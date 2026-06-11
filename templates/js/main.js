@@ -1,4 +1,4 @@
-﻿console.log("=== FanControl Web v2.9 - main.js LOADED ===");
+console.log("=== FanControl Web v2.9 - main.js LOADED ===");
 
 var chart = null;
 var allSensors = [];
@@ -7,6 +7,12 @@ var currentData = null;
 var fansBuilt = false;
 var buildingConfig = false;
 var activeSliders = new Set();
+
+// Function for safe DOM element IDs
+function safeId(key) {
+    return key.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
 var lastValidTemp = 30;
 var wizardStep = 'intro';
 
@@ -154,29 +160,29 @@ function renderDiscoveredHardware(data) {
 
     var html = '<div class="wizard-layout">';
     
-    // Р‘Р›РћРљ 1: РўР•РњРџР•Р РђРўРЈР РќР«Р• Р”РђРўР§РРљР Р Р”РРЎРљР
+    // � �� ›� ћ� љ 1: � ў� •� њ� џ� •� � � ђ� ў� Ј� � � ќ� «� • � ”� ђ� ў� §� �� љ� � � � � ”� �� Ў� љ� �
     html += '<div class="wizard-block">';
     html += '<h5>рџЊЎпёЏ Sensors & Drives</h5>';
     html += '<div id="wizard-sensors-list">';
     
-    // Р’С‹РІРѕРґ РґРёСЃРєРѕРІ
+    // � ’С‹� І� ѕ� ґ � ґ� ёСЃ� є� ѕ� І
     if (data.disks && Object.keys(data.disks).length > 0) {
         for (var k in data.disks) {
             var d = data.disks[k];
-            var safeDiskId = k.replace(/[\/.]/g, '-');
-            html += '<div class="discovered-device" id="wdrive-' + safeDiskId + '">' +
+            var diskId = safeId(k);
+            html += '<div class="discovered-device" id="wdrive-' + diskId + '">' +
                     '<span>рџ’ѕ ' + d.label + ' <small class="text-muted">(' + d.type.toUpperCase() + ')</small></span>' +
                     '<span class="drive-temp-live" style="font-weight:bold; color:#ffaa00;">' + (d.standby ? 'Sleep' : (d.temp > 0 ? d.temp + 'В°C' : '--')) + '</span>' +
                     '</div>';
         }
     }
     
-    // Р’С‹РІРѕРґ СЃРµРЅСЃРѕСЂРѕРІ РјР°С‚РµСЂРёРЅСЃРєРѕР№ РїР»Р°С‚С‹ / CPU
+    // � ’С‹� І� ѕ� ґ СЃ� µ� ЅСЃ� ѕСЂ� ѕ� І � �� °С‚� µСЂ� ё� ЅСЃ� є� ѕ� № � ї� »� °С‚С‹ / CPU
     if (data.temps && Object.keys(data.temps).length > 0) {
         for (var tk in data.temps) {
             var t = data.temps[tk];
-            var safeTempId = tk.replace(/[\/.]/g, '-');
-            html += '<div class="discovered-device" id="wtemp-' + safeTempId + '">' +
+            var tempId = safeId(tk);
+            html += '<div class="discovered-device" id="wtemp-' + tempId + '">' +
                     '<span>рџЊї ' + t.label + '</span>' +
                     '<span class="sensor-temp-live" style="font-weight:bold; color:#ffaa00;">' + (t.value || 0) + 'В°C</span>' +
                     '</div>';
@@ -184,7 +190,7 @@ function renderDiscoveredHardware(data) {
     }
     html += '</div></div>';
     
-    // Р‘Р›РћРљ 2: Р’Р•РќРўРР›РЇРўРћР Р«
+    // � �� ›� ћ� љ 2: � ’� •� ќ� ў� �� ›� Ї� ў� ћ� � � «
     html += '<div class="wizard-block">';
     html += '<h5>рџЊЂ Fans</h5>';
     html += '<div id="wizard-fans-list">';
@@ -192,14 +198,14 @@ function renderDiscoveredHardware(data) {
     if (data.fans && Object.keys(data.fans).length > 0) {
         for (var key in data.fans) {
             var fan = data.fans[key];
-            var safeId = key.replace(/[\/.]/g, '-');
+            var fanId = safeId(key);
             
-            html += '<div class="discovered-device" id="device-' + safeId + '" style="display:flex;align-items:center;justify-content:space-between">' +
+            html += '<div class="discovered-device" id="device-' + fanId + '" style="display:flex;align-items:center;justify-content:space-between">' +
                     '<div style="display:flex;align-items:center;gap:10px;flex:1">' +
-                    '<span id="icon-' + safeId + '" style="display:flex;align-items:center">' + fanSvg + '</span>' +
+                    '<span id="icon-' + fanId + '" style="display:flex;align-items:center">' + fanSvg + '</span>' +
                     '<div>' +
                     '<div style="font-weight:bold;font-size:14px">' + fan.label + '</div>' +
-                    '<div style="font-size:10px;color:#888">' + key + ' | ' + (fan.writable ? 'вњ… Controllable' : 'вљ пёЏ Read-only') + '</div>' +
+                    '<div style="font-size:10px;color:#888">' + key + ' | ' + (fan.writable ? 'вњ… Controllable' : 'вљ� пёЏ Read-only') + '</div>' +
                     '</div>' +
                     '</div>' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">' +
@@ -210,7 +216,7 @@ function renderDiscoveredHardware(data) {
         }
     }
     html += '</div></div>';
-    html += '</div>'; // РљРѕРЅРµС† wizard-layout
+    html += '</div>'; // � љ� ѕ� Ѕ� µС�  wizard-layout
     
     container.innerHTML = html;
     
@@ -270,15 +276,15 @@ function showSyncingStatus() {
 function updateValues(d) {
     currentData = d;
     
-    // Р•СЃР»Рё РјС‹ РЅР° СЌРєСЂР°РЅРµ РјР°СЃС‚РµСЂР° РЅР°СЃС‚СЂРѕР№РєРё (РєР°Р»РёР±СЂРѕРІРєРё)
+    // � •СЃ� »� ё � �С‹ � Ѕ� ° СЌ� єСЂ� °� Ѕ� µ � �� °СЃС‚� µСЂ� ° � Ѕ� °СЃС‚СЂ� ѕ� №� є� ё (� є� °� »� ё� ±СЂ� ѕ� І� є� ё)
     if (wizardStep === 'results' || wizardStep === 'calibrating') {
         
-        // 1. РћР±РЅРѕРІР»РµРЅРёРµ С‚РµРјРїРµСЂР°С‚СѓСЂ РґРёСЃРєРѕРІ
+        // 1. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ С‚� µ� �� ї� µСЂ� °С‚СѓСЂ � ґ� ёСЃ� є� ѕ� І
         if (d.hdd_sensors) {
             for (var dk in d.hdd_sensors) {
                 var disk = d.hdd_sensors[dk];
-                var safeDiskId = dk.replace(/[\/.]/g, '-');
-                var driveRow = document.getElementById("wdrive-" + safeDiskId);
+                var diskId = safeId(dk);
+                var driveRow = document.getElementById("wdrive-" + diskId);
                 if (driveRow) {
                     var dTempEl = driveRow.querySelector(".drive-temp-live");
                     if (dTempEl) {
@@ -288,12 +294,12 @@ function updateValues(d) {
             }
         }
         
-        // 2. РћР±РЅРѕРІР»РµРЅРёРµ РґР°С‚С‡РёРєРѕРІ РјР°С‚РµСЂРёРЅСЃРєРѕР№ РїР»Р°С‚С‹ / CPU
+        // 2. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ � ґ� °С‚С‡� ё� є� ѕ� І � �� °С‚� µСЂ� ё� ЅСЃ� є� ѕ� № � ї� »� °С‚С‹ / CPU
         if (d.temp_sensors) {
             for (var tk in d.temp_sensors) {
                 var sensor = d.temp_sensors[tk];
-                var safeTempId = tk.replace(/[\/.]/g, '-');
-                var tempRow = document.getElementById("wtemp-" + safeTempId);
+                var tempId = safeId(tk);
+                var tempRow = document.getElementById("wtemp-" + tempId);
                 if (tempRow) {
                     var sTempEl = tempRow.querySelector(".sensor-temp-live");
                     if (sTempEl) {
@@ -303,12 +309,12 @@ function updateValues(d) {
             }
         }
         
-        // 3. РћР±РЅРѕРІР»РµРЅРёРµ РІРµРЅС‚РёР»СЏС‚РѕСЂРѕРІ
+        // 3. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ � І� µ� ЅС‚� ё� »СЏС‚� ѕСЂ� ѕ� І
         if (d.fans) {
             for (var key in d.fans) {
                 var fan = d.fans[key];
-                var safeId = key.replace(/[\/.]/g, '-');
-                var deviceRow = document.getElementById("device-" + safeId);
+                var deviceId = safeId(key);
+                var deviceRow = document.getElementById("device-" + deviceId);
                 
                 if (deviceRow) {
                     var rpmEl = deviceRow.querySelector(".fan-rpm-live");
@@ -327,7 +333,7 @@ function updateValues(d) {
                         }
                     }
                     
-                    // Р’СЂР°С‰РµРЅРёРµ РёРєРѕРЅРєРё
+                    // � ’СЂ� °С‰� µ� Ѕ� ё� µ � ё� є� ѕ� Ѕ� є� ё
                     var iconContainer = document.getElementById("icon-" + safeId);
                     if (iconContainer) {
                         var svgElement = iconContainer.querySelector(".fan-icon-svg");
@@ -438,9 +444,7 @@ function updateValues(d) {
 
     for (k in d.fans) {
         var f = d.fans[k];
-        var ks = k.replace(/[^a-zA-Z0-9]/g, "_");
-
-        var rpmEl = document.getElementById("rpm-" + ks);
+            var ks = safeId(k);
         if (rpmEl) {
             var rpmText = f.rpm + " RPM";
             if (f.rpm_stabilizing) rpmText += " вЏі";
@@ -487,7 +491,7 @@ function buildFans(d) {
     var html = "";
     for (var k in d.fans) {
         var f = d.fans[k];
-        var ks = k.replace(/[^a-zA-Z0-9]/g, "_");
+        var ks = safeId(k);
         html += "<div class='card " + (f.fan_mode === "auto" ? "auto-mode" : "manual-mode") + "' id='card-" + ks + "'>";
         html += "<div class='card-header'>" + f.label + " <small id='status-" + ks + "'></small></div>";
         html += "<div class='card-body'>";
@@ -510,7 +514,7 @@ function buildFans(d) {
     for (var i = 0; i < sliders.length; i++) {
         (function(slider) {
             var fanKey = slider.getAttribute("data-fan");
-            var ks2 = fanKey.replace(/[^a-zA-Z0-9]/g, "_");
+            var ks2 = safeId(fanKey);
             
             slider.addEventListener("input", function() {
                 var pwmEl = document.getElementById("pwm-" + ks2);
@@ -539,7 +543,7 @@ function buildFans(d) {
     for (k in d.fans) {
         if (!fanConfigs[k]) fanConfigs[k] = {};
         var f2 = d.fans[k];
-        fanConfigs[k].sensors = f2.sensors || ["hdd:sata1"];
+        fanConfigs[k].sensors = f2.sensors || [];
         fanConfigs[k].sensor_mode = f2.sensor_mode || "max";
         fanConfigs[k].target_temp = f2.target_temp || 31;
         fanConfigs[k].fan_mode = f2.fan_mode || "manual";
@@ -552,8 +556,8 @@ function buildFanConfig(k, d) {
     buildingConfig = true;
     var f = d.fans[k];
     var cfg = fanConfigs[k] || {};
-    var ks = k.replace(/[^a-zA-Z0-9]/g, "_");
-    var sensors = cfg.sensors || ["hdd:sata1"];
+    var ks = safeId(k);
+    var sensors = cfg.sensors || [];
     var smode = cfg.sensor_mode || "max";
     var target = cfg.target_temp || 31;
     var fm = cfg.fan_mode || "manual";
@@ -746,7 +750,7 @@ function togglePopup(key, btn) {
         groups[s.group].push(s); 
     });
     
-    var sensors = (fanConfigs[key] || {}).sensors || ["hdd:sata1"];
+    var sensors = (fanConfigs[key] || {}).sensors || [];
     popup.innerHTML = "";
     
     for (var g in groups) {
@@ -788,8 +792,7 @@ function toggleSensor(key, cb) {
 function removeSensor(key, id) {
     var cfg = fanConfigs[key] || {};
     var sensors = (cfg.sensors || []).filter(function(s) { return s !== id; });
-    if (sensors.length === 0) sensors = ["hdd:sata1"];
-    cfg.sensors = sensors; 
+    cfg.sensors = sensors;
     fanConfigs[key] = cfg;
     showSyncingStatus();
     setFanConfig(key, "sensors", sensors);
@@ -846,7 +849,7 @@ function startTest() {
 }
 
 function setFan(k, v) {
-    var ks = k.replace(/[^a-zA-Z0-9]/g, "_");
+    var ks = safeId(k);
     
     var sliderEl = document.getElementById("slider-" + ks);
     var pwmEl = document.getElementById("pwm-" + ks);

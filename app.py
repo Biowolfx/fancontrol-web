@@ -1,4 +1,4 @@
-﻿import copy
+import copy
 import json
 import logging
 import os
@@ -251,6 +251,14 @@ def discover_disks():
                         discovered_devices.add(name)
     except Exception as e:
         logger.warning(f'lsblk failed: {e}')
+        # Fallback to scanning /sys/block when lsblk is unavailable
+        try:
+            for dev in Path('/sys/block').iterdir():
+                name = dev.name
+                if is_physical_disk(name) and not any(name.startswith(x) for x in ['loop', 'ram', 'zram', 'dm-', 'md', 'sr', 'iscsi', 'synoboot']):
+                    discovered_devices.add(name)
+        except Exception as e2:
+            logger.warning(f'/sys/block fallback failed: {e2}')
     
     futures_map = {dev: executor.submit(read_disk_temp, dev) for dev in sorted(discovered_devices)}
     for dev, future in futures_map.items():
@@ -327,7 +335,6 @@ def set_pwm(key, raw_pwm, from_curve=False):
         try:
             Path(f['pwm_path']).write_text(str(physical_pwm))
             f['pwm_value'] = val
-            time.sleep(0.1)
             rpm_raw = Path(f['fan_path']).read_text().strip()
             rpm_val = int(rpm_raw) if rpm_raw.isdigit() else 0
             if rpm_val > 0:
@@ -520,7 +527,6 @@ def refresh_disks():
         return
 
     futures_map = {disk_id: executor.submit(read_disk_temp, info.get('dev_name', disk_id)) for disk_id, info in sensors_copy.items()}
-    valid = []
     updated_values = {}
 
     for disk_id, future in futures_map.items():
@@ -529,9 +535,6 @@ def refresh_disks():
             t, standby = result if result else (None, False)
             if t is not None and t > 0:
                 updated_values[disk_id] = {'temp': t, 'standby': standby}
-                valid.append(t)
-            elif sensors_copy[disk_id].get('temp', 0) > 0:
-                valid.append(sensors_copy[disk_id]['temp'])
         except Exception as e:
             logger.error(f'Poll error for {disk_id}: {e}')
 
@@ -541,8 +544,12 @@ def refresh_disks():
                 state['hdd_sensors'][disk_id].update(data)
         state['last_hdd_poll'] = time.time()
         active = [v['temp'] for v in state['hdd_sensors'].values() if v.get('temp', 0) > 0 and not v.get('standby')]
-        state['max_hdd_temp'] = max(active) if active else (max(valid) if valid else 0)
-        state['failsafe'] = not bool(active)
+        if active:
+            state['max_hdd_temp'] = max(active)
+            state['failsafe'] = False
+        else:
+            state['max_hdd_temp'] = 0
+            state['failsafe'] = True
 
 def pwm_from_curve(fan, target_pct):
     curve, cal = fan.get('curve', []), fan.get('calibration', {})
@@ -563,7 +570,7 @@ def pwm_from_curve(fan, target_pct):
     return curve[-1]['pwm']
 
 def fan_temp(fan):
-    sensors, mode = fan.get('sensors', ['hdd:sata1']), fan.get('sensor_mode', 'max')
+    sensors, mode = fan.get('sensors', []), fan.get('sensor_mode', 'max')
     temps = []
     with state_lock:
         hdd_copy = {k: v.copy() for k, v in state['hdd_sensors'].items()}
@@ -584,7 +591,7 @@ def fan_temp(fan):
     return sum(temps) // len(temps)
 
 def loop():
-    global _failed_calibration_logged
+    global _failed_calibration_logged, _last_cleanup
     last_log = 0
     while True:
         try:
@@ -762,22 +769,31 @@ def handle_control():
         validate_control_request(data)
 
         if data['action'] == 'set_fan_pwm':
+            updated_fan = None
+            pwm_val = int(data['pwm'] * 255 // 100)
             with state_lock:
                 fan = state['fans'][data['fan']]
-                fan['manual_pct'] = data['pwm']
-                fan['fan_mode'] = fan.get('fan_mode', 'manual')
-                if fan['fan_mode'] == 'manual':
-                    set_pwm(data['fan'], int(data['pwm'] * 255 // 100))
+                updated_fan = fan.copy()
+                updated_fan['manual_pct'] = data['pwm']
+                updated_fan['fan_mode'] = fan.get('fan_mode', 'manual')
+                state['fans'][data['fan']] = updated_fan
                 save_config()
+
+            if updated_fan['fan_mode'] == 'manual':
+                set_pwm(data['fan'], pwm_val)
         elif data['action'] == 'set_fan_config':
+            updated_fan = None
             with state_lock:
                 fan = state['fans'][data['fan']]
+                updated_fan = fan.copy()
                 for key, value in data.items():
                     if key in ['schedule', 'sensors', 'sensor_mode', 'target_temp', 'fan_mode']:
-                        fan[key] = value
-                if data.get('fan_mode') == 'manual':
-                    set_pwm(data['fan'], int(fan.get('manual_pct', 50) * 255 // 100))
+                        updated_fan[key] = value
+                state['fans'][data['fan']] = updated_fan
                 save_config()
+
+            if data.get('fan_mode') == 'manual':
+                set_pwm(data['fan'], int(updated_fan.get('manual_pct', 50) * 255 // 100))
 
         return jsonify({"status": "success"})
     except BadRequest as br:
