@@ -1,0 +1,17 @@
+﻿version: '3.8'
+services:
+  fancontrol:
+    build: .
+    container_name: fancontrol-web
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /sys:/sys:rw
+      - /dev:/dev:rw
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Moscow
+    privileged: true
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN

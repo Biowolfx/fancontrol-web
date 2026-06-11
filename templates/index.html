@@ -1,0 +1,143 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FanControl Web v2.9</title>
+    <link rel="icon" href="data:,">
+    <style>
+        :root{--bg:#1a1a2e;--card:#16213e;--accent:#0f3460;--text:#e0e0e0}
+        *{box-sizing:border-box}
+        body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:.85rem;margin:0;padding:10px;line-height:1.4}
+        .card{background:var(--card);border:1px solid var(--accent);margin-bottom:10px;border-radius:8px;transition:border-left .3s ease}
+        .card.auto-mode{border-left:3px solid #4a90d9}
+        .card.manual-mode{border-left:3px solid #555}
+        .card-header{background:var(--accent);font-weight:bold;padding:10px 15px;font-size:14px;border-radius:8px 8px 0 0}
+        .card-body{padding:10px}
+        .fan-card{background:rgba(255,255,255,.03);margin:4px 0;padding:8px;border-radius:4px}
+        .fan-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .fan-row .name{font-weight:bold;min-width:100px}
+        .fan-row input[type=range]{flex:1;min-width:80px}
+        .sensor-temp{font-weight:bold}
+        .temp-good{color:#00ff88}
+        .temp-warn{color:#ffaa00}
+        .temp-bad{color:#ff4444}
+        .sensor-popup{display:none;position:fixed;background:var(--card);border:2px solid var(--accent);padding:10px;z-index:9999;max-height:50vh;overflow-y:auto;min-width:220px;box-shadow:0 4px 12px rgba(0,0,0,.5);border-radius:6px}
+        .sensor-popup.show{display:block}
+        .sensor-tag{background:var(--accent);padding:2px 6px;border-radius:3px;font-size:11px;display:inline-flex;align-items:center;gap:4px;margin:1px}
+        .sensor-tag .remove{cursor:pointer;color:#ff4444;font-weight:bold}
+        .sensor-btn{font-size:12px;padding:2px 8px;background:#0a0a2e;color:var(--text);border:1px solid #333;border-radius:3px;cursor:pointer}
+        
+        .setup-card{background:var(--card);border:2px solid var(--accent);box-shadow:0 8px 32px rgba(15,52,96,.4);border-radius:12px;max-width:800px;margin:5% auto;padding:40px;text-align:center}
+        .setup-title{color:#fff;font-weight:700;font-size:20px;margin-bottom:15px}
+        .btn-init{background:linear-gradient(135deg,#0f3460,#1a1a2e);border:2px solid #4a90d9;color:#fff;font-weight:bold;padding:12px 30px;border-radius:6px;cursor:pointer;font-size:16px;transition:all .2s;margin:10px 0}
+        .btn-init:hover:not(:disabled){border-color:#00ff88;color:#00ff88;box-shadow:0 0 15px rgba(0,255,136,.3)}
+        .btn-init:disabled{opacity:.5;cursor:not-allowed}
+        .pulse-loader{color:#4a90d9;margin-top:15px;animation:pulse 2s infinite}
+        @keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+        
+        .wizard-layout { display: flex; gap: 20px; text-align: left; margin: 15px 0; }
+        .wizard-block { flex: 1; background: rgba(0,0,0,0.15); padding: 15px; border-radius: 8px; border: 1px solid var(--accent); }
+        .wizard-block h5 { margin-top: 0; color: #4a90d9; border-bottom: 1px solid var(--accent); padding-bottom: 5px; }
+        
+        .discovered-device{display:flex;justify-content:space-between;align-items:center;padding:12px;margin:6px 0;background:rgba(255,255,255,.03);border-left:3px solid var(--accent);border-radius:6px;font-size:13px}
+        .badge-need-calib { background: #ff8c00; color: #000; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        
+        .fan-icon-svg{width:32px;height:32px;vertical-align:middle;margin-right:8px;transition:all 0.3s ease;display:inline-block}
+        .fan-spinning{animation:fanRotate linear infinite;transform-origin:center center}
+        @keyframes fanRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes calibratePulse{0%,100%{opacity:1}50%{opacity:.5}}
+        .calibrating-pulse{animation:calibratePulse 1.5s ease-in-out infinite}
+        .fan-rpm-live{transition:color .3s ease;min-width:90px;text-align:right}
+        .text-muted{color:#888}.text-info{color:#4a90d9}.text-warning{color:#ffaa00}.text-danger{color:#ff4444}
+        button{cursor:pointer}
+        #sync-status{display:inline-block;font-size:12px;margin-right:15px;transition:color .3s}
+        .synced{color:#00ff88}.saving{color:#4a90d9;animation:pulse 1.5s infinite}
+    </style>
+</head>
+<body>
+
+<div id="setup-screen" style="display:none">
+    <div class="setup-card">
+        <div id="setup-step-intro">
+            <div style="font-size:60px;margin-bottom:20px">вљ™пёЏ</div>
+            <h4 class="setup-title">Initial System Setup</h4>
+            <p class="text-muted" style="margin-bottom:25px">
+                Configuration file not found. System needs to scan available 
+                data buses to automatically detect fans and temperature sensors.
+            </p>
+            <button class="btn-init" id="discover-btn" onclick="runDiscovery()">
+                рџ”Ќ Start Hardware Scan
+            </button>
+            <div id="discover-loader" style="display:none" class="pulse-loader">
+                Scanning sysfs bus and querying smartctl...
+            </div>
+        </div>
+        
+        <div id="setup-step-results" style="display:none">
+            <h4 style="color:#00ff88;margin-top:0">вњ… Hardware Detected</h4>
+            <div id="discovered-devices" style="text-align:left;max-height:500px;overflow-y:auto;margin:15px 0"></div>
+            <div id="setup-step-action" style="display:none">
+                <p class="text-muted" style="margin:15px 0">
+                    To complete setup, fans must be calibrated. 
+                    This will take about 1-2 minutes.
+                </p>
+                <button class="btn-init" id="calibrate-btn" onclick="runCalibration()">
+                    рџЋЇ Start Fan Calibration
+                </button>
+                <div id="calibrate-loader" style="display:none" class="pulse-loader">
+                    Calibrating: determining PWM/RPM curves...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="main-screen" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 style="margin:0">FanControl Web v2.9</h3>
+        <div>
+            <span id="sync-status" class="text-muted synced">в—Џ Synced</span>
+            <span id="test-warning" style="display:none;color:#ffaa00;margin-right:10px">Not tested</span>
+            <button onclick="startTest()" style="background:#ff8c00;color:#000;border:none;padding:6px 12px;border-radius:4px;font-weight:bold">Test</button>
+        </div>
+    </div>
+
+    <div id="test-progress" style="display:none;background:var(--card);padding:8px;margin-bottom:8px;border-radius:4px;border:1px solid #4a90d9">
+        <small><span id="test-status"></span></small>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Fans <span id="fan-count-disp" style="background:#333;padding:2px 8px;border-radius:10px;font-size:12px">0</span></div>
+        <div class="card-body" id="fan-container">Loading...</div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+        <div class="card" style="flex:1">
+            <div class="card-header">History (24h)</div>
+            <div class="card-body"><canvas id="chart" height="180"></canvas></div>
+        </div>
+        <div style="width:300px">
+            <div class="card">
+                <div class="card-header">Status</div>
+                <div class="card-body" style="text-align:center;font-size:18px">Max HDD: <b id="max-temp-disp">--</b></div>
+            </div>
+            <div class="card">
+                <div class="card-header">Disks</div>
+                <div class="card-body" id="disks-container">Loading...</div>
+            </div>
+            <div class="card">
+                <div class="card-header">Sensors</div>
+                <div class="card-body" id="temps-container" style="max-height:150px;overflow-y:auto">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="sensor-popup" id="sensor-popup"></div>
+
+<script src="/js/socket.io.min.js"></script>
+<script src="/js/chart.js"></script>
+<script src="/js/main.js"></script>
+</body>
+</html>
