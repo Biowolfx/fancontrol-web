@@ -1,19 +1,30 @@
-﻿import os, re, json, time, threading, sqlite3, subprocess, logging, sys, copy
-from datetime import datetime, timedelta
-from pathlib import Path
-from logging.handlers import RotatingFileHandler
+﻿import copy
+import json
+import logging
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, render_template, jsonify, request, send_from_directory
+from datetime import datetime, timedelta
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_socketio import SocketIO
+from werkzeug.exceptions import BadRequest
 
 LOG_DIR = '/app/data/logs'
 os.makedirs(LOG_DIR, exist_ok=True)
-DB_FILE = '/app/data/fancontrol.db'
-CONFIG_FILE = '/app/data/fan_config.json'
 
 DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/app/data'))
 HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
 CONFIG_PATH = DATA_DIR / 'config.json'
+CONFIG_FILE = str(CONFIG_PATH)
+DB_FILE = DATA_DIR / 'fancontrol.db'
 state_lock = threading.Lock()
 
 logger = logging.getLogger('fancontrol')
@@ -45,6 +56,115 @@ state = {
     'discovered_temps': {},
     'discovered_disks': {}
 }
+executor = ThreadPoolExecutor(max_workers=6)
+_failed_calibration_logged = False
+_last_cleanup = 0
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@socketio.on('connect')
+def handle_socket_connect():
+    socketio.emit('update', get_state())
+
+@socketio.on('get_state')
+def handle_get_state():
+    socketio.emit('update', get_state())
+
+
+def get_state():
+    with state_lock:
+        return {
+            'fans': copy.deepcopy(state['fans']),
+            'temp_sensors': copy.deepcopy(state['temp_sensors']),
+            'hdd_sensors': copy.deepcopy(state['hdd_sensors']),
+            'max_hdd_temp': state.get('max_hdd_temp', 0),
+            'fan_enabled': state.get('fan_enabled', True),
+            'tested': state.get('tested', False),
+            'testing': state.get('testing', False),
+            'test_progress': copy.deepcopy(state.get('test_progress', {})),
+            '_pause_loop': state.get('_pause_loop', False),
+            'failsafe': state.get('failsafe', False),
+            'initialized': state.get('initialized', False),
+            'hardware_scanned': state.get('hardware_scanned', False),
+            'discovered_fans': copy.deepcopy(state.get('discovered_fans', {})),
+            'discovered_temps': copy.deepcopy(state.get('discovered_temps', {})),
+            'discovered_disks': copy.deepcopy(state.get('discovered_disks', {}))
+        }
+
+
+def load_config():
+    try:
+        if not CONFIG_PATH.exists():
+            return
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+        with state_lock:
+            if isinstance(cfg, dict):
+                fans = cfg.get('fans', {})
+                for key, fan_cfg in fans.items():
+                    if key in state['fans']:
+                        state['fans'][key].update(fan_cfg)
+                    else:
+                        state['fans'][key] = fan_cfg
+                state['initialized'] = bool(cfg.get('initialized', False))
+                state['tested'] = bool(cfg.get('tested', False))
+                state['config'] = cfg
+    except Exception as e:
+        logger.error(f'Failed to load config: {e}')
+
+
+@app.route('/api/discover', methods=['POST'])
+def api_discover():
+    try:
+        fans, temps = discover_fans_and_sensors()
+        disks = discover_disks()
+        with state_lock:
+            state['fans'] = fans
+            state['temp_sensors'] = temps
+            state['hdd_sensors'] = disks
+            state['hardware_scanned'] = True
+            state['discovered_fans'] = copy.deepcopy(fans)
+            state['discovered_temps'] = copy.deepcopy(temps)
+            state['discovered_disks'] = copy.deepcopy(disks)
+        socketio.emit('hardware_discovered', {'fans': fans, 'temps': temps, 'disks': disks})
+        return jsonify({'status': 'ok', 'fans': fans, 'temps': temps, 'disks': disks})
+    except Exception as e:
+        logger.error(f'Discovery error: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/initialize', methods=['POST'])
+def api_initialize():
+    try:
+        if state.get('testing'):
+            return jsonify({'status': 'error', 'message': 'Calibration already running'}), 409
+        with state_lock:
+            state['testing'] = True
+            state['test_progress'] = {'status': 'Starting calibration...', 'step': 0, 'total': 0, 'current': ''}
+        threading.Thread(target=test_fans, daemon=True).start()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        logger.error(f'Initialization error: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/test/start', methods=['POST'])
+def api_test_start():
+    try:
+        data = request.get_json(silent=True) or {}
+        fan_key = data.get('fan')
+        if state.get('testing'):
+            return jsonify({'status': 'error', 'message': 'Test already running'}), 409
+        with state_lock:
+            state['testing'] = True
+            state['test_progress'] = {'status': 'Starting test...', 'step': 0, 'total': 0, 'current': ''}
+        threading.Thread(target=test_fans, args=(fan_key,), daemon=True).start()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        logger.error(f'Test start error: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # ================ DISK SUBSYSTEM ================
 
@@ -171,7 +291,7 @@ def discover_fans_and_sensors():
                 label=lbl, pwm_path=str(pwmf), fan_path=str(fanf),
                 rpm=current_rpm, pwm_value=0, writable=w, inverted=False,
                 min_rpm=0, max_rpm=0, manual_pct=50,
-                sensors=['hdd:sata1'], sensor_mode='max', target_temp=31,
+                sensors=[], sensor_mode='max', target_temp=31,
                 fan_mode='manual', schedule=[], curve=[], calibration={}, status='not_tested',
                 current_pct=50, raw_pwm=128, last_update=0
             )
@@ -221,86 +341,100 @@ def set_pwm(key, raw_pwm, from_curve=False):
 def test_fans(fan_key=None):
     global _failed_calibration_logged
     test_successful = True
-    
-    try:
+
+    with state_lock:
         if fan_key:
             if fan_key not in state['fans']:
                 raise ValueError(f'Fan key not found: {fan_key}')
-            fans_to_test = {fan_key: state['fans'][fan_key]}
+            fans_to_test = {fan_key: copy.deepcopy(state['fans'][fan_key])}
         else:
-            fans_to_test = state['fans']
-        
-        writable_fans = {k: f for k, f in fans_to_test.items() if f['writable']}
-        
-        if len(writable_fans) == 0:
-            logger.warning('No writable fans found for calibration')
-            return
-        
-        for k, f in writable_fans.items():
-            f['inverted'] = False
-            f['status'] = 'calibrating'
-        
+            fans_to_test = {k: copy.deepcopy(v) for k, v in state['fans'].items()}
+
+    writable_fans = {k: f for k, f in fans_to_test.items() if f.get('writable')}
+
+    if len(writable_fans) == 0:
+        logger.warning('No writable fans found for calibration')
+        return
+
+    for f in writable_fans.values():
+        f['inverted'] = False
+        f['status'] = 'calibrating'
+
+    with state_lock:
+        state['testing'] = True
+        state['_pause_loop'] = True
         state['test_progress'] = dict(
             status='Starting parallel calibration...',
             step=0,
             total=11,
             current='All fans'
         )
-        socketio.emit('test_progress', state['test_progress'])
-        
-        pwm_steps = [0, 26, 51, 77, 102, 128, 153, 179, 204, 230, 255]
-        raw_data = {k: [] for k in writable_fans}
-        
+    socketio.emit('test_progress', state['test_progress'])
+
+    pwm_steps = [0, 26, 51, 77, 102, 128, 153, 179, 204, 230, 255]
+    raw_data = {k: [] for k in writable_fans}
+
+    try:
         for step_idx, p in enumerate(pwm_steps):
-            pct = step_idx * 10
-            state['test_progress'].update(
-                step=step_idx + 1,
-                status=f'Testing level {pct}%',
-                current='Parallel mode'
-            )
+            pct = round(p * 100 / 255)
+            with state_lock:
+                state['test_progress'].update(
+                    step=step_idx + 1,
+                    status=f'Testing level {pct}%',
+                    current='Parallel mode'
+                )
             socketio.emit('test_progress', state['test_progress'])
-            
+
             for k in writable_fans:
                 set_pwm_raw(k, p)
-            
+
             for _ in range(6):
                 time.sleep(1)
                 socketio.sleep(0)
-            
+
             def read_one_rpm(item):
                 key, fan = item
                 try:
                     rpm = int(Path(fan['fan_path']).read_text().strip())
-                except:
+                except Exception:
                     rpm = 0
                 return key, rpm
-            
+
             futures = [executor.submit(read_one_rpm, (k, f)) for k, f in writable_fans.items()]
             for future in futures:
                 try:
                     key, rpm = future.result(timeout=2)
                     raw_data[key].append(dict(pwm=p, rpm=rpm, pct=pct))
-                    state['fans'][key]['rpm'] = rpm
+                    if rpm is not None:
+                        with state_lock:
+                            if key in state['fans']:
+                                state['fans'][key]['rpm'] = rpm
                 except Exception as ex:
                     logger.error(f'RPM read error: {ex}')
-            
+
             socketio.emit('update', get_state())
             socketio.sleep(0)
-        
+
         for k, fan in writable_fans.items():
-            raw = raw_data[k]
-            all_rpm = [pt['rpm'] for pt in raw]
-            max_rpm = max(all_rpm)
-            
-            if max_rpm == 0:
-                logger.warning(f"Fan {fan['label']} ({k}): No RPM detected")
+            raw = raw_data.get(k, [])
+            if not raw:
+                logger.warning(f'Fan {fan.get("label", k)} ({k}): No RPM data collected')
                 fan.update(status='not_connected', min_rpm=0, max_rpm=0, curve=[], calibration={})
                 set_pwm_raw(k, 128)
                 continue
-            
+
+            all_rpm = [pt['rpm'] for pt in raw]
+            max_rpm = max(all_rpm)
+
+            if max_rpm == 0:
+                logger.warning(f"Fan {fan.get('label', k)} ({k}): No RPM detected")
+                fan.update(status='not_connected', min_rpm=0, max_rpm=0, curve=[], calibration={})
+                set_pwm_raw(k, 128)
+                continue
+
             low_rpm_avg = sum(pt['rpm'] for pt in raw[:3]) / 3 if raw[:3] else 0
             high_rpm_avg = sum(pt['rpm'] for pt in raw[-3:]) / 3 if raw[-3:] else 0
-            
+
             if high_rpm_avg > 0 and low_rpm_avg > high_rpm_avg * 1.2:
                 fan['inverted'] = True
                 fan['status'] = 'inverted'
@@ -309,7 +443,7 @@ def test_fans(fan_key=None):
                 fan['inverted'] = False
                 fan['status'] = 'normal'
                 fan['curve'] = sorted(raw, key=lambda x: x['pwm'])
-            
+
             real_min = next((pt for pt in raw if pt['rpm'] > 150), raw[0])
             fan.update(
                 min_rpm=real_min['rpm'],
@@ -317,59 +451,98 @@ def test_fans(fan_key=None):
                 calibration=dict(min_rpm=real_min['rpm'], max_rpm=max_rpm, min_pct=real_min['pct'], inverted=fan['inverted'])
             )
             set_pwm(k, 128)
-            logger.info(f'Fan {fan["label"]}: status={fan["status"]}, min={fan["min_rpm"]}rpm, max={fan["max_rpm"]}rpm')
-        
+            logger.info(f'Fan {fan.get("label", k)}: status={fan["status"]}, min={fan["min_rpm"]}rpm, max={fan["max_rpm"]}rpm')
+
+        with state_lock:
+            for k, fan in writable_fans.items():
+                if k in state['fans']:
+                    state['fans'][k].update(fan)
+
     except Exception as e:
         logger.error(f'Test error: {e}')
         test_successful = False
     finally:
-        state.update(testing=False, tested=test_successful)
-        if test_successful:
-            state['initialized'] = True
-            save_config()
-            logger.info('System initialized successfully')
-        state['_pause_loop'] = False
-        state['test_progress'] = dict(status='Ready!' if test_successful else 'Completed with errors', step=0, total=0, current='')
+        with state_lock:
+            state['testing'] = False
+            state['tested'] = test_successful
+            if test_successful:
+                state['initialized'] = True
+                save_config()
+                logger.info('System initialized successfully')
+            state['_pause_loop'] = False
+            state['test_progress'] = dict(status='Ready!' if test_successful else 'Completed with errors', step=0, total=0, current='')
+            current_initialized = state['initialized']
         socketio.emit('test_progress', state['test_progress'])
-        socketio.emit('test_complete', {'success': test_successful, 'initialized': state['initialized']})
+        socketio.emit('test_complete', {'success': test_successful, 'initialized': current_initialized})
 
 # ================ MAIN CONTROL LOOP ================
 
 def refresh():
-    for s in state['temp_sensors'].values():
-        try: s['value'] = int(Path(s['path']).read_text().strip()) // 1000
-        except: pass
+    with state_lock:
+        temp_items = [(k, v.copy()) for k, v in state['temp_sensors'].items()]
+        fan_items = [(k, v.copy()) for k, v in state['fans'].items()]
+
+    for key, sensor in temp_items:
+        try:
+            value = int(Path(sensor['path']).read_text().strip()) // 1000
+        except Exception:
+            continue
+        with state_lock:
+            if key in state['temp_sensors']:
+                state['temp_sensors'][key]['value'] = value
 
     def poll_fan(item):
-        k, f = item
-        try: f['rpm'] = int(Path(f['fan_path']).read_text().strip())
-        except Exception as e: logger.error(f'Fan poll error {k}: {e}')
+        k, fan = item
+        try:
+            rpm = int(Path(fan['fan_path']).read_text().strip())
+        except Exception as e:
+            logger.error(f'Fan poll error {k}: {e}')
+            rpm = None
+        return k, rpm
 
-    futures = [executor.submit(poll_fan, item) for item in state['fans'].items()]
+    futures = [executor.submit(poll_fan, item) for item in fan_items]
     for future in futures:
-        try: future.result(timeout=2)
-        except: pass
+        try:
+            key, rpm = future.result(timeout=2)
+            if rpm is not None:
+                with state_lock:
+                    if key in state['fans']:
+                        state['fans'][key]['rpm'] = rpm
+        except Exception:
+            pass
 
 def refresh_disks():
     now = time.time()
-    if state['last_hdd_poll'] > 0 and now - state['last_hdd_poll'] < 30: return
-    futures_map = {disk_id: executor.submit(read_disk_temp, info.get('dev_name', disk_id)) for disk_id, info in state['hdd_sensors'].items()}
+    with state_lock:
+        last_poll = state['last_hdd_poll']
+        sensors_copy = {disk_id: info.copy() for disk_id, info in state['hdd_sensors'].items()}
+    if last_poll > 0 and now - last_poll < 30:
+        return
+
+    futures_map = {disk_id: executor.submit(read_disk_temp, info.get('dev_name', disk_id)) for disk_id, info in sensors_copy.items()}
     valid = []
+    updated_values = {}
+
     for disk_id, future in futures_map.items():
         try:
             result = future.result(timeout=15)
             t, standby = result if result else (None, False)
             if t is not None and t > 0:
-                state['hdd_sensors'][disk_id].update(temp=t, standby=standby)
+                updated_values[disk_id] = {'temp': t, 'standby': standby}
                 valid.append(t)
-            elif state['hdd_sensors'][disk_id].get('temp', 0) > 0:
-                valid.append(state['hdd_sensors'][disk_id]['temp'])
+            elif sensors_copy[disk_id].get('temp', 0) > 0:
+                valid.append(sensors_copy[disk_id]['temp'])
         except Exception as e:
             logger.error(f'Poll error for {disk_id}: {e}')
-    state['last_hdd_poll'] = time.time()
-    active = [v['temp'] for v in state['hdd_sensors'].values() if v.get('temp', 0) > 0 and not v.get('standby')]
-    state['max_hdd_temp'] = max(active) if active else (max(valid) if valid else 0)
-    state['failsafe'] = not bool(active or (valid and state['max_hdd_temp'] > 0))
+
+    with state_lock:
+        for disk_id, data in updated_values.items():
+            if disk_id in state['hdd_sensors']:
+                state['hdd_sensors'][disk_id].update(data)
+        state['last_hdd_poll'] = time.time()
+        active = [v['temp'] for v in state['hdd_sensors'].values() if v.get('temp', 0) > 0 and not v.get('standby')]
+        state['max_hdd_temp'] = max(active) if active else (max(valid) if valid else 0)
+        state['failsafe'] = not bool(active)
 
 def pwm_from_curve(fan, target_pct):
     curve, cal = fan.get('curve', []), fan.get('calibration', {})
@@ -392,11 +565,14 @@ def pwm_from_curve(fan, target_pct):
 def fan_temp(fan):
     sensors, mode = fan.get('sensors', ['hdd:sata1']), fan.get('sensor_mode', 'max')
     temps = []
+    with state_lock:
+        hdd_copy = {k: v.copy() for k, v in state['hdd_sensors'].items()}
+        temp_copy = {k: v.copy() for k, v in state['temp_sensors'].items()}
     for s in sensors:
         if s.startswith('hdd:'):
-            t = state['hdd_sensors'].get(s.split(':', 1)[1], {}).get('temp', 0)
+            t = hdd_copy.get(s.split(':', 1)[1], {}).get('temp', 0)
         elif s.startswith('temp:'):
-            t = state['temp_sensors'].get(s.split(':', 1)[1], {}).get('value', 0)
+            t = temp_copy.get(s.split(':', 1)[1], {}).get('value', 0)
         else:
             t = 0
         if t > 0:
@@ -495,16 +671,21 @@ def loop():
             current_time = time.time()
             if current_time - last_log > 300 or current_time < last_log:
                 try:
-                    with sqlite3.connect(DB_FILE, timeout=30) as conn:
+                    with state_lock:
                         fc = len(state['fans'])
                         ap = sum(f.get('raw_pwm', f.get('pwm_value', 0)) for f in state['fans'].values()) // fc if fc > 0 else 0
                         ar = sum(f.get('rpm', 0) for f in state['fans'].values()) // fc if fc > 0 else 0
+                        max_temp = state.get('max_hdd_temp', 0)
+                    with sqlite3.connect(DB_FILE, timeout=30) as conn:
                         conn.execute('INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                   (datetime.now().isoformat(), 'auto', ap, ar, state['max_hdd_temp'], fc, len(state['hdd_sensors'])))
+                                   (datetime.now().isoformat(), 'auto', ap, ar, max_temp, fc, len(state['hdd_sensors'])))
                         conn.commit()
                 except sqlite3.OperationalError as e:
                     logger.error(f'SQLite write error: {e}')
                 last_log = current_time
+            if current_time - _last_cleanup > 86400:
+                cleanup_logs()
+                _last_cleanup = current_time
             time.sleep(5)
         except Exception as e:
             logger.error(f'Loop error: {e}')
@@ -520,13 +701,31 @@ def save_config():
     with state_lock:
         try:
             DATA_DIR.mkdir(parents=True, exist_ok=True)
+            state.setdefault('config', {})
+            state['config']['initialized'] = state.get('initialized', False)
+            state['config']['tested'] = state.get('tested', False)
+            state['config']['fans'] = {
+                k: {field: fan.get(field) for field in FAN_FIELDS if field in fan}
+                for k, fan in state.get('fans', {}).items()
+            }
             tmp_path = CONFIG_PATH.with_suffix('.tmp')
             with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump(state.get('config', {}), f, indent=4, ensure_ascii=False)
+                json.dump(state['config'], f, indent=4, ensure_ascii=False)
             tmp_path.replace(CONFIG_PATH)
             logger.info("Configuration saved atomically.")
         except Exception as e:
             logger.error(f"Failed to save config atomically: {e}")
+
+
+def cleanup_logs(retention_days=30):
+    try:
+        cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
+        with sqlite3.connect(DB_FILE, timeout=30) as conn:
+            conn.execute('DELETE FROM logs WHERE ts < ?', (cutoff,))
+            conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.error(f'Failed to cleanup logs: {e}')
+
 
 def validate_control_request(data):
     if not data or not isinstance(data, dict):
@@ -564,10 +763,21 @@ def handle_control():
 
         if data['action'] == 'set_fan_pwm':
             with state_lock:
-                state['fans'][data['fan']]['manual_pct'] = data['pwm']
-            # ... existing logic to write to sysfs ...
+                fan = state['fans'][data['fan']]
+                fan['manual_pct'] = data['pwm']
+                fan['fan_mode'] = fan.get('fan_mode', 'manual')
+                if fan['fan_mode'] == 'manual':
+                    set_pwm(data['fan'], int(data['pwm'] * 255 // 100))
+                save_config()
         elif data['action'] == 'set_fan_config':
-            # ... existing config update logic ...
+            with state_lock:
+                fan = state['fans'][data['fan']]
+                for key, value in data.items():
+                    if key in ['schedule', 'sensors', 'sensor_mode', 'target_temp', 'fan_mode']:
+                        fan[key] = value
+                if data.get('fan_mode') == 'manual':
+                    set_pwm(data['fan'], int(fan.get('manual_pct', 50) * 255 // 100))
+                save_config()
 
         return jsonify({"status": "success"})
     except BadRequest as br:
