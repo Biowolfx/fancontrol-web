@@ -1,959 +1,828 @@
-console.log("=== FanControl Web v2.9 - main.js LOADED ===");
+/**
+ * FanControl Web v3.0 - Neon Cyberpunk Edition
+ * Main JavaScript Application
+ */
 
-var chart = null;
-var allSensors = [];
-var fanConfigs = {};
-var currentData = null;
-var fansBuilt = false;
-var buildingConfig = false;
-var activeSliders = new Set();
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
 
-// Function for safe DOM element IDs
-function safeId(key) {
-    return key.replace(/[^a-zA-Z0-9]/g, '_');
-}
+let chart = null;
+let currentFanId = null;
+let allSensors = [];
+let fanConfigs = {};
+let isDragging = false;
+let wizardStep = 'intro';
+let currentState = null;
 
-var lastValidTemp = 30;
-var wizardStep = 'intro';
+// ============================================================================
+// SOCKET.IO CONNECTION
+// ============================================================================
 
-console.log("=== Creating socket connection ===");
-var socket = io();
-console.log("=== Socket created ===");
+console.log('[FanControl] Establishing Socket.IO connection...');
+const socket = io();
 
-socket.on("connect", function() {
-    console.log("=== Socket CONNECTED ===");
+socket.on('connect', () => {
+    console.log('[FanControl] Socket connected');
 });
 
-socket.on("update", function(d) {
-    console.log("=== Update received ===", d);
-    updateValues(d);
+socket.on('update', (data) => {
+    currentState = data;
+    updateUI(data);
 });
 
-socket.on("hardware_discovered", function(data) {
-    console.log("=== Hardware discovered event ===", data);
-    if (wizardStep === 'intro' && data) {
+socket.on('hardware_discovered', (data) => {
+    console.log('[FanControl] Hardware discovered:', data);
+    if (wizardStep === 'intro' || wizardStep === 'scanning') {
         renderDiscoveredHardware(data);
         wizardStep = 'results';
     }
 });
 
-socket.on("test_progress", function(p) {
-    console.log("=== Test progress ===", p);
-    
-    if (wizardStep !== 'calibrating' && p.step > 0) {
-        wizardStep = 'calibrating';
-        var introScreen = document.getElementById("setup-step-intro");
-        var resultsScreen = document.getElementById("setup-step-results");
-        var actionBlock = document.getElementById("setup-step-action");
-        
-        if (introScreen) introScreen.style.display = "none";
-        if (resultsScreen) resultsScreen.style.display = "block";
-        if (actionBlock) actionBlock.style.display = "block";
-        
-        var btn = document.getElementById("calibrate-btn");
-        var loader = document.getElementById("calibrate-loader");
-        if (btn) btn.disabled = true;
-        if (loader) loader.style.display = "block";
-    }
-    
-    var loader = document.getElementById("calibrate-loader");
-    if (loader && p.status) {
-        loader.textContent = p.status + " (" + p.step + "/" + p.total + ")";
-    }
-    
-    var tp = document.getElementById("test-progress");
-    if (tp) tp.style.display = "block";
-    var ts = document.getElementById("test-status");
-    if (ts) ts.textContent = p.status + " (" + p.step + "/" + p.total + ")";
+socket.on('test_progress', (progress) => {
+    console.log('[FanControl] Calibration progress:', progress);
+    updateCalibrationModal(progress);
 });
 
-socket.on("test_complete", function(data) {
-    console.log("=== Test complete ===", data);
-    var tp = document.getElementById("test-progress");
-    if (tp) tp.style.display = "none";
-
-    if (data && data.success && data.initialized) {
+socket.on('test_complete', (result) => {
+    console.log('[FanControl] Calibration complete:', result);
+    hideCalibrationModal();
+    
+    if (result.success && result.initialized) {
         wizardStep = 'done';
-        alert("🎉 Калибровка успешно завершена!\nВсе кривые PWM/RPM построены. Переходим на главный экран управления.");
-        fansBuilt = false;
-    } else if (!data || !data.success) {
-        alert("Calibration completed with errors! Check server logs.");
-        
-        wizardStep = 'results';
-        var intro = document.getElementById("setup-step-intro");
-        var results = document.getElementById("setup-step-results");
-        var action = document.getElementById("setup-step-action");
-        
-        if (intro) intro.style.display = "none";
-        if (results) results.style.display = "block";
-        if (action) action.style.display = "block";
-        
-        var btn = document.getElementById("calibrate-btn");
-        var loader = document.getElementById("calibrate-loader");
-        if (btn) btn.disabled = false;
-        if (loader) loader.style.display = "none";
+        showMainScreen();
     }
 });
 
-// ====================== WIZARD FUNCTIONS ======================
+// ============================================================================
+// UI UPDATE FUNCTIONS
+// ============================================================================
+
+function updateUI(data) {
+    if (!data) return;
+    
+    // Show appropriate screen
+    if (!data.initialized) {
+        showSetupScreen();
+        if (data.hardware_scanned && wizardStep === 'intro') {
+            renderDiscoveredHardware({
+                fans: data.fans,
+                temps: data.temp_sensors,
+                disks: data.hdd_sensors
+            });
+            wizardStep = 'results';
+            document.getElementById('discover-btn').disabled = false;
+            document.getElementById('discover-loader').classList.add('hidden');
+        }
+        return;
+    }
+    
+    showMainScreen();
+    
+    // Update indicators
+    updateFailsafeIndicator(data.failsafe);
+    updateStandbyIndicator(data.standby_mode);
+    
+    // Build fan list if needed
+    if (data.fans && Object.keys(data.fans).length > 0) {
+        buildFanList(data.fans);
+        updateFanListStatus(data.fans);
+    }
+    
+    // Build disks list
+    if (data.hdd_sensors) {
+        buildDisksList(data.hdd_sensors);
+    }
+    
+    // Build sensor list for popup
+    buildSensorList(data);
+    
+    // Update inspector if a fan is selected
+    if (currentFanId && data.fans && data.fans[currentFanId]) {
+        updateInspector(data.fans[currentFanId]);
+    }
+    
+    // Update chart
+    updateChart();
+}
+
+function showSetupScreen() {
+    document.getElementById('setup-screen').classList.remove('hidden');
+    document.getElementById('main-screen').classList.add('hidden');
+}
+
+function showMainScreen() {
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('main-screen').classList.remove('hidden');
+}
+
+function updateFailsafeIndicator(failsafe) {
+    const el = document.getElementById('failsafe-indicator');
+    if (failsafe) {
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+function updateStandbyIndicator(standby) {
+    const el = document.getElementById('standby-indicator');
+    if (standby) {
+        el.classList.remove('hidden');
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+// ============================================================================
+// FAN LIST (Left Panel)
+// ============================================================================
+
+function buildFanList(fans) {
+    const container = document.getElementById('fan-list');
+    if (!container) return;
+    
+    let html = '';
+    
+    for (const [fanId, fan] of Object.entries(fans)) {
+        const isSelected = fanId === currentFanId;
+        const borderColor = isSelected ? 'border-neon-purple' : 'border-cyber-accent';
+        const bgColor = isSelected ? 'bg-cyber-accent' : 'bg-cyber-card';
+        
+        html += `
+            <div id="fan-card-${fanId}" 
+                 class="fan-card ${bgColor} border ${borderColor} rounded-lg p-3 cursor-pointer 
+                        hover:border-neon-purple transition-all duration-200"
+                 onclick="selectFan('${fanId}')">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-sm font-semibold text-white truncate">${fan.label}</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${fan.status}</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-gray-500">${fan.mode || 'manual'}</span>
+                    <span class="font-mono text-neon-cyan" id="fan-rpm-${fanId}">${fan.rpm || 0} RPM</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html || '<div class="text-center text-gray-500 py-8">No fans detected</div>';
+}
+
+function updateFanListStatus(fans) {
+    for (const [fanId, fan] of Object.entries(fans)) {
+        const rpmEl = document.getElementById(`fan-rpm-${fanId}`);
+        if (rpmEl) {
+            rpmEl.textContent = `${fan.rpm || 0} RPM`;
+        }
+        
+        const card = document.getElementById(`fan-card-${fanId}`);
+        if (card && fanId === currentFanId) {
+            card.classList.add('border-neon-purple', 'bg-cyber-accent');
+        }
+    }
+}
+
+function selectFan(fanId) {
+    currentFanId = fanId;
+    
+    // Update card highlights
+    document.querySelectorAll('.fan-card').forEach(card => {
+        card.classList.remove('border-neon-purple', 'bg-cyber-accent');
+        card.classList.add('border-cyber-accent', 'bg-cyber-card');
+    });
+    
+    const selectedCard = document.getElementById(`fan-card-${fanId}`);
+    if (selectedCard) {
+        selectedCard.classList.add('border-neon-purple', 'bg-cyber-accent');
+        selectedCard.classList.remove('border-cyber-accent', 'bg-cyber-card');
+    }
+    
+    // Show inspector
+    if (currentState && currentState.fans && currentState.fans[fanId]) {
+        updateInspector(currentState.fans[fanId]);
+    }
+}
+
+function getStatusBadgeClass(status) {
+    const classes = {
+        'nominal': 'bg-green-900 bg-opacity-30 text-neon-green',
+        'warning': 'bg-orange-900 bg-opacity-30 text-neon-orange',
+        'critical': 'bg-red-900 bg-opacity-30 text-neon-red',
+        'failsafe': 'bg-red-900 bg-opacity-50 text-neon-red',
+        'standby': 'bg-blue-900 bg-opacity-30 text-blue-400',
+        'not_tested': 'bg-gray-700 text-gray-400',
+        'calibrating': 'bg-purple-900 bg-opacity-30 text-neon-purple',
+    };
+    return classes[status] || 'bg-gray-700 text-gray-400';
+}
+
+// ============================================================================
+// INSPECTOR (Right Panel)
+// ============================================================================
+
+function updateInspector(fan) {
+    // Show inspector, hide empty state
+    document.getElementById('inspector-empty').classList.add('hidden');
+    document.getElementById('inspector-fan').classList.remove('hidden');
+    
+    // Update title
+    document.getElementById('inspector-title').textContent = fan.label;
+    document.getElementById('inspector-subtitle').textContent = `ID: ${fan.id || 'unknown'}`;
+    
+    // Update fan name
+    document.getElementById('fan-name').textContent = fan.label;
+    
+    // Update status badge
+    const statusBadge = document.getElementById('fan-status-badge');
+    statusBadge.textContent = fan.status || 'unknown';
+    statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(fan.status)}`;
+    
+    // Update mode badge
+    const modeBadge = document.getElementById('fan-mode-badge');
+    const mode = fan.mode || 'manual';
+    modeBadge.textContent = mode.toUpperCase();
+    modeBadge.className = mode === 'auto' 
+        ? 'text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan'
+        : 'text-xs px-2 py-0.5 rounded-full bg-purple-900 bg-opacity-30 text-neon-purple';
+    
+    // Update RPM
+    document.getElementById('fan-rpm-display').textContent = fan.rpm || 0;
+    
+    // Update RPM color
+    const rpmDisplay = document.getElementById('fan-rpm-display');
+    rpmDisplay.classList.remove('text-neon-cyan', 'text-neon-orange', 'text-neon-red');
+    if (fan.rpm > (fan.max_rpm * 0.8 || 1500)) {
+        rpmDisplay.classList.add('text-neon-orange');
+    } else if (fan.status === 'failsafe' || fan.status === 'critical') {
+        rpmDisplay.classList.add('text-neon-red');
+    } else {
+        rpmDisplay.classList.add('text-neon-cyan');
+    }
+    
+    // Update slider (only if not dragging)
+    if (!isDragging) {
+        const slider = document.getElementById('pwm-slider');
+        slider.value = fan.current_pct || fan.manual_pct || 50;
+        slider.disabled = (mode === 'auto');
+        document.getElementById('pwm-value-display').textContent = `${fan.current_pct || fan.manual_pct || 50}%`;
+    }
+    
+    // Update mode buttons
+    const btnManual = document.getElementById('btn-mode-manual');
+    const btnAuto = document.getElementById('btn-mode-auto');
+    
+    if (mode === 'manual') {
+        btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
+        btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+    } else {
+        btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
+        btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
+    }
+    
+    // Show/hide auto settings
+    document.getElementById('auto-settings').style.display = (mode === 'auto') ? 'block' : 'none';
+    
+    // Update target temp
+    document.getElementById('target-temp-input').value = fan.target_temp || 31;
+    
+    // Update sensor tags
+    updateSensorTags(fan);
+    
+    // Store config
+    if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
+    fanConfigs[currentFanId].sensors = fan.sensors || [];
+    fanConfigs[currentFanId].target_temp = fan.target_temp || 31;
+    fanConfigs[currentFanId].mode = mode;
+}
+
+function updateSensorTags(fan) {
+    const container = document.getElementById('sensor-tags');
+    if (!container) return;
+    
+    const sensors = fan.sensors || [];
+    
+    if (sensors.length === 0) {
+        container.innerHTML = '<span class="text-xs text-gray-500 italic">No sensors assigned</span>';
+        return;
+    }
+    
+    container.innerHTML = sensors.map(s => {
+        const sensor = allSensors.find(x => x.id === s);
+        const label = sensor ? sensor.label : s;
+        return `
+            <span class="inline-flex items-center gap-1 bg-cyber-accent text-gray-300 text-xs px-2 py-1 rounded-full">
+                ${label}
+                <button onclick="removeSensor('${s}')" class="text-neon-red hover:text-red-400 ml-1">&times;</button>
+            </span>
+        `;
+    }).join('');
+}
+
+// ============================================================================
+// FAN CONTROL ACTIONS
+// ============================================================================
+
+function setFanMode(mode) {
+    if (!currentFanId) return;
+    
+    sendControl({
+        action: 'set_fan_config',
+        fan: currentFanId,
+        fan_mode: mode
+    });
+}
+
+function saveTargetTemp() {
+    if (!currentFanId) return;
+    
+    const temp = parseInt(document.getElementById('target-temp-input').value);
+    if (isNaN(temp) || temp < 20 || temp > 60) return;
+    
+    sendControl({
+        action: 'set_fan_config',
+        fan: currentFanId,
+        target_temp: temp
+    });
+}
+
+function removeSensor(sensorId) {
+    if (!currentFanId) return;
+    
+    const sensors = (fanConfigs[currentFanId]?.sensors || []).filter(s => s !== sensorId);
+    
+    sendControl({
+        action: 'set_fan_config',
+        fan: currentFanId,
+        sensors: sensors
+    });
+}
+
+function sendControl(payload) {
+    fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            socket.emit('get_state');
+        }
+    })
+    .catch(err => console.error('Control error:', err));
+}
+
+// ============================================================================
+// PWM SLIDER
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    const slider = document.getElementById('pwm-slider');
+    if (!slider) return;
+    
+    slider.addEventListener('input', (e) => {
+        document.getElementById('pwm-value-display').textContent = `${e.target.value}%`;
+    });
+    
+    slider.addEventListener('mousedown', () => {
+        isDragging = true;
+    });
+    
+    slider.addEventListener('mouseup', (e) => {
+        isDragging = false;
+        applyPWM(e.target.value);
+    });
+    
+    slider.addEventListener('touchend', (e) => {
+        isDragging = false;
+        applyPWM(e.target.value);
+    });
+});
+
+function applyPWM(value) {
+    if (!currentFanId) return;
+    
+    sendControl({
+        action: 'set_fan_pwm',
+        fan: currentFanId,
+        pwm: parseInt(value)
+    });
+}
+
+// ============================================================================
+// SENSOR POPUP
+// ============================================================================
+
+function buildSensorList(data) {
+    allSensors = [];
+    
+    if (data.hdd_sensors) {
+        for (const [id, disk] of Object.entries(data.hdd_sensors)) {
+            allSensors.push({
+                id: `hdd:${id}`,
+                label: disk.label,
+                temp: disk.temp,
+                standby: disk.standby,
+                group: 'Disks'
+            });
+        }
+    }
+    
+    if (data.temp_sensors) {
+        for (const [id, sensor] of Object.entries(data.temp_sensors)) {
+            allSensors.push({
+                id: `temp:${id}`,
+                label: sensor.label,
+                temp: sensor.value,
+                standby: false,
+                group: 'Sensors'
+            });
+        }
+    }
+}
+
+function toggleSensorPopup() {
+    const popup = document.getElementById('sensor-popup');
+    const list = document.getElementById('sensor-popup-list');
+    
+    if (!popup || !list) return;
+    
+    if (popup.classList.contains('hidden')) {
+        // Build list
+        const currentSensors = fanConfigs[currentFanId]?.sensors || [];
+        
+        // Group sensors
+        const groups = {};
+        allSensors.forEach(s => {
+            if (!groups[s.group]) groups[s.group] = [];
+            groups[s.group].push(s);
+        });
+        
+        let html = '';
+        for (const [group, sensors] of Object.entries(groups)) {
+            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${group}</div>`;
+            sensors.forEach(s => {
+                const checked = currentSensors.includes(s.id);
+                html += `
+                    <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-cyber-accent rounded px-2">
+                        <input type="checkbox" value="${s.id}" ${checked ? 'checked' : ''} 
+                               class="accent-neon-purple">
+                        <span class="text-sm text-gray-300">${s.label}</span>
+                        <span class="text-xs text-gray-500 ml-auto">
+                            ${s.standby ? 'Sleep' : s.temp + '°C'}
+                        </span>
+                    </label>
+                `;
+            });
+        }
+        
+        list.innerHTML = html;
+        popup.classList.remove('hidden');
+    } else {
+        closeSensorPopup();
+    }
+}
+
+function closeSensorPopup() {
+    const popup = document.getElementById('sensor-popup');
+    if (!popup) return;
+    
+    // Collect checked sensors
+    const checked = popup.querySelectorAll('input[type=checkbox]:checked');
+    const sensors = Array.from(checked).map(cb => cb.value);
+    
+    if (currentFanId) {
+        if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
+        fanConfigs[currentFanId].sensors = sensors;
+        
+        sendControl({
+            action: 'set_fan_config',
+            fan: currentFanId,
+            sensors: sensors
+        });
+    }
+    
+    popup.classList.add('hidden');
+}
+
+// ============================================================================
+// CHART (ApexCharts)
+// ============================================================================
+
+function updateChart() {
+    const chartContainer = document.getElementById('temp-chart');
+    if (!chartContainer || chartContainer.offsetParent === null) return;
+    
+    fetch('/api/history?hours=24')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.has_data) return;
+            
+            const series = [
+                {
+                    name: 'Max HDD Temp',
+                    data: data.timestamps.map((ts, i) => ({
+                        x: new Date(ts).getTime(),
+                        y: data.temps[i]
+                    }))
+                },
+                {
+                    name: 'Avg PWM',
+                    data: data.timestamps.map((ts, i) => ({
+                        x: new Date(ts).getTime(),
+                        y: data.pwm[i]
+                    }))
+                }
+            ];
+            
+            if (!chart) {
+                chart = new ApexCharts(chartContainer, {
+                    chart: {
+                        type: 'line',
+                        height: 250,
+                        background: 'transparent',
+                        foreColor: '#9ca3af',
+                        toolbar: { show: false },
+                        zoom: { enabled: false },
+                        animations: {
+                            enabled: true,
+                            easing: 'easeinout',
+                            speed: 800
+                        }
+                    },
+                    theme: { mode: 'dark' },
+                    stroke: {
+                        curve: 'smooth',
+                        width: [2, 1.5],
+                        dashArray: [0, 5]
+                    },
+                    colors: ['#ff2d55', '#00f0ff'],
+                    fill: {
+                        type: 'gradient',
+                        gradient: {
+                            shade: 'dark',
+                            type: 'vertical',
+                            opacityFrom: 0.3,
+                            opacityTo: 0
+                        }
+                    },
+                    markers: {
+                        size: 0,
+                        hover: { size: 4 }
+                    },
+                    grid: {
+                        borderColor: '#1a1f2e',
+                        strokeDashArray: 4
+                    },
+                    xaxis: {
+                        type: 'datetime',
+                        labels: {
+                            style: { colors: '#6b7280' }
+                        }
+                    },
+                    yaxis: [
+                        {
+                            title: { text: '°C', style: { color: '#ff2d55' } },
+                            labels: { style: { colors: '#6b7280' } }
+                        },
+                        {
+                            opposite: true,
+                            title: { text: '%', style: { color: '#00f0ff' } },
+                            labels: { style: { colors: '#6b7280' } },
+                            min: 0,
+                            max: 100
+                        }
+                    ],
+                    legend: {
+                        position: 'top',
+                        labels: { colors: '#9ca3af' }
+                    },
+                    tooltip: {
+                        theme: 'dark',
+                        x: { format: 'HH:mm' }
+                    }
+                });
+                
+                chart.render();
+            } else {
+                chart.updateSeries(series);
+            }
+        })
+        .catch(err => console.error('Chart error:', err));
+}
+
+// Update chart every 60 seconds
+setInterval(updateChart, 60000);
+
+// ============================================================================
+// DISKS LIST (Left Panel Bottom)
+// ============================================================================
+
+function buildDisksList(disks) {
+    const container = document.getElementById('disks-mini-list');
+    if (!container) return;
+    
+    let html = '';
+    
+    for (const [id, disk] of Object.entries(disks)) {
+        const pct = disk.pct_fill || 0;
+        const colorMap = {
+            'cyan': 'bg-neon-cyan',
+            'orange': 'bg-neon-orange',
+            'red': 'bg-neon-red',
+            'critical': 'bg-neon-red animate-pulse',
+            'unknown': 'bg-gray-600'
+        };
+        const barColor = colorMap[disk.color_zone] || 'bg-gray-600';
+        
+        html += `
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400 w-14 truncate">${disk.label}</span>
+                <div class="flex-1 h-1.5 bg-cyber-accent rounded-full overflow-hidden">
+                    <div class="h-full ${barColor} rounded-full progress-fill" style="width: ${pct}%"></div>
+                </div>
+                <span class="text-xs font-mono w-10 text-right ${getTempColorClass(disk.temp)}">
+                    ${disk.standby ? 'Sleep' : disk.temp > 0 ? disk.temp + '°' : '--'}
+                </span>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html || '<div class="text-xs text-gray-500">No disks detected</div>';
+}
+
+function getTempColorClass(temp) {
+    if (temp <= 0) return 'text-gray-500';
+    if (temp <= 35) return 'text-neon-cyan';
+    if (temp <= 45) return 'text-neon-orange';
+    return 'text-neon-red';
+}
+
+// ============================================================================
+// SETUP WIZARD
+// ============================================================================
 
 function runDiscovery() {
-    console.log("=== runDiscovery: Phase 1 - Hardware Scan ===");
+    console.log('[FanControl] Starting hardware discovery...');
     
-    var btn = document.getElementById("discover-btn");
-    var loader = document.getElementById("discover-loader");
-    if (btn) btn.disabled = true;
-    if (loader) loader.style.display = "block";
-    
+    document.getElementById('discover-btn').disabled = true;
+    document.getElementById('discover-loader').classList.remove('hidden');
     wizardStep = 'scanning';
     
-    fetch("/api/discover", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            console.log("=== Discovery result ===", data);
+    fetch('/api/discover', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('discover-btn').disabled = false;
+            document.getElementById('discover-loader').classList.add('hidden');
             
-            if (btn) btn.disabled = false;
-            if (loader) loader.style.display = "none";
-            
-            if (data.status === "ok") {
+            if (data.status === 'ok') {
                 renderDiscoveredHardware(data);
                 wizardStep = 'results';
                 
-                var intro = document.getElementById("setup-step-intro");
-                var results = document.getElementById("setup-step-results");
-                if (intro) intro.style.display = "none";
-                if (results) results.style.display = "block";
+                document.getElementById('setup-step-intro').classList.add('hidden');
+                document.getElementById('setup-step-results').classList.remove('hidden');
             } else {
-                alert("Scan error: " + data.message);
+                alert('Scan error: ' + data.message);
                 wizardStep = 'intro';
             }
         })
-        .catch(function(err) {
-            console.error("=== Discovery error ===", err);
-            alert("Connection error during scan");
-            if (btn) btn.disabled = false;
-            if (loader) loader.style.display = "none";
+        .catch(err => {
+            console.error('Discovery error:', err);
+            alert('Connection error during scan');
+            document.getElementById('discover-btn').disabled = false;
+            document.getElementById('discover-loader').classList.add('hidden');
             wizardStep = 'intro';
         });
 }
 
 function renderDiscoveredHardware(data) {
-    var container = document.getElementById("discovered-devices");
+    const container = document.getElementById('discovered-devices');
     if (!container) return;
     
-    var fanSvg = '<svg class="fan-icon-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
-        '<defs>' +
-            '<linearGradient id="bladeGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
-                '<stop offset="0%" style="stop-color:#4a90d9;stop-opacity:1" />' +
-                '<stop offset="100%" style="stop-color:#00ff88;stop-opacity:1" />' +
-            '</linearGradient>' +
-        '</defs>' +
-        '<circle cx="50" cy="50" r="12" fill="#666" stroke="#4a90d9" stroke-width="2"/>' +
-        '<circle cx="50" cy="50" r="6" fill="#333"/>' +
-        '<g fill="url(#bladeGrad)" opacity="0.9">' +
-            '<path d="M50,50 L50,8 Q55,15 60,10 Q58,25 65,20 L50,50Z" />' +
-            '<path d="M50,50 L90,50 Q82,55 86,60 Q72,58 76,65 L50,50Z" />' +
-            '<path d="M50,50 L50,92 Q45,85 40,90 Q42,75 35,80 L50,50Z" />' +
-            '<path d="M50,50 L10,50 Q18,45 14,40 Q28,42 24,35 L50,50Z" />' +
-        '</g>' +
-    '</svg>';
-
-    var html = '<div class="wizard-layout">';
+    let html = '';
     
-    // � �� ›� ћ� љ 1: � ў� •� њ� џ� •� � � ђ� ў� Ј� � � ќ� «� • � ”� ђ� ў� §� �� љ� � � � � ”� �� Ў� љ� �
-    html += '<div class="wizard-block">';
-    html += '<h5>рџЊЎпёЏ Sensors & Drives</h5>';
-    html += '<div id="wizard-sensors-list">';
-    
-    // � ’С‹� І� ѕ� ґ � ґ� ёСЃ� є� ѕ� І
-    if (data.disks && Object.keys(data.disks).length > 0) {
-        for (var k in data.disks) {
-            var d = data.disks[k];
-            var diskId = safeId(k);
-            html += '<div class="discovered-device" id="wdrive-' + diskId + '">' +
-                    '<span>рџ’ѕ ' + d.label + ' <small class="text-muted">(' + d.type.toUpperCase() + ')</small></span>' +
-                    '<span class="drive-temp-live" style="font-weight:bold; color:#ffaa00;">' + (d.standby ? 'Sleep' : (d.temp > 0 ? d.temp + 'В°C' : '--')) + '</span>' +
-                    '</div>';
-        }
-    }
-    
-    // � ’С‹� І� ѕ� ґ СЃ� µ� ЅСЃ� ѕСЂ� ѕ� І � �� °С‚� µСЂ� ё� ЅСЃ� є� ѕ� № � ї� »� °С‚С‹ / CPU
-    if (data.temps && Object.keys(data.temps).length > 0) {
-        for (var tk in data.temps) {
-            var t = data.temps[tk];
-            var tempId = safeId(tk);
-            html += '<div class="discovered-device" id="wtemp-' + tempId + '">' +
-                    '<span>рџЊї ' + t.label + '</span>' +
-                    '<span class="sensor-temp-live" style="font-weight:bold; color:#ffaa00;">' + (t.value || 0) + 'В°C</span>' +
-                    '</div>';
-        }
-    }
-    html += '</div></div>';
-    
-    // � �� ›� ћ� љ 2: � ’� •� ќ� ў� �� ›� Ї� ў� ћ� � � «
-    html += '<div class="wizard-block">';
-    html += '<h5>рџЊЂ Fans</h5>';
-    html += '<div id="wizard-fans-list">';
-    
+    // Fans section
     if (data.fans && Object.keys(data.fans).length > 0) {
-        for (var key in data.fans) {
-            var fan = data.fans[key];
-            var fanId = safeId(key);
-            
-            html += '<div class="discovered-device" id="device-' + fanId + '" style="display:flex;align-items:center;justify-content:space-between">' +
-                    '<div style="display:flex;align-items:center;gap:10px;flex:1">' +
-                    '<span id="icon-' + fanId + '" style="display:flex;align-items:center">' + fanSvg + '</span>' +
-                    '<div>' +
-                    '<div style="font-weight:bold;font-size:14px">' + fan.label + '</div>' +
-                    '<div style="font-size:10px;color:#888">' + key + ' | ' + (fan.writable ? 'вњ… Controllable' : 'вљ� пёЏ Read-only') + '</div>' +
-                    '</div>' +
-                    '</div>' +
-                    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">' +
-                    '<span class="fan-status-live"><span class="badge-need-calib">Not calibrated</span></span>' +
-                    '<span class="fan-rpm-live" style="font-weight:bold;color:#00ff88;font-size:14px;">0 RPM</span>' +
-                    '</div>' +
-                    '</div>';
+        html += '<h4 class="text-sm font-semibold text-neon-cyan mb-2">🌀 Fans</h4>';
+        for (const [id, fan] of Object.entries(data.fans)) {
+            html += `
+                <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
+                    <div>
+                        <span class="text-sm text-white">${fan.label}</span>
+                        <span class="text-xs text-gray-500 ml-2">${fan.writable ? '✅ Controllable' : '⚠️ Read-only'}</span>
+                    </div>
+                    <span class="text-xs bg-orange-900 bg-opacity-30 text-neon-orange px-2 py-0.5 rounded">Not calibrated</span>
+                </div>
+            `;
         }
     }
-    html += '</div></div>';
-    html += '</div>'; // � љ� ѕ� Ѕ� µС�  wizard-layout
     
-    container.innerHTML = html;
+    // Sensors section
+    if (data.temps && Object.keys(data.temps).length > 0) {
+        html += '<h4 class="text-sm font-semibold text-neon-green mb-2 mt-4">🌡️ Temperature Sensors</h4>';
+        for (const [id, sensor] of Object.entries(data.temps)) {
+            html += `
+                <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
+                    <span class="text-sm text-white">${sensor.label}</span>
+                    <span class="text-sm font-mono text-neon-cyan">${sensor.value || 0}°C</span>
+                </div>
+            `;
+        }
+    }
     
-    var intro = document.getElementById("setup-step-intro");
-    var results = document.getElementById("setup-step-results");
-    var action = document.getElementById("setup-step-action");
+    // Disks section
+    if (data.disks && Object.keys(data.disks).length > 0) {
+        html += '<h4 class="text-sm font-semibold text-neon-purple mb-2 mt-4">💾 Storage Disks</h4>';
+        for (const [id, disk] of Object.entries(data.disks)) {
+            html += `
+                <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
+                    <span class="text-sm text-white">${disk.label} <span class="text-xs text-gray-500">(${disk.type})</span></span>
+                    <span class="text-sm font-mono ${getTempColorClass(disk.temp)}">
+                        ${disk.standby ? 'Sleep' : disk.temp > 0 ? disk.temp + '°C' : '--'}
+                    </span>
+                </div>
+            `;
+        }
+    }
     
-    if (intro) intro.style.display = "none";
-    if (results) results.style.display = "block";
+    container.innerHTML = html || '<p class="text-gray-500">No hardware detected</p>';
     
-    if (data.fans && Object.keys(data.fans).length > 0 && action) {
-        action.style.display = "block";
+    // Show calibrate button if fans found
+    if (data.fans && Object.keys(data.fans).length > 0) {
+        document.getElementById('setup-step-action').classList.remove('hidden');
     }
 }
 
 function runCalibration() {
-    console.log("=== runCalibration: Phase 2 - Fan Calibration ===");
+    console.log('[FanControl] Starting calibration...');
     
-    var btn = document.getElementById("calibrate-btn");
-    var loader = document.getElementById("calibrate-loader");
-    if (btn) btn.disabled = true;
-    if (loader) loader.style.display = "block";
-    
+    document.getElementById('calibrate-btn').disabled = true;
+    document.getElementById('calibrate-loader').classList.remove('hidden');
     wizardStep = 'calibrating';
     
-    fetch("/api/initialize", { method: "POST" })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            console.log("=== Calibration started ===", data);
+    document.getElementById('calibration-modal').classList.remove('hidden');
+    document.getElementById('calibration-status').textContent = 'Starting...';
+    document.getElementById('calibration-progress-bar').style.width = '0%';
+    document.getElementById('calibration-step').textContent = 'Step 0/11';
+    
+    fetch('/api/initialize', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            console.log('[FanControl] Calibration initiated:', data);
         })
-        .catch(function(err) {
-            console.error("=== Calibration error ===", err);
-            alert("Calibration launch error");
-            if (btn) btn.disabled = false;
-            if (loader) loader.style.display = "none";
-            wizardStep = 'results';
+        .catch(err => {
+            console.error('Calibration error:', err);
+            hideCalibrationModal();
+            document.getElementById('calibrate-btn').disabled = false;
+            document.getElementById('calibrate-loader').classList.add('hidden');
         });
 }
 
-// ====================== MAIN SCREEN FUNCTIONS ======================
-
-function showSyncingStatus() {
-    var statusEl = document.getElementById("sync-status");
-    if (statusEl) {
-        statusEl.textContent = "вџі Saving...";
-        statusEl.className = "saving";
-        clearTimeout(window._syncTimeout);
-        window._syncTimeout = setTimeout(function() {
-            if (statusEl) {
-                statusEl.textContent = "в—Џ Synced";
-                statusEl.className = "synced";
-            }
-        }, 3000);
+function updateCalibrationModal(progress) {
+    const modal = document.getElementById('calibration-modal');
+    if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
     }
-}
-
-function updateValues(d) {
-    currentData = d;
     
-    // � •СЃ� »� ё � �С‹ � Ѕ� ° СЌ� єСЂ� °� Ѕ� µ � �� °СЃС‚� µСЂ� ° � Ѕ� °СЃС‚СЂ� ѕ� №� є� ё (� є� °� »� ё� ±СЂ� ѕ� І� є� ё)
-    if (wizardStep === 'results' || wizardStep === 'calibrating') {
-        
-        // 1. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ С‚� µ� �� ї� µСЂ� °С‚СѓСЂ � ґ� ёСЃ� є� ѕ� І
-        if (d.hdd_sensors) {
-            for (var dk in d.hdd_sensors) {
-                var disk = d.hdd_sensors[dk];
-                var diskId = safeId(dk);
-                var driveRow = document.getElementById("wdrive-" + diskId);
-                if (driveRow) {
-                    var dTempEl = driveRow.querySelector(".drive-temp-live");
-                    if (dTempEl) {
-                        dTempEl.textContent = disk.standby ? 'Sleep' : (disk.temp > 0 ? disk.temp + 'В°C' : '--');
-                    }
-                }
-            }
-        }
-        
-        // 2. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ � ґ� °С‚С‡� ё� є� ѕ� І � �� °С‚� µСЂ� ё� ЅСЃ� є� ѕ� № � ї� »� °С‚С‹ / CPU
-        if (d.temp_sensors) {
-            for (var tk in d.temp_sensors) {
-                var sensor = d.temp_sensors[tk];
-                var tempId = safeId(tk);
-                var tempRow = document.getElementById("wtemp-" + tempId);
-                if (tempRow) {
-                    var sTempEl = tempRow.querySelector(".sensor-temp-live");
-                    if (sTempEl) {
-                        sTempEl.textContent = (sensor.value || 0) + 'В°C';
-                    }
-                }
-            }
-        }
-        
-        // 3. � ћ� ±� Ѕ� ѕ� І� »� µ� Ѕ� ё� µ � І� µ� ЅС‚� ё� »СЏС‚� ѕСЂ� ѕ� І
-        if (d.fans) {
-            for (var key in d.fans) {
-                var fan = d.fans[key];
-                var deviceId = safeId(key);
-                var deviceRow = document.getElementById("device-" + deviceId);
-                
-                if (deviceRow) {
-                    var rpmEl = deviceRow.querySelector(".fan-rpm-live");
-                    if (rpmEl) rpmEl.textContent = fan.rpm + " RPM";
-                    
-                    var statusEl = deviceRow.querySelector(".fan-status-live");
-                    if (statusEl) {
-                        if (fan.status === "calibrating") {
-                            statusEl.innerHTML = '<span class="text-info calibrating-pulse">вљЎ Calibrating...</span>';
-                        } else if (fan.status === "normal") {
-                            statusEl.innerHTML = '<span style="color:#00ff88">вњ“ Normal</span>';
-                        } else if (fan.status === "inverted") {
-                            statusEl.innerHTML = '<span style="color:#ffaa00">в‡„ Inverted</span>';
-                        } else if (fan.status === "not_connected") {
-                            statusEl.innerHTML = '<span style="color:#ff4444">вњ— Not connected</span>';
-                        }
-                    }
-                    
-                    // � ’СЂ� °С‰� µ� Ѕ� ё� µ � ё� є� ѕ� Ѕ� є� ё
-                    var iconContainer = document.getElementById("icon-" + safeId);
-                    if (iconContainer) {
-                        var svgElement = iconContainer.querySelector(".fan-icon-svg");
-                        if (svgElement) {
-                            var currentRpm = fan.rpm || 0;
-                            if (currentRpm > 0) {
-                                var visualDuration = (60 / currentRpm) * 10;
-                                if (visualDuration < 0.3) visualDuration = 0.3;
-                                if (visualDuration > 5.0) visualDuration = 5.0;
-                                
-                                svgElement.style.animationDuration = visualDuration.toFixed(2) + "s";
-                                svgElement.classList.add("fan-spinning");
-                            } else {
-                                svgElement.classList.remove("fan-spinning");
-                                svgElement.style.animationDuration = "0s";
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // If system is not initialized, show setup screen
-    if (!d.initialized) {
-        var ss = document.getElementById("setup-screen");
-        var ms = document.getElementById("main-screen");
-        if (ss) ss.style.display = "block";
-        if (ms) ms.style.display = "none";
-        
-        if (d.hardware_scanned && wizardStep === 'intro') {
-            renderDiscoveredHardware({
-                fans: d.fans,
-                temps: d.temp_sensors,
-                disks: d.hdd_sensors
-            });
-            wizardStep = 'results';
-            
-            var btn = document.getElementById("discover-btn");
-            var loader = document.getElementById("discover-loader");
-            if (btn) btn.disabled = false;
-            if (loader) loader.style.display = "none";
-        }
-        return;
-    }
-
-    // Show main screen
-    var ss = document.getElementById("setup-screen");
-    var ms = document.getElementById("main-screen");
-    if (ss) ss.style.display = "none";
-    if (ms) ms.style.display = "block";
-
-    var mt = document.getElementById("max-temp-disp");
-    if (mt) {
-        var tc = "temp-good";
-        if (d.max_hdd_temp > 35) tc = "temp-bad";
-        else if (d.max_hdd_temp > 31) tc = "temp-warn";
-        
-        var tempSpan = mt.querySelector('span') || document.createElement('span');
-        tempSpan.className = tc;
-        tempSpan.textContent = d.max_hdd_temp + 'В°C';
-        if (!mt.contains(tempSpan)) {
-            mt.textContent = '';
-            mt.appendChild(tempSpan);
-        }
-    }
-
-    var tw = document.getElementById("test-warning");
-    if (tw) tw.style.display = d.tested ? "none" : "inline";
-
-    allSensors = [];
-    for (var k in d.hdd_sensors) {
-        var s = d.hdd_sensors[k];
-        allSensors.push({id: "hdd:" + k, label: s.label, temp: s.temp, standby: s.standby, group: "Disks"});
-    }
-    for (k in d.temp_sensors) {
-        allSensors.push({id: "temp:" + k, label: d.temp_sensors[k].label, temp: d.temp_sensors[k].value, standby: false, group: "Sensors"});
-    }
-
-    var dc = document.getElementById("disks-container");
-    if (dc) {
-        dc.innerHTML = '';
-        for (k in d.hdd_sensors) {
-            var v = d.hdd_sensors[k];
-            var html = '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px">' +
-                       '<span>' + v.label + '</span>' +
-                       '<span style="color:' + (v.standby ? '#4a90d9' : v.temp > 35 ? '#ff4444' : v.temp > 31 ? '#ffaa00' : '#00ff88') + '">' +
-                       (v.standby ? 'Sleep' : v.temp > 0 ? v.temp + 'В°C' : '--') + '</span></div>';
-            dc.innerHTML += html;
-        }
-    }
-
-    var tc2 = document.getElementById("temps-container");
-    if (tc2) {
-        tc2.innerHTML = '';
-        for (k in d.temp_sensors) {
-            var tv = d.temp_sensors[k];
-            tc2.innerHTML += '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px">' +
-                            '<span>' + tv.label + '</span>' +
-                            '<span>' + (tv.value || 0) + 'В°C</span></div>';
-        }
-    }
-
-    if (!fansBuilt) {
-        buildFans(d);
-        fansBuilt = true;
-    }
-
-    for (k in d.fans) {
-        var f = d.fans[k];
-            var ks = safeId(k);
-        if (rpmEl) {
-            var rpmText = f.rpm + " RPM";
-            if (f.rpm_stabilizing) rpmText += " вЏі";
-            rpmEl.textContent = rpmText;
-        }
-
-        var sliderEl = document.getElementById("slider-" + ks);
-        if (sliderEl && !activeSliders.has(ks)) {
-            sliderEl.disabled = (f.fan_mode === "auto");
-            if (f.fan_mode !== "auto") {
-                sliderEl.value = f.manual_pct || 50;
-            }
-        }
-
-        var pwmEl = document.getElementById("pwm-" + ks);
-        if (pwmEl && (!sliderEl || document.activeElement !== sliderEl)) {
-            if (f.fan_mode === "auto") {
-                pwmEl.textContent = (f.current_pct !== undefined ? f.current_pct : 50) + "%";
-            } else {
-                pwmEl.textContent = (f.manual_pct || 50) + "%";
-            }
-        }
-
-        var stEl = document.getElementById("status-" + ks);
-        if (stEl) {
-            var st = f.status || "not_tested";
-            var labels = {normal: "Normal", inverted: "Inverted", absent: "Absent", not_tested: "Not tested", not_connected: "Not connected"};
-            var classes = {normal: "temp-good", inverted: "text-warning", absent: "text-muted", not_tested: "text-danger", not_connected: "text-muted"};
-            stEl.textContent = labels[st] || st;
-            stEl.className = classes[st] || "";
-        }
-
-        var card = document.getElementById("card-" + ks);
-        if (card) {
-            card.className = "card " + (f.fan_mode === "auto" ? "auto-mode" : "manual-mode");
-        }
-    }
-}
-
-function buildFans(d) {
-    var fc = document.getElementById("fan-container");
-    if (!fc) return;
+    document.getElementById('calibration-status').textContent = progress.status;
+    document.getElementById('calibration-step').textContent = 
+        `Step ${progress.step}/${progress.total}`;
     
-    var html = "";
-    for (var k in d.fans) {
-        var f = d.fans[k];
-        var ks = safeId(k);
-        html += "<div class='card " + (f.fan_mode === "auto" ? "auto-mode" : "manual-mode") + "' id='card-" + ks + "'>";
-        html += "<div class='card-header'>" + f.label + " <small id='status-" + ks + "'></small></div>";
-        html += "<div class='card-body'>";
-        html += "<div class='fan-row'>";
-        html += "<span class='name'>" + f.label + "</span>";
-        html += " <button class='sensor-btn' data-fan='" + k + "'>Test</button>";
-        html += "<span class='rpm' id='rpm-" + ks + "'>0 RPM</span>";
-        html += "<input type='range' min='0' max='100' value='" + (f.manual_pct || 50) + "' data-fan='" + k + "' " + (d.tested ? "" : "disabled") + " id='slider-" + ks + "'>";
-        html += "<small id='pwm-" + ks + "'>" + (f.manual_pct || 50) + "%</small>";
-        html += "</div><div id='config-" + ks + "' style='font-size:12px;margin-top:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap'></div>";
-        html += "<div id='schedule-" + ks + "'></div>";
-        html += "</div></div>";
-    }
-    fc.innerHTML = html;
+    const pct = progress.total > 0 ? (progress.step / progress.total * 100) : 0;
+    document.getElementById('calibration-progress-bar').style.width = `${pct}%`;
+}
+
+function hideCalibrationModal() {
+    document.getElementById('calibration-modal').classList.add('hidden');
+}
+
+function startCalibration() {
+    if (!confirm('Recalibrate all fans? This takes 1-2 minutes.')) return;
     
-    var fcd = document.getElementById("fan-count-disp");
-    if (fcd) fcd.textContent = Object.keys(d.fans).length;
-
-    var sliders = fc.querySelectorAll("input[type=range]");
-    for (var i = 0; i < sliders.length; i++) {
-        (function(slider) {
-            var fanKey = slider.getAttribute("data-fan");
-            var ks2 = safeId(fanKey);
-            
-            slider.addEventListener("input", function() {
-                var pwmEl = document.getElementById("pwm-" + ks2);
-                if (pwmEl) pwmEl.textContent = this.value + "%";
-            });
-            
-            slider.addEventListener("change", function() {
-                showSyncingStatus();
-                setFan(fanKey, this.value);
-            });
-            
-            slider.addEventListener("mousedown", function() { activeSliders.add(ks2); });
-            slider.addEventListener("mouseup", function() { 
-                setTimeout(function() { activeSliders.delete(ks2); }, 1500); 
-            });
-        })(sliders[i]);
-    }
-
-    var buttons = fc.querySelectorAll("button.sensor-btn");
-    for (var j = 0; j < buttons.length; j++) {
-        (function(btn) {
-            btn.addEventListener("click", function() { testFan(this.getAttribute("data-fan")); });
-        })(buttons[j]);
-    }
-
-    for (k in d.fans) {
-        if (!fanConfigs[k]) fanConfigs[k] = {};
-        var f2 = d.fans[k];
-        fanConfigs[k].sensors = f2.sensors || [];
-        fanConfigs[k].sensor_mode = f2.sensor_mode || "max";
-        fanConfigs[k].target_temp = f2.target_temp || 31;
-        fanConfigs[k].fan_mode = f2.fan_mode || "manual";
-        fanConfigs[k].schedule = f2.schedule || [];
-        buildFanConfig(k, d);
-    }
-}
-
-function buildFanConfig(k, d) {
-    buildingConfig = true;
-    var f = d.fans[k];
-    var cfg = fanConfigs[k] || {};
-    var ks = safeId(k);
-    var sensors = cfg.sensors || [];
-    var smode = cfg.sensor_mode || "max";
-    var target = cfg.target_temp || 31;
-    var fm = cfg.fan_mode || "manual";
-
-    var configDiv = document.getElementById("config-" + ks);
-    if (!configDiv) { buildingConfig = false; return; }
-
-    var addBtn = document.createElement("button");
-    addBtn.className = "sensor-btn";
-    addBtn.textContent = "+";
-    addBtn.onclick = function(e) { e.stopPropagation(); togglePopup(k, this); };
-
-    var tagsDiv = document.createElement("div");
-    tagsDiv.style.cssText = "display:flex;flex-wrap:wrap;gap:2px";
-    for (var i = 0; i < sensors.length; i++) {
-        var s = sensors[i];
-        var found = allSensors.find(function(y) { return y.id === s; });
-        var tag = document.createElement("span");
-        tag.className = "sensor-tag";
-        tag.setAttribute("data-sid", s);
-        tag.textContent = (found ? found.label : s) + " ";
-        var rm = document.createElement("span");
-        rm.className = "remove";
-        rm.textContent = "x";
-        rm.onclick = function(e) {
-            e.stopPropagation();
-            removeSensor(k, this.parentNode.getAttribute("data-sid"));
-        };
-        tag.appendChild(rm);
-        tagsDiv.appendChild(tag);
-    }
-
-    var smodeSel = document.createElement("select");
-    smodeSel.innerHTML = "<option value='max'>Max</option><option value='min'>Min</option><option value='avg'>Avg</option>";
-    smodeSel.value = smode;
-    smodeSel.onchange = function() { showSyncingStatus(); setFanConfig(k, "sensor_mode", this.value); };
-
-    var targetInput = document.createElement("input");
-    targetInput.type = "number"; targetInput.value = target; targetInput.min = 20; targetInput.max = 60;
-    targetInput.style.width = "45px";
-    targetInput.onchange = function() { showSyncingStatus(); setFanConfig(k, "target_temp", this.value); };
-
-    var fmSel = document.createElement("select");
-    fmSel.innerHTML = "<option value='manual'>Manual</option><option value='auto'>Auto</option>";
-    fmSel.value = fm;
-    fmSel.onchange = function() { showSyncingStatus(); setFanConfig(k, "fan_mode", this.value); };
-
-    configDiv.innerHTML = "";
-    configDiv.appendChild(addBtn);
-    configDiv.appendChild(tagsDiv);
-    configDiv.appendChild(smodeSel);
-    configDiv.appendChild(document.createTextNode(" Target:"));
-    configDiv.appendChild(targetInput);
-    configDiv.appendChild(document.createTextNode("В°C "));
-    configDiv.appendChild(fmSel);
-
-    buildSchedule(k, ks, fm, cfg.schedule || []);
-    setTimeout(function() { buildingConfig = false; }, 100);
-}
-
-function buildSchedule(k, ks, fm, schedule) {
-    var schedDiv = document.getElementById("schedule-" + ks);
-    if (!schedDiv) return;
-    schedDiv.innerHTML = "";
-    if (fm !== "auto") return;
-
-    var builder = document.createElement("div");
-    builder.className = "timeline-builder";
-    var header = document.createElement("div");
-    header.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:8px";
-    header.innerHTML = "<span style='color:#aaa;font-size:12px'>Flexible Schedule</span>";
-    var addBtn = document.createElement("button");
-    addBtn.textContent = "+ Add";
-    addBtn.style.cssText = "font-size:11px;padding:2px 8px;background:#00aa00;color:#fff;border:none;border-radius:3px";
-    addBtn.onclick = function() { addSchedule(k); };
-    header.appendChild(addBtn);
-    builder.appendChild(header);
-
-    if (schedule.length === 0) {
-        var empty = document.createElement("div");
-        empty.style.cssText = "text-align:center;color:#888;font-size:11px;padding:10px";
-        empty.textContent = "No schedule configured.";
-        builder.appendChild(empty);
-    }
-
-    var days = ["mon","tue","wed","thu","fri","sat","sun"];
-    var dayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-    for (var i = 0; i < schedule.length; i++) {
-        var sch = schedule[i];
-        var row = document.createElement("div");
-        row.className = "timeline-rule-row";
-        row.style.cssText = "display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.2);padding:6px;border-radius:4px;margin:4px 0;flex-wrap:wrap";
-        
-        var daySel = document.createElement("select");
-        daySel.style.cssText = "background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-        daySel.innerHTML = "<option value='all'>Every day</option><option value='weekday'>Weekdays</option><option value='weekend'>Weekend</option>";
-        for (var di = 0; di < 7; di++) daySel.innerHTML += "<option value='" + days[di] + "'>" + dayNames[di] + "</option>";
-        daySel.value = sch.day || "all";
-        daySel.onchange = function() { showSyncingStatus(); updateSchedule(k, i, "day", this.value); };
-        
-        var timeStart = document.createElement("input"); 
-        timeStart.type = "time"; 
-        timeStart.value = sch.time_start || "00:00";
-        timeStart.style.cssText = "background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-        timeStart.onchange = function() { showSyncingStatus(); updateSchedule(k, i, "time_start", this.value); };
-        
-        var timeEnd = document.createElement("input"); 
-        timeEnd.type = "time"; 
-        timeEnd.value = sch.time_end || "23:59";
-        timeEnd.style.cssText = "background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-        timeEnd.onchange = function() { showSyncingStatus(); updateSchedule(k, i, "time_end", this.value); };
-        
-        var modeSel = document.createElement("select");
-        modeSel.style.cssText = "background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-        modeSel.innerHTML = "<option value='auto'>Auto</option><option value='fixed'>Fixed</option><option value='low'>Quiet</option><option value='off'>Off</option>";
-        modeSel.value = sch.mode || "auto";
-        modeSel.onchange = function() {
-            sch.mode = this.value;
-            showSyncingStatus();
-            updateSchedule(k, i, "mode", sch.mode);
-            rebuildFanConfig(k);
-        };
-        
-        var delBtn = document.createElement("button");
-        delBtn.textContent = "x";
-        delBtn.style.cssText = "color:#ff4444;background:none;border:none;font-size:16px;cursor:pointer;margin-left:auto";
-        delBtn.onclick = function() { removeSchedule(k, i); };
-        
-        row.appendChild(daySel);
-        row.appendChild(document.createTextNode(" from ")); 
-        row.appendChild(timeStart);
-        row.appendChild(document.createTextNode(" to ")); 
-        row.appendChild(timeEnd);
-        row.appendChild(modeSel);
-        if (sch.mode === "auto" || !sch.mode) {
-            row.appendChild(document.createTextNode(" Цель:"));
-            var ti = document.createElement("input");
-            ti.type = "number";
-            ti.value = sch.target_temp || 31;
-            ti.style.cssText = "width:45px;background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-            ti.min = 20; ti.max = 60;
-            ti.onchange = function() { showSyncingStatus(); updateSchedule(k, i, "target_temp", parseInt(this.value)); };
-            row.appendChild(ti);
-            row.appendChild(document.createTextNode("°C"));
-        } else if (sch.mode === "fixed" || sch.mode === "low") {
-            row.appendChild(document.createTextNode(" Скорость:"));
-
-            var pctInput = document.createElement("input");
-            pctInput.type = "number";
-            pctInput.value = sch.speed_pct !== undefined ? sch.speed_pct : (sch.mode === "low" ? 25 : 50);
-            pctInput.style.cssText = "width:45px;background:#1a1a2e;color:#fff;border:1px solid #333;font-size:11px";
-            pctInput.min = 0; pctInput.max = 100;
-
-            var pctSlider = document.createElement("input");
-            pctSlider.type = "range";
-            pctSlider.value = pctInput.value;
-            pctSlider.min = 0; pctSlider.max = 100;
-            pctSlider.style.cssText = "width:80px; margin: 0 5px; vertical-align: middle;";
-
-            pctSlider.oninput = function() { pctInput.value = this.value; };
-            pctSlider.onchange = function() { showSyncingStatus(); updateSchedule(k, i, "speed_pct", parseInt(this.value)); };
-            pctInput.onchange = function() {
-                if (this.value < 0) this.value = 0;
-                if (this.value > 100) this.value = 100;
-                pctSlider.value = this.value;
-                showSyncingStatus();
-                updateSchedule(k, i, "speed_pct", parseInt(this.value));
-            };
-
-            row.appendChild(pctSlider);
-            row.appendChild(pctInput);
-            row.appendChild(document.createTextNode("%"));
-        }
-        row.appendChild(delBtn);
-        builder.appendChild(row);
-    }
-    schedDiv.appendChild(builder);
-}
-
-function togglePopup(key, btn) {
-    var popup = document.getElementById("sensor-popup");
-    if (!popup) return;
-    var rect = btn.getBoundingClientRect();
-    popup.style.left = rect.left + "px";
-    popup.style.top = (rect.bottom + 4) + "px";
+    document.getElementById('calibration-modal').classList.remove('hidden');
+    document.getElementById('calibration-status').textContent = 'Starting...';
+    document.getElementById('calibration-progress-bar').style.width = '0%';
+    document.getElementById('calibration-step').textContent = 'Step 0/11';
     
-    var groups = {};
-    allSensors.forEach(function(s) { 
-        if (!groups[s.group]) groups[s.group] = []; 
-        groups[s.group].push(s); 
+    fetch('/api/initialize', { method: 'POST' })
+        .catch(err => console.error('Calibration error:', err));
+}
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('[FanControl] v3.0 - Neon Cyberpunk Edition initialized');
+    
+    // Click outside to close sensor popup
+    document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
+        if (e.target === this) closeSensorPopup();
     });
     
-    var sensors = (fanConfigs[key] || {}).sensors || [];
-    popup.innerHTML = "";
-    
-    for (var g in groups) {
-        var gTitle = document.createElement("div");
-        gTitle.style.cssText = "font-weight:bold;padding:3px 0;color:#aaa;font-size:11px";
-        gTitle.textContent = g;
-        popup.appendChild(gTitle);
-        
-        for (var i = 0; i < groups[g].length; i++) {
-            var s = groups[g][i];
-            var label = document.createElement("label");
-            label.style.cssText = "display:flex;align-items:center;gap:5px;padding:2px 5px;cursor:pointer;font-size:12px";
-            var cb = document.createElement("input");
-            cb.type = "checkbox"; 
-            cb.value = s.id; 
-            cb.checked = sensors.includes(s.id);
-            cb.onchange = function() { showSyncingStatus(); toggleSensor(key, this); };
-            label.appendChild(cb);
-            label.appendChild(document.createTextNode(s.label + " (" + (s.standby ? "Sleep" : s.temp + "В°C") + ")"));
-            popup.appendChild(label);
-        }
-    }
-    popup.classList.add("show");
-}
-
-function toggleSensor(key, cb) {
-    var popup = document.getElementById("sensor-popup");
-    if (!popup) return;
-    var checks = popup.querySelectorAll("input[type=checkbox]:checked");
-    var sensors = [];
-    for (var i = 0; i < checks.length; i++) sensors.push(checks[i].value);
-    if (sensors.length === 0) { cb.checked = true; sensors = [cb.value]; }
-    if (!fanConfigs[key]) fanConfigs[key] = {};
-    fanConfigs[key].sensors = sensors;
-    setFanConfig(key, "sensors", sensors);
-    rebuildFanConfig(key);
-}
-
-function removeSensor(key, id) {
-    var cfg = fanConfigs[key] || {};
-    var sensors = (cfg.sensors || []).filter(function(s) { return s !== id; });
-    cfg.sensors = sensors;
-    fanConfigs[key] = cfg;
-    showSyncingStatus();
-    setFanConfig(key, "sensors", sensors);
-    rebuildFanConfig(key);
-}
-
-function addSchedule(key) {
-    var cfg = fanConfigs[key] || {}, s = cfg.schedule || [];
-    s.push({day: "all", time_start: "00:00", time_end: "23:59", mode: "auto", target_temp: 31});
-    cfg.schedule = s; 
-    fanConfigs[key] = cfg; 
-    showSyncingStatus();
-    setFanConfig(key, "schedule", s);
-    rebuildFanConfig(key);
-}
-
-function removeSchedule(key, i) {
-    var cfg = fanConfigs[key] || {}, s = cfg.schedule || [];
-    s.splice(i, 1); 
-    cfg.schedule = s; 
-    fanConfigs[key] = cfg; 
-    showSyncingStatus();
-    setFanConfig(key, "schedule", s);
-    rebuildFanConfig(key);
-}
-
-function updateSchedule(key, i, field, val) {
-    var cfg = fanConfigs[key] || {}, s = cfg.schedule || [];
-    if (!s[i]) return;
-    s[i][field] = val; 
-    cfg.schedule = s; 
-    fanConfigs[key] = cfg; 
-    setFanConfig(key, "schedule", s);
-}
-
-function rebuildFanConfig(k) { 
-    if (currentData) buildFanConfig(k, currentData); 
-}
-
-function testFan(key) {
-    fetch("/api/test/start", {
-        method: "POST", 
-        headers: {"Content-Type": "application/json"}, 
-        body: JSON.stringify({fan: key})
-    });
-    var tp = document.getElementById("test-progress"); 
-    if (tp) tp.style.display = "block";
-}
-
-function startTest() {
-    fetch("/api/test/start", {method: "POST"});
-    var tp = document.getElementById("test-progress"); 
-    if (tp) tp.style.display = "block";
-}
-
-function setFan(k, v) {
-    var ks = safeId(k);
-    
-    var sliderEl = document.getElementById("slider-" + ks);
-    var pwmEl = document.getElementById("pwm-" + ks);
-    if (pwmEl) pwmEl.textContent = v + "%";
-    
-    fetch("/api/control", {
-        method: "POST", 
-        headers: {"Content-Type": "application/json"}, 
-        body: JSON.stringify({action: "set_fan_pwm", fan: k, pwm: parseInt(v)})
-    })
-    .then(function() {
-        setTimeout(function() {
-            socket.emit('get_state');
-        }, 1500);
-    })
-    .catch(function(err) {
-        console.error('Fan control error:', err);
-        socket.emit('get_state');
-    });
-}
-
-function setFanConfig(k, field, val) {
-    if (buildingConfig) return;
-    if (!fanConfigs[k]) fanConfigs[k] = {};
-    var oldVal = fanConfigs[k][field];
-    if (typeof val === "object" && val !== null) { 
-        if (JSON.stringify(oldVal) === JSON.stringify(val)) return; 
-    } else if (oldVal === val) return;
-    
-    fanConfigs[k][field] = val;
-    var payload = {action: "set_fan_config", fan: k}; 
-    payload[field] = val;
-    fetch("/api/control", {
-        method: "POST", 
-        headers: {"Content-Type": "application/json"}, 
-        body: JSON.stringify(payload)
-    });
-    if (field === "fan_mode") rebuildFanConfig(k);
-}
-
-// ====================== HISTORY CHART ======================
-
-function loadChart() {
-    var ctx = document.getElementById("chart");
-    if (!ctx) return;
-
-    fetch("/api/history?hours=24")
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (!d || d.length === 0) {
-                console.log("Chart: no historical data");
-                return;
-            }
-
-            var chartData = {labels: [], temps: [], rpm: []};
-            d.forEach(function(x) {
-                chartData.labels.push(new Date(x.ts).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}));
-                if (x.max_temp > 0) lastValidTemp = x.max_temp;
-                chartData.temps.push(lastValidTemp);
-                chartData.rpm.push(x.rpm || 0);
-            });
-
-            if (!chart) {
-                chart = new Chart(ctx, {
-                    type: "line",
-                    data: {
-                        labels: chartData.labels,
-                        datasets: [
-                            {label: "Max HDD В°C", data: chartData.temps, borderColor: "#ff4444", yAxisID: "y1", tension: 0.3},
-                            {label: "RPM", data: chartData.rpm, borderColor: "#00ff88", yAxisID: "y2", tension: 0.3}
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y1: {type: "linear", position: "left", title: {display: true, text: "В°C"}},
-                            y2: {type: "linear", position: "right", title: {display: true, text: "RPM"}}
-                        }
-                    }
-                });
-            } else {
-                chart.data.labels = chartData.labels;
-                if (chart.data.datasets && chart.data.datasets[0]) 
-                    chart.data.datasets[0].data = chartData.temps;
-                if (chart.data.datasets && chart.data.datasets[1]) 
-                    chart.data.datasets[1].data = chartData.rpm;
-                chart.update();
-            }
-        })
-        .catch(function(err) {
-            console.error("Chart load error:", err);
-        });
-}
-
-console.log("=== Calling loadChart ===");
-loadChart();
-setInterval(loadChart, 60000);
-
-document.addEventListener('click', function(e) {
-    var popup = document.getElementById('sensor-popup');
-    if (popup && !popup.contains(e.target) && !e.target.classList.contains('sensor-btn')) {
-        popup.classList.remove('show');
-    }
+    // Initial chart load (after short delay to ensure DOM is ready)
+    setTimeout(updateChart, 2000);
 });
 
-console.log("=== FanControl Web v2.9 - main.js FULLY LOADED ===");
+console.log('[FanControl] main.js loaded successfully');
