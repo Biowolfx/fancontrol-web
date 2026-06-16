@@ -911,7 +911,11 @@ def test_fans(fan_key: Optional[str] = None):
             if is_inverted:
                 fan['inverted'] = True
                 fan['status'] = 'inverted'
-                fan['curve'] = sorted(raw, key=lambda x: x['pwm'], reverse=True)
+                # Normalize curve: remap PWM so low pct = low RPM, high pct = high RPM
+                fan['curve'] = [
+                    {'pwm': 255 - pt['pwm'], 'rpm': pt['rpm'], 'pct': 100 - pt['pct']}
+                    for pt in sorted(raw, key=lambda x: x['pwm'])
+                ]
             else:
                 fan['inverted'] = False
                 fan['status'] = 'normal'
@@ -923,13 +927,18 @@ def test_fans(fan_key: Optional[str] = None):
                 raw[0]
             )
             
+            # For inverted fans, normalize min_pct to match normalized curve
+            cal_min_pct = real_min['pct']
+            if is_inverted:
+                cal_min_pct = 100 - real_min['pct']
+            
             fan.update({
                 'min_rpm': real_min['rpm'],
                 'max_rpm': max_rpm,
                 'calibration': {
                     'min_rpm': real_min['rpm'],
                     'max_rpm': max_rpm,
-                    'min_pct': real_min['pct'],
+                    'min_pct': cal_min_pct,
                     'inverted': fan['inverted']
                 }
             })
