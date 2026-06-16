@@ -111,6 +111,10 @@ PWM_CURVE_POINTS = 11
 MIN_PWM_PCT = 20
 MAX_PWM_PCT = 100
 
+# Rate limiting for control endpoints
+_control_rate_limit: Dict[str, float] = {}
+CONTROL_RATE_LIMIT_SECONDS = 0.1
+
 # ============================================================================
 # THREAD-SAFE STATE ACCESSOR
 # ============================================================================
@@ -277,6 +281,13 @@ def handle_control():
     try:
         data = request.get_json(force=True)
         validate_control_request(data)
+        
+        fan_key = data.get('fan', '')
+        now = time.monotonic()
+        last_time = _control_rate_limit.get(fan_key, 0)
+        if now - last_time < CONTROL_RATE_LIMIT_SECONDS:
+            return jsonify({"status": "error", "message": "Rate limit exceeded"}), 429
+        _control_rate_limit[fan_key] = now
         
         if data['action'] == 'set_fan_pwm':
             return _handle_set_pwm(data)
@@ -1131,7 +1142,8 @@ def pwm_from_curve(fan: Dict, target_pct: float) -> int:
 
 
 def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
-                      target_temp: float, schedule_item: Optional[Dict] = None) -> Tuple[int, str]:
+                      target_temp: float, schedule_item: Optional[Dict] = None,
+                      failsafe: bool = False, standby_mode: bool = False) -> Tuple[int, str]:
     """
     PURE FUNCTION: Calculates target PWM percentage and status.
     Does NOT write to hardware or modify state.
@@ -1142,16 +1154,16 @@ def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
         current_temp: Current effective temperature
         target_temp: Target temperature
         schedule_item: Current schedule rule if applied (optional)
+        failsafe: Whether the system is in failsafe mode
+        standby_mode: Whether disks are in standby
     
     Returns:
         (target_pct: int, status: str)
     """
-    # 1. Real failsafe - hardware emergency, maximum cooling
-    if state.get('failsafe'):
+    if failsafe:
         return MAX_PWM_PCT, 'failsafe'
 
-    # 2. Standby mode - disks sleeping
-    if state.get('standby_mode'):
+    if standby_mode:
         status = 'standby'
         
         if schedule_item:
@@ -1233,6 +1245,8 @@ def loop():
             
             with state_lock:
                 fans_snapshot = copy.deepcopy(state['fans'])
+                sys_failsafe = state.get('failsafe', False)
+                sys_standby = state.get('standby_mode', False)
             
             updated_fans_metrics = {}
             
@@ -1285,7 +1299,8 @@ def loop():
                                     current_temp = fan_temp(fan)
                                     target_temp = item.get('target_temp', fan.get('target_temp', 31))
                                     target_pct, status = process_auto_mode(
-                                        fan_id, fan, current_temp, target_temp, item
+                                        fan_id, fan, current_temp, target_temp, item,
+                                        failsafe=sys_failsafe, standby_mode=sys_standby
                                     )
                                 break
                     
@@ -1293,7 +1308,8 @@ def loop():
                         current_temp = fan_temp(fan)
                         target_temp = fan.get('target_temp', 31)
                         target_pct, status = process_auto_mode(
-                            fan_id, fan, current_temp, target_temp
+                            fan_id, fan, current_temp, target_temp,
+                            failsafe=sys_failsafe, standby_mode=sys_standby
                         )
                 
                 else:
@@ -1480,7 +1496,6 @@ def load_config():
                 
                 state['initialized'] = bool(cfg.get('initialized', False))
                 state['tested'] = bool(cfg.get('tested', False))
-                state['config'] = cfg
                 
             logger.info('Configuration loaded successfully')
             

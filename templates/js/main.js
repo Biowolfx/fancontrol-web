@@ -14,6 +14,8 @@ let fanConfigs = {};
 let isDragging = false;
 let wizardStep = 'intro';
 let currentState = null;
+let lastChartUpdate = 0;
+const CHART_UPDATE_INTERVAL = 30000;
 
 // ============================================================================
 // SOCKET.IO CONNECTION
@@ -511,8 +513,13 @@ function closeSensorPopup() {
 // ============================================================================
 
 function updateChart() {
+    const now = Date.now();
+    if (now - lastChartUpdate < CHART_UPDATE_INTERVAL) return;
+    
     const chartContainer = document.getElementById('temp-chart');
     if (!chartContainer || chartContainer.offsetParent === null) return;
+    
+    lastChartUpdate = now;
     
     fetch('/api/history?hours=24')
         .then(r => r.json())
