@@ -739,7 +739,7 @@ def set_pwm(key: str, raw_pwm: int, from_curve: bool = False):
         val = max(0, min(255, int(raw_pwm)))
         fan['raw_pwm'] = val
         
-        physical_pwm = (255 - val) if (fan.get('inverted') and not from_curve) else val
+        physical_pwm = (255 - val) if fan.get('inverted') else val
         
         try:
             Path(fan['pwm_path']).write_text(str(physical_pwm))
