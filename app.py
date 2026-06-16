@@ -891,7 +891,24 @@ def test_fans(fan_key: Optional[str] = None):
             low_rpm_avg = sum(pt['rpm'] for pt in raw[:3]) / 3 if raw[:3] else 0
             high_rpm_avg = sum(pt['rpm'] for pt in raw[-3:]) / 3 if raw[-3:] else 0
             
-            if high_rpm_avg > 0 and low_rpm_avg > high_rpm_avg * 1.2:
+            # Also compute full-range comparison for noisy fans
+            half = len(raw) // 2
+            first_half_avg = sum(pt['rpm'] for pt in raw[:half]) / max(half, 1)
+            second_half_avg = sum(pt['rpm'] for pt in raw[half:]) / max(len(raw) - half, 1)
+            
+            logger.info(
+                f'Fan {fan.get("label", k)}: '
+                f'low3_avg={low_rpm_avg:.0f}, high3_avg={high_rpm_avg:.0f}, '
+                f'first_half_avg={first_half_avg:.0f}, second_half_avg={second_half_avg:.0f}'
+            )
+            
+            is_inverted = False
+            if high_rpm_avg > 0 and low_rpm_avg > high_rpm_avg * 1.1:
+                is_inverted = True
+            elif second_half_avg > 0 and first_half_avg > second_half_avg * 1.1:
+                is_inverted = True
+            
+            if is_inverted:
                 fan['inverted'] = True
                 fan['status'] = 'inverted'
                 fan['curve'] = sorted(raw, key=lambda x: x['pwm'], reverse=True)
