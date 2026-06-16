@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.0 - Neon Cyberpunk Edition
+ * FanControl Web v3.0.1 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -15,7 +15,18 @@ let isDragging = false;
 let wizardStep = 'intro';
 let currentState = null;
 let lastChartUpdate = 0;
-const CHART_UPDATE_INTERVAL = 30000;
+const CHART_UPDATE_INTERVAL = 60000;
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
 
 // ============================================================================
 // SOCKET.IO CONNECTION
@@ -88,7 +99,6 @@ function updateUI(data) {
     // Build fan list if needed
     if (data.fans && Object.keys(data.fans).length > 0) {
         buildFanList(data.fans);
-        updateFanListStatus(data.fans);
     }
     
     // Build disks list
@@ -152,17 +162,17 @@ function buildFanList(fans) {
         const bgColor = isSelected ? 'bg-cyber-accent' : 'bg-cyber-card';
         
         html += `
-            <div id="fan-card-${fanId}" 
+            <div id="fan-card-${escapeHtml(fanId)}" 
                  class="fan-card ${bgColor} border ${borderColor} rounded-lg p-3 cursor-pointer 
                         hover:border-neon-purple transition-all duration-200"
-                 onclick="selectFan('${fanId}')">
+                 onclick="selectFan('${escapeHtml(fanId)}')">
                 <div class="flex items-center justify-between mb-1">
-                    <span class="text-sm font-semibold text-white truncate">${fan.label}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${fan.status}</span>
+                    <span class="text-sm font-semibold text-white truncate">${escapeHtml(fan.label)}</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${escapeHtml(fan.status)}</span>
                 </div>
                 <div class="flex items-center justify-between text-xs">
-                    <span class="text-gray-500">${fan.mode || 'manual'}</span>
-                    <span class="font-mono text-neon-cyan" id="fan-rpm-${fanId}">${fan.rpm || 0} RPM</span>
+                    <span class="text-gray-500">${escapeHtml(fan.mode || 'manual')}</span>
+                    <span class="font-mono text-neon-cyan" id="fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0} RPM</span>
                 </div>
             </div>
         `;
@@ -314,8 +324,8 @@ function updateSensorTags(fan) {
         const label = sensor ? sensor.label : s;
         return `
             <span class="inline-flex items-center gap-1 bg-cyber-accent text-gray-300 text-xs px-2 py-1 rounded-full">
-                ${label}
-                <button onclick="removeSensor('${s}')" class="text-neon-red hover:text-red-400 ml-1">&times;</button>
+                ${escapeHtml(label)}
+                <button onclick="removeSensor('${escapeHtml(s)}')" class="text-neon-red hover:text-red-400 ml-1">&times;</button>
             </span>
         `;
     }).join('');
@@ -367,11 +377,6 @@ function sendControl(payload) {
         body: JSON.stringify(payload)
     })
     .then(r => r.json())
-    .then(data => {
-        if (data.status === 'success') {
-            socket.emit('get_state');
-        }
-    })
     .catch(err => console.error('Control error:', err));
 }
 
@@ -463,14 +468,14 @@ function toggleSensorPopup() {
         
         let html = '';
         for (const [group, sensors] of Object.entries(groups)) {
-            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${group}</div>`;
+            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${escapeHtml(group)}</div>`;
             sensors.forEach(s => {
                 const checked = currentSensors.includes(s.id);
                 html += `
                     <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-cyber-accent rounded px-2">
-                        <input type="checkbox" value="${s.id}" ${checked ? 'checked' : ''} 
+                        <input type="checkbox" value="${escapeHtml(s.id)}" ${checked ? 'checked' : ''} 
                                class="accent-neon-purple">
-                        <span class="text-sm text-gray-300">${s.label}</span>
+                        <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
                         <span class="text-xs text-gray-500 ml-auto">
                             ${s.standby ? 'Sleep' : s.temp + '°C'}
                         </span>
@@ -645,7 +650,7 @@ function buildDisksList(disks) {
         
         html += `
             <div class="flex items-center gap-2">
-                <span class="text-xs text-gray-400 w-14 truncate">${disk.label}</span>
+                <span class="text-xs text-gray-400 w-14 truncate">${escapeHtml(disk.label)}</span>
                 <div class="flex-1 h-1.5 bg-cyber-accent rounded-full overflow-hidden">
                     <div class="h-full ${barColor} rounded-full progress-fill" style="width: ${pct}%"></div>
                 </div>
@@ -716,7 +721,7 @@ function renderDiscoveredHardware(data) {
             html += `
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
                     <div>
-                        <span class="text-sm text-white">${fan.label}</span>
+                        <span class="text-sm text-white">${escapeHtml(fan.label)}</span>
                         <span class="text-xs text-gray-500 ml-2">${fan.writable ? '✅ Controllable' : '⚠️ Read-only'}</span>
                     </div>
                     <span class="text-xs bg-orange-900 bg-opacity-30 text-neon-orange px-2 py-0.5 rounded">Not calibrated</span>
@@ -731,7 +736,7 @@ function renderDiscoveredHardware(data) {
         for (const [id, sensor] of Object.entries(data.temps)) {
             html += `
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
-                    <span class="text-sm text-white">${sensor.label}</span>
+                    <span class="text-sm text-white">${escapeHtml(sensor.label)}</span>
                     <span class="text-sm font-mono text-neon-cyan">${sensor.value || 0}°C</span>
                 </div>
             `;
@@ -744,7 +749,7 @@ function renderDiscoveredHardware(data) {
         for (const [id, disk] of Object.entries(data.disks)) {
             html += `
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
-                    <span class="text-sm text-white">${disk.label} <span class="text-xs text-gray-500">(${disk.type})</span></span>
+                    <span class="text-sm text-white">${escapeHtml(disk.label)} <span class="text-xs text-gray-500">(${escapeHtml(disk.type)})</span></span>
                     <span class="text-sm font-mono ${getTempColorClass(disk.temp)}">
                         ${disk.standby ? 'Sleep' : disk.temp > 0 ? disk.temp + '°C' : '--'}
                     </span>
@@ -821,7 +826,7 @@ function startCalibration() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('[FanControl] v3.0 - Neon Cyberpunk Edition initialized');
+    console.log('[FanControl] v3.0.1 - Neon Cyberpunk Edition initialized');
     
     // Click outside to close sensor popup
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {

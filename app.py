@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FanControl Web v3.0 - Neon Cyberpunk Edition
+FanControl Web v3.0.1 - Neon Cyberpunk Edition
 Modern fan control with real-time monitoring and intelligent thermal management
 """
 
@@ -30,7 +30,7 @@ from werkzeug.exceptions import BadRequest
 # ============================================================================
 
 LOG_DIR = '/app/data/logs'
-os.makedirs(LOG_DIR, exist_ok=True)
+Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
 
 DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/app/data'))
 HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
@@ -65,9 +65,11 @@ logger.addHandler(file_handler)
 
 # Flask & SocketIO
 app = Flask(__name__, static_folder='templates/js', static_url_path='/js')
+CORS_ORIGINS = os.getenv('FANCONTROL_CORS_ORIGINS', 'http://localhost:5059,http://127.0.0.1:5059').split(',')
+
 socketio = SocketIO(
     app,
-    cors_allowed_origins='*',
+    cors_allowed_origins=CORS_ORIGINS,
     async_mode='threading',
     logger=False,
     engineio_logger=False,
@@ -79,14 +81,15 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.0"
+CONFIG_VERSION = "3.0.1"
+MAX_HISTORY_HOURS = 168
+SENSOR_FAILURE_TEMP = 99
 
 state: Dict[str, Any] = {
     'fans': {},
     'temp_sensors': {},
     'hdd_sensors': {},
     'max_hdd_temp': 0,
-    'fan_enabled': True,
     'tested': False,
     'testing': False,
     'test_progress': {},
@@ -97,9 +100,6 @@ state: Dict[str, Any] = {
     'last_hdd_poll': 0.0,
     'initialized': False,
     'hardware_scanned': False,
-    'discovered_fans': {},
-    'discovered_temps': {},
-    'discovered_disks': {},
     'config_version': CONFIG_VERSION
 }
 
@@ -114,6 +114,8 @@ MAX_PWM_PCT = 100
 # Rate limiting for control endpoints
 _control_rate_limit: Dict[str, float] = {}
 CONTROL_RATE_LIMIT_SECONDS = 0.1
+_RATE_LIMIT_CLEANUP_INTERVAL = 600
+_rate_limit_last_cleanup = time.monotonic()
 
 # ============================================================================
 # THREAD-SAFE STATE ACCESSOR
@@ -130,7 +132,6 @@ def get_state() -> Dict[str, Any]:
             'temp_sensors': copy.deepcopy(state['temp_sensors']),
             'hdd_sensors': copy.deepcopy(state['hdd_sensors']),
             'max_hdd_temp': state.get('max_hdd_temp', 0),
-            'fan_enabled': state.get('fan_enabled', True),
             'tested': state.get('tested', False),
             'testing': state.get('testing', False),
             'test_progress': copy.deepcopy(state.get('test_progress', {})),
@@ -171,9 +172,6 @@ def api_discover():
             state['temp_sensors'] = temps
             state['hdd_sensors'] = disks
             state['hardware_scanned'] = True
-            state['discovered_fans'] = copy.deepcopy(fans)
-            state['discovered_temps'] = copy.deepcopy(temps)
-            state['discovered_disks'] = copy.deepcopy(disks)
         
         socketio.emit('hardware_discovered', {
             'fans': fans,
@@ -244,7 +242,7 @@ def api_test_start():
 def api_history():
     """Return history data optimized for ApexCharts"""
     try:
-        hours = request.args.get('hours', 24, type=int)
+        hours = max(1, min(request.args.get('hours', 24, type=int), MAX_HISTORY_HOURS))
         since = (datetime.now() - timedelta(hours=hours)).isoformat()
         
         with sqlite3.connect(DB_FILE, timeout=5) as conn:
@@ -278,6 +276,7 @@ def api_history():
 @app.route('/api/control', methods=['POST'])
 def handle_control():
     """Handle fan control commands with validation"""
+    global _rate_limit_last_cleanup
     try:
         data = request.get_json(force=True)
         validate_control_request(data)
@@ -289,10 +288,18 @@ def handle_control():
             return jsonify({"status": "error", "message": "Rate limit exceeded"}), 429
         _control_rate_limit[fan_key] = now
         
+        if now - _rate_limit_last_cleanup > _RATE_LIMIT_CLEANUP_INTERVAL:
+            expired = [k for k, t in _control_rate_limit.items() if now - t > 60]
+            for k in expired:
+                del _control_rate_limit[k]
+            _rate_limit_last_cleanup = now
+        
         if data['action'] == 'set_fan_pwm':
             return _handle_set_pwm(data)
         elif data['action'] == 'set_fan_config':
             return _handle_set_config(data)
+        else:
+            return jsonify({"status": "error", "message": f"Unknown action: {data['action']}"}), 400
             
     except BadRequest as br:
         return jsonify({"status": "error", "message": br.description}), 400
@@ -706,18 +713,17 @@ def discover_disks() -> Dict[str, Dict]:
 # ============================================================================
 
 def set_pwm_raw(key: str, physical_pwm: int):
-    """Set raw PWM value (0-255) with lock"""
-    with state_lock:
-        fan = state['fans'].get(key)
-        if not fan or not fan.get('pwm_path', '').startswith('/sys/class/hwmon/'):
-            return
-        
-        val = max(0, min(255, int(physical_pwm)))
-        try:
-            Path(fan['pwm_path']).write_text(str(val))
-            fan['pwm_value'] = val
-        except Exception as e:
-            logger.error(f'Raw PWM write error {key}: {e}')
+    """Set raw PWM value (0-255). Caller must hold state_lock."""
+    fan = state['fans'].get(key)
+    if not fan or not fan.get('pwm_path', '').startswith('/sys/class/hwmon/'):
+        return
+    
+    val = max(0, min(255, int(physical_pwm)))
+    try:
+        Path(fan['pwm_path']).write_text(str(val))
+        fan['pwm_value'] = val
+    except Exception as e:
+        logger.error(f'Raw PWM write error {key}: {e}')
 
 
 def set_pwm(key: str, raw_pwm: int, from_curve: bool = False):
@@ -813,7 +819,8 @@ def test_fans(fan_key: Optional[str] = None):
             socketio.emit('test_progress', state['test_progress'])
             
             for k in writable_fans:
-                set_pwm_raw(k, pwm_value)
+                with state_lock:
+                    set_pwm_raw(k, pwm_value)
             
             time.sleep(5)
             
@@ -861,7 +868,8 @@ def test_fans(fan_key: Optional[str] = None):
                     'curve': [],
                     'calibration': {}
                 })
-                set_pwm_raw(k, 128)
+                with state_lock:
+                    set_pwm_raw(k, 128)
                 continue
             
             all_rpm = [pt['rpm'] for pt in raw]
@@ -876,7 +884,8 @@ def test_fans(fan_key: Optional[str] = None):
                     'curve': [],
                     'calibration': {}
                 })
-                set_pwm_raw(k, 128)
+                with state_lock:
+                    set_pwm_raw(k, 128)
                 continue
             
             low_rpm_avg = sum(pt['rpm'] for pt in raw[:3]) / 3 if raw[:3] else 0
@@ -1018,7 +1027,7 @@ def refresh_disks():
     updated_values = {}
     for disk_id, future in futures_map.items():
         try:
-            result = future.result(timeout=10)
+            result = future.result(timeout=5)
             temp, standby = result if result else (None, False)
             
             if temp is not None:
@@ -1073,7 +1082,7 @@ def fan_temp(fan: Dict) -> float:
     mode = fan.get('sensor_mode', 'max')
     
     if not sensors:
-        return 99
+        return SENSOR_FAILURE_TEMP
     
     temps = []
     
@@ -1102,7 +1111,7 @@ def fan_temp(fan: Dict) -> float:
             temps.append(temp)
     
     if not temps:
-        return 99
+        return SENSOR_FAILURE_TEMP
     
     if mode == 'max':
         return max(temps)
@@ -1184,7 +1193,7 @@ def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
         return int(target_pct), status
 
     # 3. Temperature sensor failure - MAXIMUM COOLING for hardware safety!
-    if current_temp >= 99:
+    if current_temp >= SENSOR_FAILURE_TEMP:
         return MAX_PWM_PCT, 'critical'
 
     # 4. Normal operation (Proportional curve)
@@ -1531,6 +1540,15 @@ def validate_control_request(data: Dict):
             raise BadRequest("PWM value must be between 0 and 100")
     
     elif action == 'set_fan_config':
+        if 'target_temp' in data:
+            t = data['target_temp']
+            if not isinstance(t, (int, float)) or not (20 <= t <= 60):
+                raise BadRequest("target_temp must be between 20 and 60")
+        
+        if 'sensor_mode' in data:
+            if data['sensor_mode'] not in ('max', 'min', 'avg'):
+                raise BadRequest("sensor_mode must be 'max', 'min', or 'avg'")
+        
         if 'schedule' in data:
             if not isinstance(data['schedule'], list):
                 raise BadRequest("Schedule must be a list of rules")
@@ -1560,34 +1578,31 @@ def handle_get_state():
 # ============================================================================
 # ENTRY POINT
 # ============================================================================
+# INITIALIZATION
+# ============================================================================
 
-if __name__ == '__main__':
-    logger.info('=' * 60)
-    logger.info('STARTING FanControl Web v3.0 - Neon Cyberpunk Edition')
-    logger.info('=' * 60)
-    
-    # Initialize database
-    try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(DB_FILE, timeout=5) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS logs (
-                    ts TEXT,
-                    mode TEXT,
-                    pwm INTEGER,
-                    rpm INTEGER,
-                    max_temp INTEGER,
-                    fan_count INTEGER,
-                    disk_count INTEGER
-                )
-            ''')
-            conn.commit()
-        logger.info('Database initialized')
-    except sqlite3.OperationalError as e:
-        logger.error(f'Failed to initialize database: {e}')
-        sys.exit(1)
-    
-    # Load or discover hardware
+def init_database():
+    """Initialize SQLite database and schema"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(DB_FILE, timeout=5) as conn:
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS logs (
+                ts TEXT,
+                mode TEXT,
+                pwm INTEGER,
+                rpm INTEGER,
+                max_temp INTEGER,
+                fan_count INTEGER,
+                disk_count INTEGER
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)')
+        conn.commit()
+    logger.info('Database initialized')
+
+
+def init_hardware():
+    """Discover hardware and load configuration"""
     if CONFIG_PATH.exists():
         try:
             state['fans'], state['temp_sensors'] = discover_fans_and_sensors()
@@ -1604,10 +1619,39 @@ if __name__ == '__main__':
     else:
         state['initialized'] = False
         logger.info('No configuration found - wizard mode')
+
+
+_control_loop_started = False
+
+def _ensure_control_loop():
+    """Start control loop once (safe for gunicorn workers)"""
+    global _control_loop_started
+    if not _control_loop_started:
+        _control_loop_started = True
+        threading.Thread(target=loop, daemon=True).start()
+
+
+@app.before_request
+def _auto_init():
+    """Auto-initialize on first request when running under gunicorn"""
+    if not state.get('_gunicorn_initialized'):
+        state['_gunicorn_initialized'] = True
+        try:
+            init_database()
+        except Exception as e:
+            logger.error(f'Database init error: {e}')
+        init_hardware()
+        _ensure_control_loop()
+
+
+if __name__ == '__main__':
+    logger.info('=' * 60)
+    logger.info('STARTING FanControl Web v3.0.1 - Neon Cyberpunk Edition')
+    logger.info('=' * 60)
     
-    # Start control loop
-    threading.Thread(target=loop, daemon=True).start()
+    init_database()
+    init_hardware()
+    _ensure_control_loop()
     
-    # Start web server
     logger.info('Starting server on port 5059')
-    socketio.run(app, host='0.0.0.0', port=5059, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5059)

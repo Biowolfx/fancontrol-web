@@ -22,4 +22,4 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 EXPOSE 5059
-CMD ["python", "app.py"]
+CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:5059", "app:app"]
