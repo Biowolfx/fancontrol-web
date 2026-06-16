@@ -924,25 +924,24 @@ def test_fans(fan_key: Optional[str] = None):
                 fan['inverted'] = True
                 fan['status'] = 'inverted'
                 # Normalize curve: remap PWM so low pct = low RPM, high pct = high RPM
-                fan['curve'] = [
-                    {'pwm': 255 - pt['pwm'], 'rpm': pt['rpm'], 'pct': 100 - pt['pct']}
-                    for pt in sorted(raw, key=lambda x: x['pwm'])
-                ]
+                fan['curve'] = sorted(
+                    [{'pwm': 255 - pt['pwm'], 'rpm': pt['rpm'], 'pct': 100 - pt['pct']}
+                     for pt in raw],
+                    key=lambda x: x['pwm']
+                )
             else:
                 fan['inverted'] = False
                 fan['status'] = 'normal'
                 fan['curve'] = sorted(raw, key=lambda x: x['pwm'])
             
             min_threshold = max_rpm * 0.05
-            real_min = next(
-                (pt for pt in raw if pt['rpm'] > min_threshold),
-                raw[0]
-            )
             
-            # For inverted fans, normalize min_pct to match normalized curve
+            # Find min_pct from the actual curve used (normalized or not)
+            real_min = next(
+                (pt for pt in fan['curve'] if pt['rpm'] > min_threshold),
+                fan['curve'][0]
+            )
             cal_min_pct = real_min['pct']
-            if is_inverted:
-                cal_min_pct = 100 - real_min['pct']
             
             fan.update({
                 'min_rpm': real_min['rpm'],
@@ -956,6 +955,9 @@ def test_fans(fan_key: Optional[str] = None):
             })
             
             set_pwm(k, 128)
+            fan['manual_pct'] = 50
+            fan['current_pct'] = 50
+            fan['target_pwm'] = 50
             logger.info(
                 f'Fan {fan.get("label", k)}: status={fan["status"]}, '
                 f'min={fan["min_rpm"]}rpm, max={fan["max_rpm"]}rpm'
