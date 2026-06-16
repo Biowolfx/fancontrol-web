@@ -223,6 +223,7 @@ function getStatusBadgeClass(status) {
         'critical': 'bg-red-900 bg-opacity-30 text-neon-red',
         'failsafe': 'bg-red-900 bg-opacity-50 text-neon-red',
         'standby': 'bg-blue-900 bg-opacity-30 text-blue-400',
+        'inverted': 'bg-cyan-900 bg-opacity-30 text-neon-cyan',
         'not_tested': 'bg-gray-700 text-gray-400',
         'calibrating': 'bg-purple-900 bg-opacity-30 text-neon-purple',
     };
