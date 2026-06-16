@@ -1306,7 +1306,7 @@ def loop():
                 if mode == 'manual':
                     raw_pct = fan.get('manual_pct', 50)
                     status = fan.get('status', 'nominal')
-                    if status not in ['nominal', 'warning', 'critical', 'standby', 'failsafe']:
+                    if status not in ['nominal', 'warning', 'critical', 'standby', 'failsafe', 'inverted', 'no_sensor']:
                         status = 'nominal'
                     target_pct = raw_pct
                 
@@ -1349,6 +1349,8 @@ def loop():
                                         fan_id, fan, current_temp, target_temp, item,
                                         failsafe=sys_failsafe, standby_mode=sys_standby
                                     )
+                                    if status == 'critical' and not fan.get('sensors'):
+                                        status = 'no_sensor'
                                 break
                     
                     if not schedule_applied:
@@ -1358,6 +1360,8 @@ def loop():
                             fan_id, fan, current_temp, target_temp,
                             failsafe=sys_failsafe, standby_mode=sys_standby
                         )
+                        if status == 'critical' and not fan.get('sensors'):
+                            status = 'no_sensor'
                 
                 else:
                     continue
