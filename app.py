@@ -891,22 +891,34 @@ def test_fans(fan_key: Optional[str] = None):
             low_rpm_avg = sum(pt['rpm'] for pt in raw[:3]) / 3 if raw[:3] else 0
             high_rpm_avg = sum(pt['rpm'] for pt in raw[-3:]) / 3 if raw[-3:] else 0
             
+            # Direct comparison: RPM at PWM=0 vs PWM=255
+            rpm_at_zero = raw[0]['rpm'] if raw else 0
+            rpm_at_max = raw[-1]['rpm'] if raw else 0
+            
             # Also compute full-range comparison for noisy fans
             half = len(raw) // 2
             first_half_avg = sum(pt['rpm'] for pt in raw[:half]) / max(half, 1)
             second_half_avg = sum(pt['rpm'] for pt in raw[half:]) / max(len(raw) - half, 1)
             
             logger.info(
-                f'Fan {fan.get("label", k)}: '
+                f'Fan {fan.get("label", k)} inversion check: '
+                f'rpm@PWM0={rpm_at_zero}, rpm@PWM255={rpm_at_max}, '
                 f'low3_avg={low_rpm_avg:.0f}, high3_avg={high_rpm_avg:.0f}, '
                 f'first_half_avg={first_half_avg:.0f}, second_half_avg={second_half_avg:.0f}'
             )
             
             is_inverted = False
-            if high_rpm_avg > 0 and low_rpm_avg > high_rpm_avg * 1.1:
+            # Method 1: Direct comparison (most reliable)
+            if rpm_at_max > 0 and rpm_at_zero > rpm_at_max * 1.1:
                 is_inverted = True
+            # Method 2: Average of first/last 3 points
+            elif high_rpm_avg > 0 and low_rpm_avg > high_rpm_avg * 1.1:
+                is_inverted = True
+            # Method 3: Half-range comparison (for noisy fans)
             elif second_half_avg > 0 and first_half_avg > second_half_avg * 1.1:
                 is_inverted = True
+            
+            logger.info(f'Fan {fan.get("label", k)} inversion result: {"INVERTED" if is_inverted else "normal"}')
             
             if is_inverted:
                 fan['inverted'] = True
