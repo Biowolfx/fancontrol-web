@@ -8,10 +8,10 @@ services:
     volumes:
       - /sys:/sys:rw
       - /dev:/dev:rw
-      - ./data:/app/data
+      - /volume1/docker/fancontrol-web/data:/app/data
     environment:
       - TZ=Europe/Moscow
-      - FANCONTROL_CORS_ORIGINS=http://localhost:5059,http://127.0.0.1:5059
+      - FANCONTROL_CORS_ORIGINS=*
     privileged: true
     cap_add:
       - SYS_RAWIO

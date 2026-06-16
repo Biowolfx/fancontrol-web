@@ -3,11 +3,9 @@ FROM python:3.10-slim
 # Install tools and update smartmontools database
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl \
         lm-sensors \
         smartmontools \
         util-linux && \
-    update-smart-drivedb && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for safer container execution
