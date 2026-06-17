@@ -319,38 +319,12 @@ function updateInspector(fan) {
         setTimeout(() => renderScheduleGrid(), 50);
     }
     
-    // Update sensor tags
-    updateSensorTags(fan);
-    
     // Store config
     if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
-    fanConfigs[currentFanId].sensors = sensors;
+    fanConfigs[currentFanId].sensors = fan.sensors || [];
     fanConfigs[currentFanId].target_temp = fan.target_temp || 31;
     fanConfigs[currentFanId].mode = mode;
     fanConfigs[currentFanId].sensor_mode = fan.sensor_mode || 'max';
-}
-
-function updateSensorTags(fan) {
-    const container = document.getElementById('sensor-tags');
-    if (!container) return;
-    
-    const sensors = fan.sensors || [];
-    
-    if (sensors.length === 0) {
-        container.innerHTML = '<span class="text-xs text-gray-500 italic">No sensors assigned</span>';
-        return;
-    }
-    
-    container.innerHTML = sensors.map(s => {
-        const sensor = allSensors.find(x => x.id === s);
-        const label = sensor ? sensor.label : s;
-        return `
-            <span class="inline-flex items-center gap-1 bg-cyber-accent text-gray-300 text-xs px-2 py-1 rounded-full">
-                ${escapeHtml(label)}
-                <button onclick="removeSensor('${escapeHtml(s)}')" class="text-neon-red hover:text-red-400 ml-1">&times;</button>
-            </span>
-        `;
-    }).join('');
 }
 
 // ============================================================================
@@ -360,42 +334,10 @@ function updateSensorTags(fan) {
 function setFanMode(mode) {
     if (!currentFanId) return;
     
-    if (mode === 'auto') {
-        const sensors = fanConfigs[currentFanId]?.sensors || [];
-        if (sensors.length === 0) {
-            document.getElementById('no-sensor-warning')?.classList.remove('hidden');
-        }
-    }
-    
     sendControl({
         action: 'set_fan_config',
         fan: currentFanId,
         fan_mode: mode
-    });
-}
-
-function saveTargetTemp() {
-    if (!currentFanId) return;
-    
-    const temp = parseInt(document.getElementById('target-temp-input').value);
-    if (isNaN(temp) || temp < 20 || temp > 60) return;
-    
-    sendControl({
-        action: 'set_fan_config',
-        fan: currentFanId,
-        target_temp: temp
-    });
-}
-
-function removeSensor(sensorId) {
-    if (!currentFanId) return;
-    
-    const sensors = (fanConfigs[currentFanId]?.sensors || []).filter(s => s !== sensorId);
-    
-    sendControl({
-        action: 'set_fan_config',
-        fan: currentFanId,
-        sensors: sensors
     });
 }
 
@@ -880,35 +822,38 @@ function renderScheduleGrid() {
         scheduleData[key] = item;
     });
     
-    let html = '<table class="border-collapse">';
+    let html = '<table class="border-collapse" style="border-spacing: 1px;">';
     
-    // Header row
-    html += '<tr><th class="w-10 h-6"></th>';
-    for (const label of DAY_LABELS) {
-        html += `<th class="h-6 px-1 text-xs text-gray-500 font-normal">${label}</th>`;
+    // Header row: empty corner + 24 hours
+    html += '<tr><th class="w-12 h-5"></th>';
+    for (let h = 0; h < 24; h++) {
+        html += `<th class="h-5 px-0 text-[10px] text-gray-500 font-normal" style="width:18px">${h}</th>`;
     }
     html += '</tr>';
     
-    // Hour rows
-    for (let hour = 0; hour < 24; hour++) {
-        const timeStr = String(hour).padStart(2, '0') + ':00';
-        html += `<tr><td class="w-10 h-5 text-xs text-gray-600 font-mono pr-1 text-right">${String(hour).padStart(2, '0')}</td>`;
+    // Day rows
+    for (let d = 0; d < DAYS.length; d++) {
+        const day = DAYS[d];
+        html += `<tr><td class="w-12 h-5 text-[10px] text-gray-400 font-semibold pr-1 text-right align-middle">${DAY_LABELS[d]}</td>`;
         
-        for (const day of DAYS) {
+        for (let h = 0; h < 24; h++) {
+            const timeStr = String(h).padStart(2, '0') + ':00';
             const key = `${day}_${timeStr}`;
             const item = scheduleData[key];
-            let colorClass = 'bg-gray-800 hover:bg-gray-700';
+            
+            let bg = 'bg-gray-800';
             if (item) {
-                if (item.mode === 'auto') colorClass = 'bg-green-800 hover:bg-green-700';
-                else if (item.mode === 'manual') colorClass = 'bg-orange-800 hover:bg-orange-700';
-                else if (item.mode === 'off') colorClass = 'bg-red-900 hover:bg-red-800';
+                if (item.mode === 'auto') bg = 'bg-green-700';
+                else if (item.mode === 'manual') bg = 'bg-orange-600';
+                else if (item.mode === 'off') bg = 'bg-red-800';
             }
             
-            html += `<td class="w-5 h-5 ${colorClass} border border-gray-800 cursor-pointer transition-colors duration-100"
-                         data-day="${day}" data-hour="${hour}"
-                         onmousedown="onScheduleCellMouseDown(event, '${day}', ${hour})"
-                         onmouseenter="onScheduleCellMouseEnter(event, '${day}', ${hour})"
-                         title="${day} ${timeStr}${item ? ' - ' + item.mode : ''}"></td>`;
+            html += `<td class="${bg} cursor-pointer schedule-cell transition-colors duration-75"
+                         data-day="${day}" data-hour="${h}"
+                         onmousedown="onScheduleMouseDown(event,'${day}',${h})"
+                         onmouseenter="onScheduleMouseEnter(event,'${day}',${h})"
+                         title="${DAY_LABELS[d]} ${timeStr}${item ? ' [' + item.mode + ']' : ''}"
+                         style="width:18px;height:18px;"></td>`;
         }
         html += '</tr>';
     }
@@ -916,12 +861,10 @@ function renderScheduleGrid() {
     html += '</table>';
     container.innerHTML = html;
     
-    document.addEventListener('mouseup', onScheduleMouseUp);
-    
     validateSchedule();
 }
 
-function onScheduleCellMouseDown(e, day, hour) {
+function onScheduleMouseDown(e, day, hour) {
     e.preventDefault();
     isDraggingSchedule = true;
     dragStartCell = { day, hour };
@@ -929,63 +872,67 @@ function onScheduleCellMouseDown(e, day, hour) {
     highlightSelection();
 }
 
-function onScheduleCellMouseEnter(e, day, hour) {
+function onScheduleMouseEnter(e, day, hour) {
     if (!isDraggingSchedule || !dragStartCell) return;
     
-    const startIdx = dragStartCell.hour;
-    const endIdx = hour;
-    const minH = Math.min(startIdx, endIdx);
-    const maxH = Math.max(startIdx, endIdx);
+    const startH = dragStartCell.hour;
+    const startD = DAYS.indexOf(dragStartCell.day);
+    const endD = DAYS.indexOf(day);
+    const minD = Math.min(startD, endD);
+    const maxD = Math.max(startD, endD);
     
-    if (dragStartCell.day === day) {
-        scheduleSelection = [];
-        for (let h = minH; h <= maxH; h++) {
-            scheduleSelection.push({ day, hour: h });
-        }
-    } else {
-        const startDayIdx = DAYS.indexOf(dragStartCell.day);
-        const endDayIdx = DAYS.indexOf(day);
-        const minDay = Math.min(startDayIdx, endDayIdx);
-        const maxDay = Math.max(startDayIdx, endDayIdx);
+    scheduleSelection = [];
+    for (let d = minD; d <= maxD; d++) {
+        const minH = (d === minD && d === maxD) ? Math.min(startH, hour) 
+                   : (d === minD) ? (startD <= endD ? startH : hour)
+                   : (d === maxD) ? (startD <= endD ? hour : startH)
+                   : 0;
+        const maxH = (d === minD && d === maxD) ? Math.max(startH, hour)
+                   : (d === minD) ? (startD <= endD ? Math.max(startH, 23) : Math.min(hour, 23))
+                   : (d === maxD) ? (startD <= endD ? Math.min(hour, 23) : Math.max(startH, 0))
+                   : 23;
         
-        scheduleSelection = [];
-        for (let d = minDay; d <= maxDay; d++) {
-            for (let h = 0; h < 24; h++) {
-                if (d === minDay && h < minH) continue;
-                if (d === maxDay && h > maxH) continue;
-                scheduleSelection.push({ day: DAYS[d], hour: h });
-            }
+        const hFrom = Math.min(minH, maxH);
+        const hTo = Math.max(minH, maxH);
+        for (let h = hFrom; h <= hTo; h++) {
+            scheduleSelection.push({ day: DAYS[d], hour: h });
         }
     }
     highlightSelection();
 }
 
-function onScheduleMouseUp(e) {
+function highlightSelection() {
+    clearHighlight();
+    for (const cell of scheduleSelection) {
+        const el = document.querySelector(`.schedule-cell[data-day="${cell.day}"][data-hour="${cell.hour}"]`);
+        if (el) {
+            el.style.outline = '2px solid #00f0ff';
+            el.style.outlineOffset = '-1px';
+            el.style.zIndex = '1';
+        }
+    }
+}
+
+function clearHighlight() {
+    document.querySelectorAll('.schedule-cell').forEach(el => {
+        el.style.outline = '';
+        el.style.outlineOffset = '';
+        el.style.zIndex = '';
+    });
+}
+
+document.addEventListener('mouseup', () => {
     if (!isDraggingSchedule) return;
     isDraggingSchedule = false;
     
     if (scheduleSelection.length === 1) {
         openScheduleEditor([scheduleSelection[0]]);
     } else if (scheduleSelection.length > 1) {
-        openScheduleEditor(scheduleSelection);
+        openScheduleEditor([...scheduleSelection]);
     }
     scheduleSelection = [];
     clearHighlight();
-}
-
-function highlightSelection() {
-    clearHighlight();
-    for (const cell of scheduleSelection) {
-        const el = document.querySelector(`td[data-day="${cell.day}"][data-hour="${cell.hour}"]`);
-        if (el) el.classList.add('ring-1', 'ring-neon-cyan');
-    }
-}
-
-function clearHighlight() {
-    document.querySelectorAll('#schedule-grid td.ring-neon-cyan').forEach(el => {
-        el.classList.remove('ring-1', 'ring-neon-cyan');
-    });
-}
+});
 
 // ============================================================================
 // SCHEDULE EDITOR
