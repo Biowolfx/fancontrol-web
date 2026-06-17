@@ -311,58 +311,47 @@ def api_history():
 
 @app.route('/api/update/check')
 def api_update_check():
-    """Check for Git updates"""
+    """Check for updates via GitHub API"""
     try:
-        # Ensure we're in a git repo
-        repo_dir = os.getenv('FANCONTROL_REPO_DIR', '/app')
+        # Get current commit hash from the build-time arg or file
+        current_hash = os.getenv('FANCONTROL_GIT_HASH', '')
+        if not current_hash:
+            try:
+                current_hash = subprocess.run(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    capture_output=True, text=True, timeout=5,
+                    cwd='/app'
+                ).stdout.strip()
+            except Exception:
+                pass
         
-        # Fetch latest from remote
-        fetch_result = subprocess.run(
-            ['git', 'fetch', 'origin'],
-            capture_output=True, text=True, timeout=30,
-            cwd=repo_dir
-        )
-        if fetch_result.returncode != 0:
-            return jsonify({'status': 'error', 'message': fetch_result.stderr.strip()}), 500
+        # Query GitHub API for latest commit on main
+        import urllib.request
+        import urllib.error
+        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
+        url = f'https://api.github.com/repos/{repo}/commits/main'
         
-        # Get current commit hash
-        local = subprocess.run(
-            ['git', 'rev-parse', 'HEAD'],
-            capture_output=True, text=True, timeout=10,
-            cwd=repo_dir
-        )
-        current_hash = local.stdout.strip()[:8] if local.returncode == 0 else 'unknown'
+        req = urllib.request.Request(url, headers={
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'fancontrol-web'
+        })
         
-        # Get remote HEAD hash
-        remote = subprocess.run(
-            ['git', 'rev-parse', 'origin/main'],
-            capture_output=True, text=True, timeout=10,
-            cwd=repo_dir
-        )
-        remote_hash = remote.stdout.strip()[:8] if remote.returncode == 0 else 'unknown'
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
         
-        # Compare
-        has_update = current_hash != remote_hash
+        remote_hash = data['sha'][:8]
+        commit_msg = data['commit']['message'].split('\n')[0]
         
-        commit_msg = ''
-        if has_update:
-            log_result = subprocess.run(
-                ['git', 'log', '--oneline', '-1', 'origin/main'],
-                capture_output=True, text=True, timeout=10,
-                cwd=repo_dir
-            )
-            commit_msg = log_result.stdout.strip() if log_result.returncode == 0 else ''
+        has_update = current_hash != remote_hash and current_hash != ''
         
         return jsonify({
             'status': 'ok',
             'has_update': has_update,
-            'current_hash': current_hash,
+            'current_hash': current_hash or 'unknown',
             'remote_hash': remote_hash,
             'commit_message': commit_msg
         })
         
-    except subprocess.TimeoutExpired:
-        return jsonify({'status': 'error', 'message': 'Git operation timed out'}), 500
     except Exception as e:
         logger.error(f'Update check error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -370,39 +359,18 @@ def api_update_check():
 
 @app.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
-    """Pull latest changes and restart container"""
+    """Signal container restart for update application"""
     try:
-        repo_dir = os.getenv('FANCONTROL_REPO_DIR', '/app')
+        logger.info('Update apply requested, triggering restart...')
         
-        # Pull latest
-        pull_result = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
-            capture_output=True, text=True, timeout=60,
-            cwd=repo_dir
-        )
-        
-        if pull_result.returncode != 0:
-            return jsonify({'status': 'error', 'message': pull_result.stderr.strip()}), 500
-        
-        # Trigger container restart via docker restart (runs inside container)
-        # The container should have restart: unless-stopped in compose
-        logger.info('Update applied, triggering restart...')
-        
-        # Write a flag file so the container restarts on next health check failure
-        restart_flag = DATA_DIR / '.restart_pending'
-        restart_flag.write_text('update')
-        
-        # Schedule restart in background
         def _restart():
             time.sleep(2)
-            subprocess.run(['kill', '-TERM', str(os.getpid())], timeout=5)
+            os.kill(os.getpid(), 15)
         
         executor.submit(_restart)
         
-        return jsonify({'status': 'ok', 'message': 'Update applied, restarting...'})
+        return jsonify({'status': 'ok', 'message': 'Restarting...'})
         
-    except subprocess.TimeoutExpired:
-        return jsonify({'status': 'error', 'message': 'Git pull timed out'}), 500
     except Exception as e:
         logger.error(f'Update apply error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500

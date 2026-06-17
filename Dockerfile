@@ -1,5 +1,8 @@
 FROM python:3.10-slim
 
+ARG GIT_HASH=unknown
+ENV FANCONTROL_GIT_HASH=${GIT_HASH}
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git \

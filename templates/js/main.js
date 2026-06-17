@@ -1723,18 +1723,12 @@ function scheduleAutoUpdate() {
 async function checkForUpdates() {
     const btn = document.getElementById('update-check-btn');
     const result = document.getElementById('update-result');
-    const applyBtn = document.getElementById('update-apply-btn');
     
     if (btn) {
         btn.disabled = true;
         btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
     }
     if (result) result.classList.add('hidden');
-    if (applyBtn) {
-        applyBtn.classList.add('hidden');
-        applyBtn.disabled = true;
-        applyBtn.className = 'hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-cyber-accent text-gray-500 border-gray-700';
-    }
     
     try {
         const resp = await fetch('/api/update/check');
@@ -1751,12 +1745,11 @@ async function checkForUpdates() {
                     <div class="font-semibold mb-2">${t('settings.update_available', 'Update available')}</div>
                     <div class="flex justify-between mb-1"><span class="text-gray-400">Current:</span><span class="font-mono">${escapeHtml(data.current_hash || '?')}</span></div>
                     <div class="flex justify-between mb-1"><span class="text-gray-400">New:</span><span class="font-mono text-white">${escapeHtml(data.remote_hash || '?')}</span></div>
-                    ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}`;
-            }
-            if (applyBtn) {
-                applyBtn.classList.remove('hidden');
-                applyBtn.disabled = false;
-                applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
+                    ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}
+                    <div class="mt-2 pt-2 border-t border-green-800">
+                        <div class="text-gray-400 mb-1">${t('settings.update_host_hint', 'Run on host to apply:')}</div>
+                        <code class="block p-2 bg-black bg-opacity-30 rounded text-neon-green text-[10px] font-mono break-all">cd /volume1/docker/fancontrol-web && git pull && docker compose up -d --build</code>
+                    </div>`;
             }
         } else {
             if (badge) badge.classList.add('hidden');
@@ -1787,36 +1780,6 @@ async function autoCheckUpdate() {
     if (_updateChecked) return;
     _updateChecked = true;
     await checkForUpdates();
-}
-
-async function applyUpdate() {
-    if (!confirm(t('settings.update_confirm', 'Update will restart the container. Continue?'))) return;
-    
-    const applyBtn = document.getElementById('update-apply-btn');
-    const result = document.getElementById('update-result');
-    
-    applyBtn.disabled = true;
-    applyBtn.querySelector('span').textContent = t('settings.updating', 'Updating...');
-    
-    try {
-        const resp = await fetch('/api/update/apply', { method: 'POST' });
-        const data = await resp.json();
-        
-        if (data.status === 'ok') {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent text-neon-cyan';
-            result.textContent = t('settings.update_applied', 'Update applied. Container will restart...');
-            // Socket will reconnect after restart
-        } else {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
-            result.textContent = data.message || t('settings.update_failed', 'Update failed');
-        }
-    } catch (e) {
-        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
-        result.textContent = t('settings.update_error', 'Failed to apply update');
-    }
-    
-    applyBtn.disabled = false;
-    applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Apply Update & Restart');
 }
 
 async function switchLanguage(code) {

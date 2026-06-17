@@ -129,6 +129,7 @@
   "settings.update_failed": "Update failed",
   "settings.update_confirm": "Update will restart the container. Continue?",
   "settings.update_available": "Update available",
+  "settings.update_host_hint": "Run on host to apply update:",
 
   "common.edit": "Edit",
   "common.del": "Del",

@@ -129,6 +129,7 @@
   "settings.update_failed": "Обновление не удалось",
   "settings.update_confirm": "Обновление перезапустит контейнер. Продолжить?",
   "settings.update_available": "Доступно обновление",
+  "settings.update_host_hint": "Выполните на хосте для применения:",
 
   "common.edit": "Изм.",
   "common.del": "Удл.",

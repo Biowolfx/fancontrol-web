@@ -1,7 +1,10 @@
 version: '3.8'
 services:
   fancontrol:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_HASH: ${GIT_HASH:-unknown}
     container_name: fancontrol-web
     restart: unless-stopped
     network_mode: host
@@ -9,11 +12,10 @@ services:
       - /sys:/sys:rw
       - /dev:/dev:rw
       - /volume1/docker/fancontrol-web/data:/app/data
-      - /volume1/docker/fancontrol-web:/repo:ro
     environment:
       - TZ=Europe/Moscow
       - FANCONTROL_CORS_ORIGINS=*
-      - FANCONTROL_REPO_DIR=/repo
+      - FANCONTROL_REPO=Biowolfx/fancontrol-web
     privileged: true
     cap_add:
       - SYS_RAWIO
