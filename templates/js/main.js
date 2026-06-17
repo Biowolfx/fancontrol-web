@@ -242,7 +242,7 @@ function buildFanList(fans) {
         `;
     }
     
-    container.innerHTML = html || '<div class="text-center text-gray-500 py-8">No fans detected</div>';
+    container.innerHTML = html || `<div class="text-center text-gray-500 py-8">${t('setup.no_fans', 'No fans detected')}</div>`;
 }
 
 function updateFanListStatus(fans) {
@@ -527,7 +527,7 @@ function toggleSensorPopup() {
                                class="accent-neon-purple">
                         <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
                         <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? 'Sleep' : s.temp + '°C'}
+                            ${s.standby ? t('sensor.sleep', 'Sleep') : s.temp + '°C'}
                         </span>
                     </label>
                 `;
@@ -605,14 +605,14 @@ function updateChart() {
             
             const series = [
                 {
-                    name: 'Max HDD Temp',
+                    name: t('chart.max_hdd_temp', 'Max HDD Temp'),
                     data: data.timestamps.map((ts, i) => ({
                         x: new Date(ts).getTime(),
                         y: data.temps[i]
                     }))
                 },
                 {
-                    name: 'Avg PWM',
+                    name: t('chart.avg_pwm', 'Avg PWM'),
                     data: data.timestamps.map((ts, i) => ({
                         x: new Date(ts).getTime(),
                         y: data.pwm[i]
@@ -727,13 +727,13 @@ function buildDisksList(disks) {
                     <div class="h-full ${barColor} rounded-full progress-fill" style="width: ${pct}%"></div>
                 </div>
                 <span class="text-xs font-mono w-10 text-right ${getTempColorClass(disk.temp)}">
-                    ${disk.standby ? 'Sleep' : disk.temp > 0 ? disk.temp + '°' : '--'}
+                    ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? disk.temp + '°' : '--'}
                 </span>
             </div>
         `;
     }
     
-    container.innerHTML = html || '<div class="text-xs text-gray-500">No disks detected</div>';
+    container.innerHTML = html || `<div class="text-xs text-gray-500">${t('setup.no_disks', 'No disks detected')}</div>`;
 }
 
 function getTempColorClass(temp) {
@@ -823,14 +823,14 @@ function renderDiscoveredHardware(data) {
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
                     <span class="text-sm text-white">${escapeHtml(disk.label)} <span class="text-xs text-gray-500">(${escapeHtml(disk.type)})</span></span>
                     <span class="text-sm font-mono ${getTempColorClass(disk.temp)}">
-                        ${disk.standby ? 'Sleep' : disk.temp > 0 ? disk.temp + '°C' : '--'}
+                            ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? disk.temp + '°C' : '--'}
                     </span>
                 </div>
             `;
         }
     }
     
-    container.innerHTML = html || '<p class="text-gray-500">No hardware detected</p>';
+    container.innerHTML = html || `<p class="text-gray-500">${t('setup.no_hardware', 'No hardware detected')}</p>`;
     
     // Show calibrate button if fans found
     if (data.fans && Object.keys(data.fans).length > 0) {
@@ -882,7 +882,7 @@ function hideCalibrationModal() {
 }
 
 function startCalibration() {
-    if (!confirm('Recalibrate all fans? This takes 1-2 minutes.')) return;
+    if (!confirm(t('calibration.confirm', 'Recalibrate all fans? This takes 1-2 minutes.'))) return;
     
     document.getElementById('calibration-modal').classList.remove('hidden');
     document.getElementById('calibration-status').textContent = 'Starting...';
@@ -1014,7 +1014,7 @@ function renderScheduleRules() {
     const schedule = fan?.schedule || [];
     
     if (schedule.length === 0) {
-        container.innerHTML = '<p class="text-xs text-gray-500 italic">No rules configured</p>';
+        container.innerHTML = `<p class="text-xs text-gray-500 italic">${t('schedule.no_rules', 'No rules configured')}</p>`;
         return;
     }
     
@@ -1339,7 +1339,7 @@ function updateScheduleEditorSensors() {
     if (!container) return;
     
     if (scheduleEditorSensors.length === 0) {
-        container.innerHTML = '<span class="text-xs text-gray-500 italic">No sensors assigned</span>';
+        container.innerHTML = `<span class="text-xs text-gray-500 italic">${t('editor.no_sensors', 'No sensors assigned')}</span>`;
         document.getElementById('sched-sensor-mode-section').classList.add('hidden');
         return;
     }
@@ -1386,7 +1386,7 @@ function toggleScheduleSensorPopup() {
                                class="accent-neon-purple">
                         <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
                         <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? 'Sleep' : s.temp + '°C'}
+                            ${s.standby ? t('sensor.sleep', 'Sleep') : s.temp + '°C'}
                         </span>
                     </label>
                 `;
@@ -1510,11 +1510,11 @@ function describeCells(cells) {
     
     let dayStr = '';
     if (days.length === 7) {
-        dayStr = 'Every day';
+        dayStr = t('schedule.every_day', 'Every day');
     } else if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) {
-        dayStr = 'Weekdays';
+        dayStr = t('schedule.weekdays', 'Weekdays');
     } else if (days.length === 2 && days.includes('sat') && days.includes('sun')) {
-        dayStr = 'Weekends';
+        dayStr = t('schedule.weekends', 'Weekends');
     } else if (days.length <= 3) {
         dayStr = days.map(d => DAY_LABELS[DAYS.indexOf(d)]).join(', ');
     } else {
@@ -1553,7 +1553,7 @@ function validateSchedule() {
             if (dayHours < 24) emptyDays.push(day);
         }
         warning.classList.remove('hidden');
-        detail.textContent = `Missing: ${emptyDays.join(', ')}. Empty hours = fan off.`;
+        detail.textContent = `${t('schedule.missing', 'Missing')}: ${emptyDays.join(', ')}. ${t('schedule.empty_hours', 'Empty hours = fan off.')}`;
     } else {
         warning.classList.add('hidden');
     }

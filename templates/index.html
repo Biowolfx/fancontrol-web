@@ -127,10 +127,10 @@
             
             <!-- Step 2: Results -->
             <div id="setup-step-results" class="hidden">
-                <h3 class="text-xl font-bold text-neon-green mb-4">✅ Hardware Detected</h3>
+                <h3 class="text-xl font-bold text-neon-green mb-4" data-i18n="setup.results_title">✅ Hardware Detected</h3>
                 <div id="discovered-devices" class="max-h-96 overflow-y-auto space-y-3 mb-6"></div>
                 <div id="setup-step-action" class="hidden text-center">
-                    <p class="text-gray-400 mb-4">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
+                    <p class="text-gray-400 mb-4" data-i18n="setup.calibrate_hint">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
                     <button id="calibrate-btn" onclick="runCalibration()"
                             class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg 
                                    transition-all duration-300 hover:shadow-neon-cyan disabled:opacity-50 disabled:cursor-not-allowed">
@@ -172,7 +172,7 @@
             
             <!-- Fans List -->
             <div class="flex-1 overflow-y-auto p-3 space-y-2" id="fan-list">
-                <div class="text-center text-gray-500 py-8">Loading fans...</div>
+                <div class="text-center text-gray-500 py-8" data-i18n="setup.loading_fans">Loading fans...</div>
             </div>
             
             <!-- Disks Summary -->
@@ -214,8 +214,8 @@
                 <!-- Empty State -->
                 <div id="inspector-empty" class="flex flex-col items-center justify-center h-full text-gray-600">
                     <div class="text-6xl mb-4">🌀</div>
-                    <p class="text-lg">Select a fan from the left panel</p>
-                    <p class="text-sm">to view controls and analytics</p>
+                    <p class="text-lg" data-i18n="inspector.select">Select a fan from the left panel</p>
+                    <p class="text-sm" data-i18n="inspector.hint_detail">to view controls and analytics</p>
                 </div>
                 
                 <!-- Fan Inspector (hidden by default) -->
@@ -230,23 +230,23 @@
                             </svg>
                         </div>
                         <div>
-                            <h3 id="fan-name" class="text-2xl font-bold text-white">Fan Name</h3>
+                            <h3 id="fan-name" class="text-2xl font-bold text-white" data-i18n-placeholder="inspector.fan_name">Fan Name</h3>
                             <div class="flex items-center gap-2 mt-1">
-                                <span id="fan-inverted-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan">INVERTED</span>
-                                <span id="fan-status-badge" class="text-xs px-2 py-0.5 rounded-full">Status</span>
-                                <span id="fan-mode-badge" class="text-xs px-2 py-0.5 rounded-full">Mode</span>
+                                <span id="fan-inverted-badge" class="hidden text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan" data-i18n="fan.inverted">INVERTED</span>
+                                <span id="fan-status-badge" class="text-xs px-2 py-0.5 rounded-full" data-i18n="inspector.status">Status</span>
+                                <span id="fan-mode-badge" class="text-xs px-2 py-0.5 rounded-full" data-i18n="inspector.mode">Mode</span>
                             </div>
                         </div>
                         <div class="ml-auto text-right">
                             <div id="fan-rpm-display" class="text-3xl font-bold font-mono text-neon-cyan">0</div>
-                            <div class="text-xs text-gray-500">RPM</div>
+                            <div class="text-xs text-gray-500" data-i18n="fan.rpm">RPM</div>
                         </div>
                     </div>
                     
                     <!-- PWM Slider -->
                     <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent">
                         <div class="flex items-center justify-between mb-3">
-                            <label class="text-sm font-semibold text-gray-300">Fan Speed</label>
+                            <label class="text-sm font-semibold text-gray-300" data-i18n="inspector.fan_speed">Fan Speed</label>
                             <span id="pwm-value-display" class="text-lg font-bold font-mono text-neon-purple">50%</span>
                         </div>
                         <input type="range" id="pwm-slider" min="0" max="100" value="50"
@@ -265,13 +265,13 @@
                         <button id="btn-mode-manual" onclick="setFanMode('manual')"
                                 class="py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300
                                        bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30
-                                       hover:bg-opacity-40 hover:shadow-neon-purple">
+                                       hover:bg-opacity-40 hover:shadow-neon-purple" data-i18n="mode.manual">
                             🎮 Manual
                         </button>
                         <button id="btn-mode-auto" onclick="setFanMode('auto')"
                                 class="py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300
                                        bg-cyber-accent text-gray-400 border border-gray-700
-                                       hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan">
+                                       hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan" data-i18n="mode.auto">
                             🤖 Auto
                         </button>
                     </div>
@@ -448,7 +448,7 @@
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-8 max-w-md w-full mx-4 text-center shadow-neon-cyan">
             <div class="text-4xl mb-4 animate-spin-slow">⚙️</div>
             <h3 class="text-xl font-bold text-white mb-2" data-i18n="calibration.title">Calibrating Fans</h3>
-            <p id="calibration-status" class="text-gray-400 mb-4">Starting...</p>
+            <p id="calibration-status" class="text-gray-400 mb-4" data-i18n="calibration.status">Starting...</p>
             <div class="w-full bg-cyber-accent rounded-full h-2 mb-2">
                 <div id="calibration-progress-bar" class="bg-neon-cyan h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
             </div>

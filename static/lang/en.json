@@ -124,5 +124,21 @@
   "tooltip.sensor_mode_min": "Use the lowest temperature from all assigned sensors",
   "tooltip.sensor_mode_avg": "Use the average temperature from all assigned sensors",
   "tooltip.schedule_grid": "Click or drag to select cells, then configure fan behavior for each time period",
-  "tooltip.inverted": "This fan has inverted PWM control - higher PWM values produce lower RPM"
+  "tooltip.inverted": "This fan has inverted PWM control - higher PWM values produce lower RPM",
+
+  "setup.loading_fans": "Loading fans...",
+  "setup.results_title": "Hardware Detected",
+  "setup.calibrate_hint": "To complete setup, fans must be calibrated. This takes about 1-2 minutes.",
+  "inspector.status": "Status",
+  "inspector.mode": "Mode",
+  "inspector.hint_detail": "to view controls and analytics",
+  "inspector.fan_name": "Fan Name",
+  "calibration.status": "Starting...",
+  "calibration.step_label": "Step 0/11",
+
+  "setup.no_fans": "No fans detected",
+  "setup.no_disks": "No disks detected",
+  "setup.no_hardware": "No hardware detected",
+  "schedule.missing": "Missing",
+  "schedule.empty_hours": "Empty hours = fan off."
 }
