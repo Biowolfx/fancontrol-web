@@ -21,7 +21,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_socketio import SocketIO
 from werkzeug.exceptions import BadRequest
 
@@ -64,7 +64,7 @@ file_handler.setFormatter(fmt)
 logger.addHandler(file_handler)
 
 # Flask & SocketIO
-app = Flask(__name__, static_folder='templates/js', static_url_path='/js')
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 CORS_ORIGINS = os.getenv('FANCONTROL_CORS_ORIGINS', 'http://localhost:5059,http://127.0.0.1:5059').split(',')
 
 socketio = SocketIO(
@@ -140,7 +140,8 @@ def get_state() -> Dict[str, Any]:
             'standby_mode': state.get('standby_mode', False),
             'initialized': state.get('initialized', False),
             'hardware_scanned': state.get('hardware_scanned', False),
-            'config_version': CONFIG_VERSION
+            'config_version': CONFIG_VERSION,
+            'language': state.get('language', 'en')
         }
 
 # ============================================================================
@@ -153,10 +154,45 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/js/<path:filename>')
+def serve_js(filename):
+    """Serve JavaScript files from templates/js"""
+    return send_from_directory(os.path.join(app.root_path, 'templates', 'js'), filename)
+
+
 @app.route('/api/state')
 def api_get_state():
     """REST endpoint for current state (debugging/health checks)"""
     return jsonify(get_state())
+
+
+@app.route('/api/lang/<code>')
+def api_get_lang(code):
+    """Serve translation file"""
+    lang_file = Path(app.static_folder) / 'lang' / f'{code}.json'
+    if lang_file.exists():
+        with open(lang_file, 'r', encoding='utf-8') as f:
+            return jsonify(json.load(f))
+    return jsonify({}), 404
+
+
+@app.route('/api/language', methods=['POST'])
+def api_set_language():
+    """Save language preference to config"""
+    try:
+        data = request.get_json(force=True)
+        lang = data.get('language', 'en')
+        if lang not in ('en', 'ru'):
+            return jsonify({"status": "error", "message": "Unsupported language"}), 400
+        
+        with state_lock:
+            state['language'] = lang
+        
+        save_config()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        logger.error(f'Language save error: {e}', exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/discover', methods=['POST'])
@@ -1503,6 +1539,7 @@ def save_config():
             'config_version': CONFIG_VERSION,
             'initialized': state.get('initialized', False),
             'tested': state.get('tested', False),
+            'language': state.get('language', 'en'),
             'fans': {}
         }
         
@@ -1554,6 +1591,7 @@ def load_config():
                 
                 state['initialized'] = bool(cfg.get('initialized', False))
                 state['tested'] = bool(cfg.get('tested', False))
+                state['language'] = cfg.get('language', 'en')
                 
             logger.info('Configuration loaded successfully')
             

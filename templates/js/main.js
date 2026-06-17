@@ -27,6 +27,58 @@ let scheduleEditorSensors = [];
 let expandedRuleGroups = new Set();
 
 // ============================================================================
+// I18N SYSTEM
+// ============================================================================
+
+let currentLang = localStorage.getItem('fancontrol_lang') || 'en';
+let translations = {};
+
+async function loadLang(code) {
+    try {
+        const resp = await fetch(`/api/lang/${code}`);
+        if (resp.ok) {
+            translations = await resp.json();
+            currentLang = code;
+            localStorage.setItem('fancontrol_lang', code);
+            applyTranslations();
+            return true;
+        }
+    } catch (e) {
+        console.error('[i18n] Failed to load lang:', code, e);
+    }
+    return false;
+}
+
+function t(key, fallback) {
+    return translations[key] || fallback || key;
+}
+
+function applyTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key && translations[key]) {
+            el.textContent = translations[key];
+        }
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key && translations[key]) {
+            el.title = translations[key];
+        }
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key && translations[key]) {
+            el.placeholder = translations[key];
+        }
+    });
+    // Update page title
+    if (translations['app.title']) {
+        document.title = `${translations['app.title']} v3.1.0`;
+    }
+}
+
+// ============================================================================
 // UTILITIES
 // ============================================================================
 
@@ -1508,11 +1560,71 @@ function validateSchedule() {
 }
 
 // ============================================================================
+// SETTINGS & LANGUAGE
+// ============================================================================
+
+function toggleSettings() {
+    const overlay = document.getElementById('settings-overlay');
+    const panel = document.getElementById('settings-panel');
+    if (!overlay || !panel) return;
+    
+    const isOpen = !panel.classList.contains('hidden');
+    if (isOpen) {
+        overlay.classList.add('hidden');
+        panel.classList.add('hidden');
+    } else {
+        overlay.classList.remove('hidden');
+        panel.classList.remove('hidden');
+        updateLangButtons();
+    }
+}
+
+function updateLangButtons() {
+    const enBtn = document.getElementById('lang-btn-en');
+    const ruBtn = document.getElementById('lang-btn-ru');
+    const setupEn = document.getElementById('setup-lang-en');
+    const setupRu = document.getElementById('setup-lang-ru');
+    
+    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
+    
+    if (enBtn) enBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'en' ? activeClass : inactiveClass}`;
+    if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'ru' ? activeClass : inactiveClass}`;
+    if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'en' ? activeClass : inactiveClass}`;
+    if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'ru' ? activeClass : inactiveClass}`;
+}
+
+async function switchLanguage(code) {
+    if (code === currentLang) return;
+    
+    const success = await loadLang(code);
+    if (success) {
+        updateLangButtons();
+        // Save to server config
+        fetch('/api/language', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language: code })
+        }).catch(() => {});
+        
+        // Re-render dynamic content
+        if (currentFanId) {
+            const fan = currentState?.fans?.[currentFanId];
+            if (fan) updateInspector(fan);
+        }
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('[FanControl] v3.1.0 - Neon Cyberpunk Edition initialized');
+    
+    // Load language
+    await loadLang(currentLang);
+    updateLangButtons();
     
     // Click outside to close sensor popup (stop propagation to avoid closing editor underneath)
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {

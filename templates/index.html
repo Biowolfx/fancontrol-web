@@ -97,11 +97,21 @@
     <div id="setup-screen" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-cyber-bg bg-opacity-95">
         <div class="bg-cyber-card border border-cyber-accent rounded-2xl p-10 max-w-2xl w-full mx-4 shadow-neon-purple">
             
+            <!-- Language selector for setup -->
+            <div class="flex justify-end mb-4">
+                <div class="flex gap-1">
+                    <button onclick="switchLanguage('en')" id="setup-lang-en"
+                            class="text-xs px-2 py-1 rounded border transition-all">EN</button>
+                    <button onclick="switchLanguage('ru')" id="setup-lang-ru"
+                            class="text-xs px-2 py-1 rounded border transition-all">RU</button>
+                </div>
+            </div>
+            
             <!-- Step 1: Intro -->
             <div id="setup-step-intro" class="text-center">
                 <div class="text-6xl mb-6">🌀</div>
-                <h2 class="text-2xl font-bold text-white mb-4 glow-cyan">Initial System Setup</h2>
-                <p class="text-gray-400 mb-8">
+                <h2 class="text-2xl font-bold text-white mb-4 glow-cyan" data-i18n="setup.heading">Initial System Setup</h2>
+                <p class="text-gray-400 mb-8" data-i18n="setup.description">
                     No configuration found. System needs to scan available data buses 
                     to automatically detect fans and temperature sensors.
                 </p>
@@ -147,12 +157,15 @@
             <!-- Header -->
             <div class="p-4 border-b border-cyber-accent">
                 <div class="flex items-center justify-between mb-2">
-                    <h1 class="text-lg font-bold glow-cyan">FanControl</h1>
-                    <span class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-2 py-1 rounded">v3.1.0</span>
+                    <h1 class="text-lg font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-2 py-1 rounded">v3.1.0</span>
+                        <button onclick="toggleSettings()" class="text-gray-400 hover:text-neon-cyan transition-colors p-1" data-i18n-title="header.settings">⚙</button>
+                    </div>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-gray-500">
                     <span id="sync-status" class="flex items-center gap-1">
-                        <span class="w-2 h-2 bg-neon-green rounded-full"></span> Synced
+                        <span class="w-2 h-2 bg-neon-green rounded-full"></span> <span data-i18n="header.synced">Synced</span>
                     </span>
                 </div>
             </div>
@@ -164,7 +177,7 @@
             
             <!-- Disks Summary -->
             <div class="border-t border-cyber-accent p-3">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Storage</h3>
+                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2" data-i18n="header.storage">Storage</h3>
                 <div id="disks-mini-list" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
             </div>
         </div>
@@ -177,8 +190,8 @@
             <!-- Top Bar -->
             <div class="p-4 border-b border-cyber-accent flex items-center justify-between">
                 <div>
-                    <h2 id="inspector-title" class="text-xl font-bold text-white">Select a device</h2>
-                    <p id="inspector-subtitle" class="text-xs text-gray-500">Click on a fan to inspect</p>
+                    <h2 id="inspector-title" class="text-xl font-bold text-white" data-i18n="inspector.select">Select a device</h2>
+                    <p id="inspector-subtitle" class="text-xs text-gray-500" data-i18n="inspector.hint">Click on a fan to inspect</p>
                 </div>
                 <div class="flex items-center gap-3">
                     <div id="failsafe-indicator" class="hidden flex items-center gap-2 bg-red-900 bg-opacity-30 text-neon-red px-3 py-1 rounded-lg alert-pulse">
@@ -187,11 +200,11 @@
                     <div id="standby-indicator" class="hidden flex items-center gap-2 bg-blue-900 bg-opacity-30 text-blue-400 px-3 py-1 rounded-lg">
                         <span class="w-2 h-2 bg-blue-400 rounded-full"></span> STANDBY
                     </div>
-                    <button onclick="startCalibration()" 
-                            class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-3 py-1.5 rounded-lg 
-                                   hover:bg-opacity-40 transition-all">
-                        Recalibrate
-                    </button>
+                        <button onclick="startCalibration()" 
+                                class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-3 py-1.5 rounded-lg 
+                                       hover:bg-opacity-40 transition-all" data-i18n="setup.calibrate_btn_short">
+                            Recalibrate
+                        </button>
                 </div>
             </div>
             
@@ -266,7 +279,7 @@
                     <!-- Auto Mode Settings -->
                     <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent" id="auto-settings" style="display:none;">
                         <div class="flex items-center justify-between mb-3">
-                            <h4 class="text-sm font-semibold text-gray-300">Weekly Schedule</h4>
+                            <h4 class="text-sm font-semibold text-gray-300" data-i18n="schedule.weekly">Weekly Schedule</h4>
                             <span id="schedule-coverage" class="text-xs text-gray-500"></span>
                         </div>
                         
@@ -298,11 +311,11 @@
                         
                         <div class="flex gap-2">
                             <button onclick="clearSchedule()" 
-                                    class="text-xs bg-red-900 bg-opacity-30 text-red-400 px-3 py-1.5 rounded-lg hover:bg-opacity-50 transition-all">
+                                    class="text-xs bg-red-900 bg-opacity-30 text-red-400 px-3 py-1.5 rounded-lg hover:bg-opacity-50 transition-all" data-i18n="schedule.clear_all">
                                 Clear All
                             </button>
                             <button onclick="fillScheduleDefaults()" 
-                                    class="text-xs bg-cyber-accent text-gray-400 px-3 py-1.5 rounded-lg hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple transition-all">
+                                    class="text-xs bg-cyber-accent text-gray-400 px-3 py-1.5 rounded-lg hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple transition-all" data-i18n="schedule.fill_auto">
                                 Fill Empty with Auto
                             </button>
                         </div>
@@ -311,7 +324,7 @@
                     
                     <!-- Chart -->
                     <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent">
-                        <h4 class="text-sm font-semibold text-gray-300 mb-3">Temperature History (24h)</h4>
+                        <h4 class="text-sm font-semibold text-gray-300 mb-3" data-i18n="chart.temp_history">Temperature History (24h)</h4>
                         <div id="temp-chart" class="h-64"></div>
                     </div>
                 </div>
@@ -322,7 +335,7 @@
     <!-- Sensor Popup -->
     <div id="sensor-popup" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-md w-full mx-4 shadow-neon-purple">
-            <h3 class="text-lg font-bold text-white mb-4">Select Sensors</h3>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="sensor.title">Select Sensors</h3>
             <div id="sensor-popup-list" class="max-h-64 overflow-y-auto space-y-2 mb-4"></div>
             <button id="sensor-popup-done-btn" onclick="closeSensorPopupForContext()"
                     class="w-full bg-neon-purple text-white py-2 rounded-lg font-semibold hover:shadow-neon-purple transition-all">
@@ -335,13 +348,13 @@
     <div id="schedule-editor" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-lg w-full mx-4 shadow-neon-purple">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-bold text-white">Edit Schedule</h3>
+                <h3 class="text-lg font-bold text-white" data-i18n="editor.title">Edit Schedule</h3>
                 <span id="schedule-editor-cells" class="text-xs text-gray-500"></span>
             </div>
             
             <!-- Mode Selection -->
             <div class="mb-4">
-                <label class="text-sm font-semibold text-gray-300 block mb-2">Mode</label>
+                <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.mode">Mode</label>
                 <div class="flex gap-2">
                     <button id="sched-btn-auto" onclick="setScheduleMode('auto')" 
                             class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
@@ -360,7 +373,7 @@
             
             <!-- Auto Mode Settings -->
             <div id="sched-auto-settings" class="mb-4">
-                <label class="text-sm font-semibold text-gray-300 block mb-2">Target Temperature</label>
+                <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.target_temp">Target Temperature</label>
                 <div class="flex items-center gap-3 mb-3">
                     <input type="number" id="sched-target-temp" value="31" min="20" max="60"
                            class="w-20 bg-cyber-bg border border-cyber-accent rounded-lg px-3 py-2 text-white text-center font-mono
@@ -368,16 +381,16 @@
                     <span class="text-gray-400">°C</span>
                 </div>
                 
-                <label class="text-sm font-semibold text-gray-300 block mb-2">Sensors</label>
+                <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.sensors">Sensors</label>
                 <div id="sched-sensor-tags" class="flex flex-wrap gap-2 mb-2"></div>
                 <button onclick="toggleScheduleSensorPopup()"
                         class="text-xs bg-cyber-accent text-gray-400 px-3 py-1.5 rounded-lg 
-                               hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple transition-all mb-3">
+                               hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple transition-all mb-3" data-i18n="editor.add_sensor">
                     + Add Sensor
                 </button>
                 
                 <div id="sched-sensor-mode-section" class="hidden">
-                    <label class="text-sm font-semibold text-gray-300 block mb-2">Temperature Mode</label>
+                    <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.temp_mode">Temperature Mode</label>
                     <div class="flex gap-2">
                         <button id="sched-btn-sensor-max" onclick="setScheduleSensorMode('max')" 
                                 class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border">
@@ -397,7 +410,7 @@
             
             <!-- Manual Mode Settings -->
             <div id="sched-manual-settings" class="hidden mb-4">
-                <label class="text-sm font-semibold text-gray-300 block mb-2">Fan Speed</label>
+                <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.fan_speed">Fan Speed</label>
                 <div class="flex items-center gap-3">
                     <input type="range" id="sched-speed-slider" min="0" max="100" value="50"
                            class="flex-1 h-2 bg-cyber-accent rounded-lg appearance-none cursor-pointer
@@ -413,17 +426,17 @@
             <div class="flex gap-2">
                 <button onclick="saveScheduleEdit()" 
                         class="flex-1 bg-neon-cyan bg-opacity-20 text-neon-cyan py-2.5 rounded-lg font-semibold
-                               hover:bg-opacity-40 transition-all">
+                               hover:bg-opacity-40 transition-all" data-i18n="editor.apply">
                     Apply
                 </button>
                 <button onclick="deleteScheduleEdit()" 
                         class="bg-red-900 bg-opacity-30 text-red-400 px-4 py-2.5 rounded-lg font-semibold
-                               hover:bg-opacity-50 transition-all">
+                               hover:bg-opacity-50 transition-all" data-i18n="editor.delete">
                     Delete
                 </button>
                 <button onclick="closeScheduleEditor()" 
                         class="bg-cyber-accent text-gray-400 px-4 py-2.5 rounded-lg font-semibold
-                               hover:text-white transition-all">
+                               hover:text-white transition-all" data-i18n="editor.cancel">
                     Cancel
                 </button>
             </div>
@@ -434,12 +447,39 @@
     <div id="calibration-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-8 max-w-md w-full mx-4 text-center shadow-neon-cyan">
             <div class="text-4xl mb-4 animate-spin-slow">⚙️</div>
-            <h3 class="text-xl font-bold text-white mb-2">Calibrating Fans</h3>
+            <h3 class="text-xl font-bold text-white mb-2" data-i18n="calibration.title">Calibrating Fans</h3>
             <p id="calibration-status" class="text-gray-400 mb-4">Starting...</p>
             <div class="w-full bg-cyber-accent rounded-full h-2 mb-2">
                 <div id="calibration-progress-bar" class="bg-neon-cyan h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
             </div>
             <p id="calibration-step" class="text-xs text-gray-500">Step 0/11</p>
+        </div>
+    </div>
+    
+    <!-- Settings Panel -->
+    <div id="settings-overlay" class="hidden fixed inset-0 z-[70] bg-black bg-opacity-50" onclick="toggleSettings()"></div>
+    <div id="settings-panel" class="hidden fixed top-0 right-0 h-full w-80 bg-cyber-card border-l border-cyber-accent z-[75] shadow-2xl overflow-y-auto">
+        <div class="p-5">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-lg font-bold text-white" data-i18n="settings.title">Settings</h2>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-white transition-colors text-xl">&times;</button>
+            </div>
+            
+            <!-- Language -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.language">Language</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.language_hint">Select your preferred language</p>
+                <div class="flex gap-2">
+                    <button id="lang-btn-en" onclick="switchLanguage('en')"
+                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                        English
+                    </button>
+                    <button id="lang-btn-ru" onclick="switchLanguage('ru')"
+                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                        Русский
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     
