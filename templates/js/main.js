@@ -462,6 +462,17 @@ function toggleSensorPopup() {
     }
 }
 
+function closeSensorPopupForContext() {
+    const popup = document.getElementById('sensor-popup');
+    if (!popup) return;
+    
+    if (popup._scheduleMode) {
+        toggleScheduleSensorPopup();
+    } else {
+        closeSensorPopup();
+    }
+}
+
 function closeSensorPopup() {
     const popup = document.getElementById('sensor-popup');
     if (!popup) return;
@@ -1233,11 +1244,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
         e.stopPropagation();
         if (e.target === this) {
-            if (this._scheduleMode) {
-                toggleScheduleSensorPopup();
-            } else {
-                closeSensorPopup();
-            }
+            closeSensorPopupForContext();
         }
     });
     
