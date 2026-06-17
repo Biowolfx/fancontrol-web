@@ -326,18 +326,16 @@ def api_update_check():
                 pass
         
         # Query GitHub API for latest commit on main
-        import urllib.request
-        import urllib.error
+        import requests
         repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
         url = f'https://api.github.com/repos/{repo}/commits/main'
         
-        req = urllib.request.Request(url, headers={
+        resp = requests.get(url, timeout=15, headers={
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'fancontrol-web'
         })
-        
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
+        resp.raise_for_status()
+        data = resp.json()
         
         remote_hash = data['sha'][:8]
         commit_msg = data['commit']['message'].split('\n')[0]
