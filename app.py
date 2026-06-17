@@ -315,35 +315,24 @@ def api_update_check():
     try:
         # Get current commit hash from the build-time arg
         current_hash = os.getenv('FANCONTROL_GIT_HASH', '')
-        if not current_hash:
-            try:
-                current_hash = subprocess.run(
-                    ['git', 'rev-parse', '--short', 'HEAD'],
-                    capture_output=True, text=True, timeout=5,
-                    cwd='/app'
-                ).stdout.strip()
-            except Exception:
-                pass
         
-        # Resolve DNS manually (eventlet breaks requests/urllib3 DNS)
-        import socket
+        # Resolve DNS outside eventlet (eventlet greendns breaks getaddrinfo)
         import http.client
-        
-        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
         host = 'api.github.com'
-        
-        # Resolve IP via standard socket
-        orig_getaddrinfo = socket.getaddrinfo
         try:
-            # Temporarily unmonkey-patch if eventlet is active
-            if hasattr(socket, '_original_getaddrinfo'):
-                socket.getaddrinfo = socket._original_getaddrinfo
-            addrs = socket.getaddrinfo(host, 443, socket.AF_INET)
-            ip = addrs[0][4][0]
-        finally:
-            socket.getaddrinfo = orig_getaddrinfo
+            result = subprocess.run(
+                ['python3', '-c', f'import socket; print(socket.getaddrinfo("{host}", 443, socket.AF_INET)[0][4][0])'],
+                capture_output=True, text=True, timeout=10
+            )
+            ip = result.stdout.strip()
+            if not ip:
+                raise Exception(f'DNS resolution failed: {result.stderr.strip()}')
+        except Exception as e:
+            logger.error(f'DNS resolution failed: {e}')
+            return jsonify({'status': 'error', 'message': f'DNS resolution failed: {e}'}), 500
         
         # Make HTTPS request with resolved IP
+        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
         conn = http.client.HTTPSConnection(ip, 443, timeout=15)
         conn.request('GET', f'/repos/{repo}/commits/main', headers={
             'Host': host,
