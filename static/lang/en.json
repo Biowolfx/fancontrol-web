@@ -152,5 +152,8 @@
 
   "setup.calibrate_btn_short": "Recalibrate",
 
-  "inspector.fan_speed": "Fan Speed"
+  "inspector.fan_speed": "Fan Speed",
+
+  "sensors.disks": "Disks",
+  "sensors.sensors_group": "Sensors"
 }

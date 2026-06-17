@@ -313,7 +313,7 @@ function updateInspector(fan) {
     
     // Update status badge
     const statusBadge = document.getElementById('fan-status-badge');
-    statusBadge.textContent = fan.status || 'unknown';
+    statusBadge.textContent = t('status.' + fan.status, fan.status || 'unknown');
     statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(fan.status)}`;
     
     // Update inverted badge
@@ -325,7 +325,7 @@ function updateInspector(fan) {
     // Update mode badge
     const modeBadge = document.getElementById('fan-mode-badge');
     const mode = fan.mode || 'manual';
-    modeBadge.textContent = mode.toUpperCase();
+    modeBadge.textContent = t('mode.' + mode, mode).toUpperCase();
     modeBadge.className = mode === 'auto' 
         ? 'text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan'
         : 'text-xs px-2 py-0.5 rounded-full bg-purple-900 bg-opacity-30 text-neon-purple';
@@ -481,7 +481,7 @@ function buildSensorList(data) {
                 label: disk.label,
                 temp: disk.temp,
                 standby: disk.standby,
-                group: 'Disks'
+                group: 'sensors.disks'
             });
         }
     }
@@ -493,7 +493,7 @@ function buildSensorList(data) {
                 label: sensor.label,
                 temp: sensor.value,
                 standby: false,
-                group: 'Sensors'
+                group: 'sensors.sensors_group'
             });
         }
     }
@@ -518,7 +518,7 @@ function toggleSensorPopup() {
         
         let html = '';
         for (const [group, sensors] of Object.entries(groups)) {
-            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${escapeHtml(group)}</div>`;
+            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${t(group, group)}</div>`;
             sensors.forEach(s => {
                 const checked = currentSensors.includes(s.id);
                 html += `
@@ -1218,20 +1218,20 @@ function onScheduleMouseEnter(e, day, hour) {
     const maxD = Math.max(startD, endD);
     
     scheduleSelection = [];
-    for (let d = minD; d <= maxD; d++) {
-        const minH = (d === minD && d === maxD) ? Math.min(startH, hour) 
-                   : (d === minD) ? (startD <= endD ? startH : hour)
-                   : (d === maxD) ? (startD <= endD ? hour : startH)
-                   : 0;
-        const maxH = (d === minD && d === maxD) ? Math.max(startH, hour)
-                   : (d === minD) ? (startD <= endD ? Math.max(startH, 23) : Math.min(hour, 23))
-                   : (d === maxD) ? (startD <= endD ? Math.min(hour, 23) : Math.max(startH, 0))
-                   : 23;
-        
-        const hFrom = Math.min(minH, maxH);
-        const hTo = Math.max(minH, maxH);
+    
+    if (minD === maxD) {
+        // Same day: select hour range
+        const hFrom = Math.min(startH, hour);
+        const hTo = Math.max(startH, hour);
         for (let h = hFrom; h <= hTo; h++) {
-            scheduleSelection.push({ day: DAYS[d], hour: h });
+            scheduleSelection.push({ day: DAYS[minD], hour: h });
+        }
+    } else {
+        // Cross-day: select ALL hours on each day in range
+        for (let d = minD; d <= maxD; d++) {
+            for (let h = 0; h < 24; h++) {
+                scheduleSelection.push({ day: DAYS[d], hour: h });
+            }
         }
     }
     highlightSelection();
@@ -1382,7 +1382,7 @@ function toggleScheduleSensorPopup() {
         
         let html = '';
         for (const [group, sensors] of Object.entries(groups)) {
-            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${escapeHtml(group)}</div>`;
+            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${t(group, group)}</div>`;
             sensors.forEach(s => {
                 const checked = scheduleEditorSensors.includes(s.id);
                 html += `
@@ -1553,9 +1553,9 @@ function validateSchedule() {
     
     if (pct < 100) {
         const emptyDays = [];
-        for (const day of DAYS) {
-            const dayHours = schedule.filter(s => s.day === day).length;
-            if (dayHours < 24) emptyDays.push(day);
+        for (let i = 0; i < DAYS.length; i++) {
+            const dayHours = schedule.filter(s => s.day === DAYS[i]).length;
+            if (dayHours < 24) emptyDays.push(tDay(i));
         }
         warning.classList.remove('hidden');
         detail.textContent = `${t('schedule.missing', 'Missing')}: ${emptyDays.join(', ')}. ${t('schedule.empty_hours', 'Empty hours = fan off.')}`;

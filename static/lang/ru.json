@@ -152,5 +152,8 @@
 
   "setup.calibrate_btn_short": "Перекалибровать",
 
-  "inspector.fan_speed": "Скорость вентилятора"
+  "inspector.fan_speed": "Скорость вентилятора",
+
+  "sensors.disks": "Диски",
+  "sensors.sensors_group": "Датчики"
 }
