@@ -843,7 +843,7 @@ function renderScheduleGrid() {
     });
     const groupKeys = Object.keys(groups);
     groupKeys.forEach((gk, idx) => {
-        const color = RULE_COLORS[idx % RULE_COLORS.length];
+        const color = getRuleColor(idx);
         groups[gk].forEach(item => {
             const cellKey = `${item.day}_${item.time_start}`;
             colorMap[cellKey] = color;
@@ -907,6 +907,16 @@ const RULE_COLORS = [
     { hex: '#0f766e', dot: '#2dd4bf', text: '#5eead4' },
 ];
 
+function getRuleColor(idx) {
+    if (idx < RULE_COLORS.length) return RULE_COLORS[idx];
+    // Generate colors via HSL for groups beyond 8
+    const hue = (idx * 137) % 360;
+    const hex = `hsl(${hue}, 60%, 35%)`;
+    const dot = `hsl(${hue}, 70%, 65%)`;
+    const text = `hsl(${hue}, 70%, 80%)`;
+    return { hex, dot, text };
+}
+
 function ruleKey(item) {
     return JSON.stringify({
         mode: item.mode,
@@ -941,7 +951,7 @@ function renderScheduleRules() {
     
     let html = '<div class="space-y-2">';
     groupList.forEach((group, idx) => {
-        const color = RULE_COLORS[idx % RULE_COLORS.length];
+        const color = getRuleColor(idx);
         const item = group.item;
         const cells = group.cells;
         
@@ -1340,6 +1350,12 @@ function fillScheduleDefaults() {
 
 function applyScheduleToFan() {
     const schedule = Object.values(scheduleData);
+    
+    // Update local state immediately so render sees new data
+    if (currentState?.fans?.[currentFanId]) {
+        currentState.fans[currentFanId].schedule = schedule;
+    }
+    
     sendControl({
         action: 'set_fan_config',
         fan: currentFanId,
