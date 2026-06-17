@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FanControl Web v3.0.1 - Neon Cyberpunk Edition
+FanControl Web v3.1.0 - Neon Cyberpunk Edition
 Modern fan control with real-time monitoring and intelligent thermal management
 """
 
@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.0.1"
+CONFIG_VERSION = "3.1.0"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
@@ -1709,7 +1709,7 @@ def _auto_init():
 
 if __name__ == '__main__':
     logger.info('=' * 60)
-    logger.info('STARTING FanControl Web v3.0.1 - Neon Cyberpunk Edition')
+    logger.info('STARTING FanControl Web v3.1.0 - Neon Cyberpunk Edition')
     logger.info('=' * 60)
     
     init_database()

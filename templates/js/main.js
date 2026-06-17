@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.0.1 - Neon Cyberpunk Edition
+ * FanControl Web v3.1.0 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -1033,15 +1033,22 @@ function renderScheduleRules() {
         
         html += `
             <div class="bg-cyber-accent rounded-lg overflow-hidden">
-                <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-opacity-80 transition-all"
-                     onclick="toggleRuleGroup(${gIdx})">
+                <div class="flex items-center gap-2 px-3 py-2">
                     <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color.dot}"></span>
                     <span class="text-xs flex-shrink-0">${modeIcon}</span>
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 cursor-pointer" onclick="toggleRuleGroup(${gIdx})">
                         <span class="text-xs font-semibold" style="color:${color.text}">${escapeHtml(settings)}</span>
                         <span class="text-[10px] text-gray-500 ml-2">${cells.length}h</span>
                     </div>
-                    <span id="rule-chevron-${gIdx}" class="text-[10px] text-gray-500 transition-transform duration-200">▸</span>
+                    <button onclick="editRuleGroup(${gIdx}); event.stopPropagation()" 
+                            class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
+                        Edit
+                    </button>
+                    <button onclick="deleteRuleGroup(${gIdx}); event.stopPropagation()" 
+                            class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
+                        Del
+                    </button>
+                    <span id="rule-chevron-${gIdx}" class="text-[10px] text-gray-500 transition-transform duration-200 cursor-pointer" onclick="toggleRuleGroup(${gIdx})">▸</span>
                 </div>
                 <div id="rule-subperiods-${gIdx}" class="hidden border-t border-gray-700">
         `;
@@ -1113,6 +1120,26 @@ function deleteSinglePeriod(day, fromHour, toHour) {
         const key = `${day}_${String(h).padStart(2, '0')}:00`;
         delete scheduleData[key];
     }
+    applyScheduleToFan();
+}
+
+function editRuleGroup(idx) {
+    const container = document.getElementById('schedule-rules');
+    const group = container._groups[idx];
+    if (!group) return;
+    const cells = group.cells.map(c => ({ day: c.day, hour: parseInt(c.time_start) }));
+    openScheduleEditor(cells);
+}
+
+function deleteRuleGroup(idx) {
+    const container = document.getElementById('schedule-rules');
+    const group = container._groups[idx];
+    if (!group) return;
+    group.cells.forEach(cell => {
+        const key = `${cell.day}_${cell.time_start}`;
+        delete scheduleData[key];
+    });
+    expandedRuleGroups.delete(idx);
     applyScheduleToFan();
 }
 
@@ -1485,7 +1512,7 @@ function validateSchedule() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('[FanControl] v3.0.1 - Neon Cyberpunk Edition initialized');
+    console.log('[FanControl] v3.1.0 - Neon Cyberpunk Edition initialized');
     
     // Click outside to close sensor popup (stop propagation to avoid closing editor underneath)
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
