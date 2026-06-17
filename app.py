@@ -1538,8 +1538,8 @@ def load_config():
         
         cfg = migrate_config(cfg)
         
-        # Fields that come from calibration/hardware detection, NOT from config
-        CALIBRATION_FIELDS = {'inverted', 'status', 'curve', 'calibration', 'min_rpm', 'max_rpm', 'rpm', 'pwm_value', 'raw_pwm', 'last_update'}
+        # Fields that are runtime-only, should NOT be loaded from config
+        RUNTIME_ONLY_FIELDS = {'rpm', 'pwm_value', 'raw_pwm', 'last_update', 'current_pct', 'target_pwm'}
         
         with state_lock:
             if isinstance(cfg, dict):
@@ -1547,9 +1547,8 @@ def load_config():
                 
                 for fan_id, fan_cfg in fans.items():
                     if fan_id in state['fans']:
-                        # Only apply user settings, preserve calibration data from hardware
                         for key, val in fan_cfg.items():
-                            if key not in CALIBRATION_FIELDS:
+                            if key not in RUNTIME_ONLY_FIELDS:
                                 state['fans'][fan_id][key] = val
                     else:
                         state['fans'][fan_id] = fan_cfg
