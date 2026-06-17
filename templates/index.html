@@ -266,7 +266,7 @@
                     <!-- Temperature Target -->
                     <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent" id="auto-settings" style="display:none;">
                         <label class="text-sm font-semibold text-gray-300 block mb-2">Target Temperature</label>
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3 mb-4">
                             <input type="number" id="target-temp-input" value="31" min="20" max="60"
                                    class="w-20 bg-cyber-bg border border-cyber-accent rounded-lg px-3 py-2 text-white text-center font-mono
                                           focus:border-neon-cyan focus:outline-none">
@@ -276,6 +276,34 @@
                                            hover:bg-opacity-40 transition-all">
                                 Save
                             </button>
+                        </div>
+                        
+                        <div id="no-sensor-warning" class="hidden bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded-lg p-3 mb-4">
+                            <p class="text-sm text-yellow-300 font-semibold mb-1">No sensors assigned</p>
+                            <p class="text-xs text-yellow-400 mb-2">Assign at least one temperature sensor for auto mode to work correctly.</p>
+                            <button onclick="toggleSensorPopup()" 
+                                    class="text-xs bg-yellow-600 bg-opacity-30 text-yellow-200 px-3 py-1.5 rounded-lg hover:bg-opacity-50 transition-all">
+                                + Add Sensor
+                            </button>
+                        </div>
+                        
+                        <div id="sensor-mode-section" class="hidden">
+                            <label class="text-sm font-semibold text-gray-300 block mb-2">Temperature Mode</label>
+                            <p class="text-xs text-gray-500 mb-2">When multiple sensors are assigned, choose how to combine their readings:</p>
+                            <div class="flex gap-2">
+                                <button id="btn-sensor-max" onclick="setSensorMode('max')" 
+                                        class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                                    Max
+                                </button>
+                                <button id="btn-sensor-min" onclick="setSensorMode('min')" 
+                                        class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                                    Min
+                                </button>
+                                <button id="btn-sensor-avg" onclick="setSensorMode('avg')" 
+                                        class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                                    Average
+                                </button>
+                            </div>
                         </div>
                     </div>
                     

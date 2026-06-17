@@ -309,14 +309,30 @@ function updateInspector(fan) {
     // Update target temp
     document.getElementById('target-temp-input').value = fan.target_temp || 31;
     
+    // Update no-sensor warning
+    const sensors = fan.sensors || [];
+    const noSensorWarning = document.getElementById('no-sensor-warning');
+    const sensorModeSection = document.getElementById('sensor-mode-section');
+    if (noSensorWarning) {
+        noSensorWarning.classList.toggle('hidden', sensors.length > 0 || mode !== 'auto');
+    }
+    if (sensorModeSection) {
+        const showSensorMode = sensors.length > 1;
+        sensorModeSection.classList.toggle('hidden', !showSensorMode);
+        if (showSensorMode) {
+            updateSensorModeButtons(fan.sensor_mode || 'max');
+        }
+    }
+    
     // Update sensor tags
     updateSensorTags(fan);
     
     // Store config
     if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
-    fanConfigs[currentFanId].sensors = fan.sensors || [];
+    fanConfigs[currentFanId].sensors = sensors;
     fanConfigs[currentFanId].target_temp = fan.target_temp || 31;
     fanConfigs[currentFanId].mode = mode;
+    fanConfigs[currentFanId].sensor_mode = fan.sensor_mode || 'max';
 }
 
 function updateSensorTags(fan) {
@@ -349,10 +365,45 @@ function updateSensorTags(fan) {
 function setFanMode(mode) {
     if (!currentFanId) return;
     
+    if (mode === 'auto') {
+        const sensors = fanConfigs[currentFanId]?.sensors || [];
+        if (sensors.length === 0) {
+            document.getElementById('no-sensor-warning')?.classList.remove('hidden');
+        }
+    }
+    
     sendControl({
         action: 'set_fan_config',
         fan: currentFanId,
         fan_mode: mode
+    });
+}
+
+function setSensorMode(sensorMode) {
+    if (!currentFanId) return;
+    
+    sendControl({
+        action: 'set_fan_config',
+        fan: currentFanId,
+        sensor_mode: sensorMode
+    });
+    
+    updateSensorModeButtons(sensorMode);
+    
+    if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
+    fanConfigs[currentFanId].sensor_mode = sensorMode;
+}
+
+function updateSensorModeButtons(activeMode) {
+    const modes = ['max', 'min', 'avg'];
+    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+    
+    modes.forEach(m => {
+        const btn = document.getElementById(`btn-sensor-${m}`);
+        if (btn) {
+            btn.className = `flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border ${m === activeMode ? activeClass : inactiveClass}`;
+        }
     });
 }
 
@@ -519,6 +570,17 @@ function closeSensorPopup() {
             fan: currentFanId,
             sensors: sensors
         });
+        
+        // Update no-sensor warning and sensor mode section
+        const mode = fanConfigs[currentFanId]?.mode || 'manual';
+        const noSensorWarning = document.getElementById('no-sensor-warning');
+        const sensorModeSection = document.getElementById('sensor-mode-section');
+        if (noSensorWarning) {
+            noSensorWarning.classList.toggle('hidden', sensors.length > 0 || mode !== 'auto');
+        }
+        if (sensorModeSection) {
+            sensorModeSection.classList.toggle('hidden', sensors.length <= 1);
+        }
     }
     
     popup.classList.add('hidden');
