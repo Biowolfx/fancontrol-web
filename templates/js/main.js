@@ -869,18 +869,22 @@ function renderScheduleGrid() {
             const key = `${day}_${timeStr}`;
             const item = scheduleData[key];
             
-            let bg = 'bg-gray-800';
+            let bgStyle = 'background:#1f2937';
             if (item) {
                 const cm = colorMap[key];
-                bg = cm ? cm.bg : (item.mode === 'auto' ? 'bg-green-700' : item.mode === 'manual' ? 'bg-orange-600' : 'bg-red-800');
+                if (cm) {
+                    bgStyle = `background:${cm.hex}`;
+                } else {
+                    bgStyle = item.mode === 'auto' ? 'background:#15803d' : item.mode === 'manual' ? 'background:#c2410c' : 'background:#991b1b';
+                }
             }
             
-            html += `<td class="${bg} cursor-pointer schedule-cell transition-colors duration-75"
+            html += `<td class="cursor-pointer schedule-cell transition-colors duration-75"
                          data-day="${day}" data-hour="${h}"
                          onmousedown="onScheduleMouseDown(event,'${day}',${h})"
                          onmouseenter="onScheduleMouseEnter(event,'${day}',${h})"
                          title="${DAY_LABELS[d]} ${timeStr}${item ? ' [' + item.mode + ']' : ''}"
-                         style="width:18px;height:18px;"></td>`;
+                         style="width:18px;height:18px;${bgStyle}"></td>`;
         }
         html += '</tr>';
     }
@@ -893,14 +897,14 @@ function renderScheduleGrid() {
 }
 
 const RULE_COLORS = [
-    { bg: 'bg-green-700', dot: 'bg-green-400', text: 'text-green-300' },
-    { bg: 'bg-orange-600', dot: 'bg-orange-400', text: 'text-orange-300' },
-    { bg: 'bg-red-800', dot: 'bg-red-400', text: 'text-red-300' },
-    { bg: 'bg-blue-700', dot: 'bg-blue-400', text: 'text-blue-300' },
-    { bg: 'bg-purple-700', dot: 'bg-purple-400', text: 'text-purple-300' },
-    { bg: 'bg-yellow-700', dot: 'bg-yellow-400', text: 'text-yellow-300' },
-    { bg: 'bg-pink-700', dot: 'bg-pink-400', text: 'text-pink-300' },
-    { bg: 'bg-teal-700', dot: 'bg-teal-400', text: 'text-teal-300' },
+    { hex: '#15803d', dot: '#4ade80', text: '#86efac' },
+    { hex: '#c2410c', dot: '#fb923c', text: '#fdba74' },
+    { hex: '#991b1b', dot: '#f87171', text: '#fca5a5' },
+    { hex: '#1d4ed8', dot: '#60a5fa', text: '#93c5fd' },
+    { hex: '#7e22ce', dot: '#c084fc', text: '#d8b4fe' },
+    { hex: '#a16207', dot: '#facc15', text: '#fde047' },
+    { hex: '#be185d', dot: '#f472b6', text: '#f9a8d4' },
+    { hex: '#0f766e', dot: '#2dd4bf', text: '#5eead4' },
 ];
 
 function ruleKey(item) {
@@ -965,9 +969,9 @@ function renderScheduleRules() {
         
         html += `
             <div class="flex items-center gap-2 bg-cyber-accent rounded-lg px-3 py-2">
-                <span class="w-3 h-3 rounded-full ${color.dot} flex-shrink-0"></span>
+                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color.dot}"></span>
                 <div class="flex-1 min-w-0">
-                    <div class="text-xs font-semibold ${color.text}">${escapeHtml(period)}</div>
+                    <div class="text-xs font-semibold" style="color:${color.text}">${escapeHtml(period)}</div>
                     <div class="text-[10px] text-gray-500 truncate">${escapeHtml(settings)}</div>
                 </div>
                 <span class="text-[10px] text-gray-600 flex-shrink-0">${cells.length}h</span>
