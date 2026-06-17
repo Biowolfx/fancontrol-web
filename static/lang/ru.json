@@ -140,5 +140,17 @@
   "setup.no_disks": "Диски не обнаружены",
   "setup.no_hardware": "Оборудование не обнаружено",
   "schedule.missing": "Пропущено",
-  "schedule.empty_hours": "Пустые часы = вентилятор выключен."
+  "schedule.empty_hours": "Пустые часы = вентилятор выключен.",
+
+  "days.mon": "Пн",
+  "days.tue": "Вт",
+  "days.wed": "Ср",
+  "days.thu": "Чт",
+  "days.fri": "Пт",
+  "days.sat": "Сб",
+  "days.sun": "Вс",
+
+  "setup.calibrate_btn_short": "Перекалибровать",
+
+  "inspector.fan_speed": "Скорость вентилятора"
 }

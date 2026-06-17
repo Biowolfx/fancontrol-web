@@ -230,13 +230,13 @@ function buildFanList(fans) {
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-sm font-semibold text-white truncate">${escapeHtml(fan.label)}</span>
                     <div class="flex items-center gap-1">
-                        ${fan.inverted ? '<span class="text-xs px-1.5 py-0.5 rounded bg-cyan-900 bg-opacity-30 text-neon-cyan">INV</span>' : ''}
-                        <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${escapeHtml(fan.status)}</span>
+                        ${fan.inverted ? `<span class="text-xs px-1.5 py-0.5 rounded bg-cyan-900 bg-opacity-30 text-neon-cyan">${t('fan.inv', 'INV')}</span>` : ''}
+                        <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${t('status.' + fan.status, fan.status)}</span>
                     </div>
                 </div>
                 <div class="flex items-center justify-between text-xs">
-                    <span class="text-gray-500">${escapeHtml(fan.mode || 'manual')}</span>
-                    <span class="font-mono text-neon-cyan" id="fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0} RPM</span>
+                    <span class="text-gray-500">${t('mode.' + (fan.mode || 'manual'), fan.mode || 'manual')}</span>
+                    <span class="font-mono text-neon-cyan" id="fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0} ${t('fan.rpm', 'RPM')}</span>
                 </div>
             </div>
         `;
@@ -899,6 +899,11 @@ function startCalibration() {
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_KEYS = ['days.mon', 'days.tue', 'days.wed', 'days.thu', 'days.fri', 'days.sat', 'days.sun'];
+
+function tDay(idx) {
+    return t(DAY_KEYS[idx], DAY_LABELS[idx]);
+}
 
 function renderScheduleGrid() {
     const container = document.getElementById('schedule-grid');
@@ -941,7 +946,7 @@ function renderScheduleGrid() {
     // Day rows
     for (let d = 0; d < DAYS.length; d++) {
         const day = DAYS[d];
-        html += `<tr><td class="w-12 h-5 text-[10px] text-gray-400 font-semibold pr-1 text-right align-middle">${DAY_LABELS[d]}</td>`;
+        html += `<tr><td class="w-12 h-5 text-[10px] text-gray-400 font-semibold pr-1 text-right align-middle">${tDay(d)}</td>`;
         
         for (let h = 0; h < 24; h++) {
             const timeStr = String(h).padStart(2, '0') + ':00';
@@ -962,7 +967,7 @@ function renderScheduleGrid() {
                          data-day="${day}" data-hour="${h}"
                          onmousedown="onScheduleMouseDown(event,'${day}',${h})"
                          onmouseenter="onScheduleMouseEnter(event,'${day}',${h})"
-                         title="${DAY_LABELS[d]} ${timeStr}${item ? ' [' + item.mode + ']' : ''}"
+                         title="${tDay(d)} ${timeStr}${item ? ' [' + t('mode.' + item.mode, item.mode) + ']' : ''}"
                          style="width:18px;height:18px;${bgStyle}"></td>`;
         }
         html += '</tr>';
@@ -1106,7 +1111,7 @@ function renderScheduleRules() {
         `;
         
         subPeriods.forEach((sp, sIdx) => {
-            const dayLabel = DAY_LABELS[DAYS.indexOf(sp.day)];
+            const dayLabel = tDay(DAYS.indexOf(sp.day));
             const fromStr = String(sp.from).padStart(2, '0') + ':00';
             const toStr = String(sp.to + 1).padStart(2, '0') + ':00';
             
@@ -1502,7 +1507,7 @@ function applyScheduleToFan() {
 function describeCells(cells) {
     if (cells.length === 0) return '';
     if (cells.length === 1) {
-        return `${DAY_LABELS[DAYS.indexOf(cells[0].day)]} ${String(cells[0].hour).padStart(2, '0')}:00`;
+        return `${tDay(DAYS.indexOf(cells[0].day))} ${String(cells[0].hour).padStart(2, '0')}:00`;
     }
     
     const days = [...new Set(cells.map(c => c.day))].sort((a, b) => DAYS.indexOf(a) - DAYS.indexOf(b));
@@ -1516,7 +1521,7 @@ function describeCells(cells) {
     } else if (days.length === 2 && days.includes('sat') && days.includes('sun')) {
         dayStr = t('schedule.weekends', 'Weekends');
     } else if (days.length <= 3) {
-        dayStr = days.map(d => DAY_LABELS[DAYS.indexOf(d)]).join(', ');
+        dayStr = days.map(d => tDay(DAYS.indexOf(d))).join(', ');
     } else {
         dayStr = `${days.length} days`;
     }

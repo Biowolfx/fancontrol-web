@@ -300,10 +300,10 @@
                         
                         <!-- Legend -->
                         <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
-                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#15803d"></span> Auto</span>
-                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#c2410c"></span> Manual</span>
-                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#991b1b"></span> Off</span>
-                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#1f2937"></span> Empty</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#15803d"></span> <span data-i18n="schedule.legend_auto">Auto</span></span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#c2410c"></span> <span data-i18n="schedule.legend_manual">Manual</span></span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#991b1b"></span> <span data-i18n="schedule.legend_off">Off</span></span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded" style="background:#1f2937"></span> <span data-i18n="schedule.legend_empty">Empty</span></span>
                         </div>
                         
                         <!-- Schedule Rules Summary -->
@@ -357,15 +357,15 @@
                 <label class="text-sm font-semibold text-gray-300 block mb-2" data-i18n="editor.mode">Mode</label>
                 <div class="flex gap-2">
                     <button id="sched-btn-auto" onclick="setScheduleMode('auto')" 
-                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border" data-i18n="mode.auto">
                         🌡️ Auto
                     </button>
                     <button id="sched-btn-manual" onclick="setScheduleMode('manual')" 
-                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border" data-i18n="mode.manual">
                         🎮 Manual
                     </button>
                     <button id="sched-btn-off" onclick="setScheduleMode('off')" 
-                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                            class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border" data-i18n="schedule.legend_off">
                         ⏻ Off
                     </button>
                 </div>
