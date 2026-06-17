@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.2.1 - Neon Cyberpunk Edition
+ * FanControl Web v3.3.0 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -111,7 +111,7 @@ function applyTranslations() {
     });
     // Update page title
     if (translations['app.title']) {
-        document.title = `${translations['app.title']} v3.2.1`;
+        document.title = `${translations['app.title']} v3.3.0`;
     }
 }
 
@@ -1789,7 +1789,7 @@ async function switchLanguage(code) {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[FanControl] v3.2.1 - Neon Cyberpunk Edition initialized');
+    console.log('[FanControl] v3.3.0 - Neon Cyberpunk Edition initialized');
     
     // Load language
     await loadLang(currentLang);

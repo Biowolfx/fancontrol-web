@@ -9,9 +9,11 @@ services:
       - /sys:/sys:rw
       - /dev:/dev:rw
       - /volume1/docker/fancontrol-web/data:/app/data
+      - /volume1/docker/fancontrol-web:/repo:ro
     environment:
       - TZ=Europe/Moscow
       - FANCONTROL_CORS_ORIGINS=*
+      - FANCONTROL_REPO_DIR=/repo
     privileged: true
     cap_add:
       - SYS_RAWIO
