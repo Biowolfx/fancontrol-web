@@ -168,7 +168,10 @@ function buildFanList(fans) {
                  onclick="selectFan('${escapeHtml(fanId)}')">
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-sm font-semibold text-white truncate">${escapeHtml(fan.label)}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${escapeHtml(fan.status)}</span>
+                    <div class="flex items-center gap-1">
+                        ${fan.inverted ? '<span class="text-xs px-1.5 py-0.5 rounded bg-cyan-900 bg-opacity-30 text-neon-cyan">INV</span>' : ''}
+                        <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${escapeHtml(fan.status)}</span>
+                    </div>
                 </div>
                 <div class="flex items-center justify-between text-xs">
                     <span class="text-gray-500">${escapeHtml(fan.mode || 'manual')}</span>
@@ -251,6 +254,12 @@ function updateInspector(fan) {
     const statusBadge = document.getElementById('fan-status-badge');
     statusBadge.textContent = fan.status || 'unknown';
     statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(fan.status)}`;
+    
+    // Update inverted badge
+    const invertedBadge = document.getElementById('fan-inverted-badge');
+    if (invertedBadge) {
+        invertedBadge.classList.toggle('hidden', !fan.inverted);
+    }
     
     // Update mode badge
     const modeBadge = document.getElementById('fan-mode-badge');

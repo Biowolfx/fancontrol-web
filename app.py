@@ -1375,7 +1375,8 @@ def loop():
                     'current_pct': target_pct,
                     'target_pwm': target_pct,
                     'mode': mode,
-                    'status': status
+                    'status': status,
+                    'inverted': fan.get('inverted', False)
                 }
             
             with state_lock:
