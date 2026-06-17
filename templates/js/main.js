@@ -17,6 +17,14 @@ let currentState = null;
 let lastChartUpdate = 0;
 const CHART_UPDATE_INTERVAL = 60000;
 
+// Schedule state
+let scheduleData = {};
+let scheduleSelection = [];
+let isDraggingSchedule = false;
+let dragStartCell = null;
+let editingCells = [];
+let scheduleEditorSensors = [];
+
 // ============================================================================
 // UTILITIES
 // ============================================================================
@@ -306,22 +314,9 @@ function updateInspector(fan) {
     // Show/hide auto settings
     document.getElementById('auto-settings').style.display = (mode === 'auto') ? 'block' : 'none';
     
-    // Update target temp
-    document.getElementById('target-temp-input').value = fan.target_temp || 31;
-    
-    // Update no-sensor warning
-    const sensors = fan.sensors || [];
-    const noSensorWarning = document.getElementById('no-sensor-warning');
-    const sensorModeSection = document.getElementById('sensor-mode-section');
-    if (noSensorWarning) {
-        noSensorWarning.classList.toggle('hidden', sensors.length > 0 || mode !== 'auto');
-    }
-    if (sensorModeSection) {
-        const showSensorMode = sensors.length > 1;
-        sensorModeSection.classList.toggle('hidden', !showSensorMode);
-        if (showSensorMode) {
-            updateSensorModeButtons(fan.sensor_mode || 'max');
-        }
+    // Render schedule grid when in auto mode
+    if (mode === 'auto') {
+        setTimeout(() => renderScheduleGrid(), 50);
     }
     
     // Update sensor tags
@@ -376,34 +371,6 @@ function setFanMode(mode) {
         action: 'set_fan_config',
         fan: currentFanId,
         fan_mode: mode
-    });
-}
-
-function setSensorMode(sensorMode) {
-    if (!currentFanId) return;
-    
-    sendControl({
-        action: 'set_fan_config',
-        fan: currentFanId,
-        sensor_mode: sensorMode
-    });
-    
-    updateSensorModeButtons(sensorMode);
-    
-    if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
-    fanConfigs[currentFanId].sensor_mode = sensorMode;
-}
-
-function updateSensorModeButtons(activeMode) {
-    const modes = ['max', 'min', 'avg'];
-    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
-    
-    modes.forEach(m => {
-        const btn = document.getElementById(`btn-sensor-${m}`);
-        if (btn) {
-            btn.className = `flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border ${m === activeMode ? activeClass : inactiveClass}`;
-        }
     });
 }
 
@@ -895,6 +862,391 @@ function startCalibration() {
 }
 
 // ============================================================================
+// SCHEDULE GRID
+// ============================================================================
+
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function renderScheduleGrid() {
+    const container = document.getElementById('schedule-grid');
+    if (!container) return;
+    
+    const fan = currentState?.fans?.[currentFanId];
+    const schedule = fan?.schedule || [];
+    scheduleData = {};
+    schedule.forEach(item => {
+        const key = `${item.day}_${item.time_start}`;
+        scheduleData[key] = item;
+    });
+    
+    let html = '<table class="border-collapse">';
+    
+    // Header row
+    html += '<tr><th class="w-10 h-6"></th>';
+    for (const label of DAY_LABELS) {
+        html += `<th class="h-6 px-1 text-xs text-gray-500 font-normal">${label}</th>`;
+    }
+    html += '</tr>';
+    
+    // Hour rows
+    for (let hour = 0; hour < 24; hour++) {
+        const timeStr = String(hour).padStart(2, '0') + ':00';
+        html += `<tr><td class="w-10 h-5 text-xs text-gray-600 font-mono pr-1 text-right">${String(hour).padStart(2, '0')}</td>`;
+        
+        for (const day of DAYS) {
+            const key = `${day}_${timeStr}`;
+            const item = scheduleData[key];
+            let colorClass = 'bg-gray-800 hover:bg-gray-700';
+            if (item) {
+                if (item.mode === 'auto') colorClass = 'bg-green-800 hover:bg-green-700';
+                else if (item.mode === 'manual') colorClass = 'bg-orange-800 hover:bg-orange-700';
+                else if (item.mode === 'off') colorClass = 'bg-red-900 hover:bg-red-800';
+            }
+            
+            html += `<td class="w-5 h-5 ${colorClass} border border-gray-800 cursor-pointer transition-colors duration-100"
+                         data-day="${day}" data-hour="${hour}"
+                         onmousedown="onScheduleCellMouseDown(event, '${day}', ${hour})"
+                         onmouseenter="onScheduleCellMouseEnter(event, '${day}', ${hour})"
+                         title="${day} ${timeStr}${item ? ' - ' + item.mode : ''}"></td>`;
+        }
+        html += '</tr>';
+    }
+    
+    html += '</table>';
+    container.innerHTML = html;
+    
+    document.addEventListener('mouseup', onScheduleMouseUp);
+    
+    validateSchedule();
+}
+
+function onScheduleCellMouseDown(e, day, hour) {
+    e.preventDefault();
+    isDraggingSchedule = true;
+    dragStartCell = { day, hour };
+    scheduleSelection = [{ day, hour }];
+    highlightSelection();
+}
+
+function onScheduleCellMouseEnter(e, day, hour) {
+    if (!isDraggingSchedule || !dragStartCell) return;
+    
+    const startIdx = dragStartCell.hour;
+    const endIdx = hour;
+    const minH = Math.min(startIdx, endIdx);
+    const maxH = Math.max(startIdx, endIdx);
+    
+    if (dragStartCell.day === day) {
+        scheduleSelection = [];
+        for (let h = minH; h <= maxH; h++) {
+            scheduleSelection.push({ day, hour: h });
+        }
+    } else {
+        const startDayIdx = DAYS.indexOf(dragStartCell.day);
+        const endDayIdx = DAYS.indexOf(day);
+        const minDay = Math.min(startDayIdx, endDayIdx);
+        const maxDay = Math.max(startDayIdx, endDayIdx);
+        
+        scheduleSelection = [];
+        for (let d = minDay; d <= maxDay; d++) {
+            for (let h = 0; h < 24; h++) {
+                if (d === minDay && h < minH) continue;
+                if (d === maxDay && h > maxH) continue;
+                scheduleSelection.push({ day: DAYS[d], hour: h });
+            }
+        }
+    }
+    highlightSelection();
+}
+
+function onScheduleMouseUp(e) {
+    if (!isDraggingSchedule) return;
+    isDraggingSchedule = false;
+    
+    if (scheduleSelection.length === 1) {
+        openScheduleEditor([scheduleSelection[0]]);
+    } else if (scheduleSelection.length > 1) {
+        openScheduleEditor(scheduleSelection);
+    }
+    scheduleSelection = [];
+    clearHighlight();
+}
+
+function highlightSelection() {
+    clearHighlight();
+    for (const cell of scheduleSelection) {
+        const el = document.querySelector(`td[data-day="${cell.day}"][data-hour="${cell.hour}"]`);
+        if (el) el.classList.add('ring-1', 'ring-neon-cyan');
+    }
+}
+
+function clearHighlight() {
+    document.querySelectorAll('#schedule-grid td.ring-neon-cyan').forEach(el => {
+        el.classList.remove('ring-1', 'ring-neon-cyan');
+    });
+}
+
+// ============================================================================
+// SCHEDULE EDITOR
+// ============================================================================
+
+function openScheduleEditor(cells) {
+    editingCells = cells;
+    scheduleEditorSensors = [];
+    
+    const editor = document.getElementById('schedule-editor');
+    editor.classList.remove('hidden');
+    
+    document.getElementById('schedule-editor-cells').textContent = 
+        cells.length === 1 
+            ? `${cells[0].day} ${String(cells[0].hour).padStart(2, '0')}:00`
+            : `${cells.length} cells`;
+    
+    // Get existing data from first cell
+    const key = `${cells[0].day}_${String(cells[0].hour).padStart(2, '0')}:00`;
+    const existing = scheduleData[key];
+    
+    if (existing) {
+        setScheduleMode(existing.mode);
+        document.getElementById('sched-target-temp').value = existing.target_temp || 31;
+        document.getElementById('sched-speed-slider').value = existing.speed_pct ?? 50;
+        document.getElementById('sched-speed-value').textContent = `${existing.speed_pct ?? 50}%`;
+        scheduleEditorSensors = [...(existing.sensors || [])];
+        if (existing.sensor_mode) setScheduleSensorMode(existing.sensor_mode);
+    } else {
+        setScheduleMode('auto');
+        document.getElementById('sched-target-temp').value = 31;
+        document.getElementById('sched-speed-slider').value = 50;
+        document.getElementById('sched-speed-value').textContent = '50%';
+        
+        // Auto-fill sensors from first existing schedule item
+        const fan = currentState?.fans?.[currentFanId];
+        const schedule = fan?.schedule || [];
+        if (schedule.length > 0) {
+            const first = schedule[0];
+            scheduleEditorSensors = [...(first.sensors || [])];
+            if (first.sensor_mode) setScheduleSensorMode(first.sensor_mode);
+        }
+    }
+    
+    updateScheduleEditorSensors();
+}
+
+function setScheduleMode(mode) {
+    const modes = ['auto', 'manual', 'off'];
+    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+    
+    modes.forEach(m => {
+        const btn = document.getElementById(`sched-btn-${m}`);
+        if (btn) btn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${m === mode ? activeClass : inactiveClass}`;
+    });
+    
+    document.getElementById('sched-auto-settings').classList.toggle('hidden', mode !== 'auto');
+    document.getElementById('sched-manual-settings').classList.toggle('hidden', mode !== 'manual');
+}
+
+function setScheduleSensorMode(sensorMode) {
+    const modes = ['max', 'min', 'avg'];
+    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+    
+    modes.forEach(m => {
+        const btn = document.getElementById(`sched-btn-sensor-${m}`);
+        if (btn) btn.className = `flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border ${m === sensorMode ? activeClass : inactiveClass}`;
+    });
+}
+
+function updateScheduleEditorSensors() {
+    const container = document.getElementById('sched-sensor-tags');
+    if (!container) return;
+    
+    if (scheduleEditorSensors.length === 0) {
+        container.innerHTML = '<span class="text-xs text-gray-500 italic">No sensors assigned</span>';
+        document.getElementById('sched-sensor-mode-section').classList.add('hidden');
+        return;
+    }
+    
+    container.innerHTML = scheduleEditorSensors.map(s => {
+        const sensor = allSensors.find(x => x.id === s);
+        const label = sensor ? sensor.label : s;
+        return `
+            <span class="inline-flex items-center gap-1 bg-cyber-accent text-gray-300 text-xs px-2 py-1 rounded-full">
+                ${escapeHtml(label)}
+                <button onclick="removeScheduleSensor('${escapeHtml(s)}')" class="text-neon-red hover:text-red-400 ml-1">&times;</button>
+            </span>
+        `;
+    }).join('');
+    
+    document.getElementById('sched-sensor-mode-section').classList.toggle('hidden', scheduleEditorSensors.length <= 1);
+}
+
+function removeScheduleSensor(sensorId) {
+    scheduleEditorSensors = scheduleEditorSensors.filter(s => s !== sensorId);
+    updateScheduleEditorSensors();
+}
+
+function toggleScheduleSensorPopup() {
+    const popup = document.getElementById('sensor-popup');
+    const list = document.getElementById('sensor-popup-list');
+    if (!popup || !list) return;
+    
+    if (popup.classList.contains('hidden')) {
+        const groups = {};
+        allSensors.forEach(s => {
+            if (!groups[s.group]) groups[s.group] = [];
+            groups[s.group].push(s);
+        });
+        
+        let html = '';
+        for (const [group, sensors] of Object.entries(groups)) {
+            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${escapeHtml(group)}</div>`;
+            sensors.forEach(s => {
+                const checked = scheduleEditorSensors.includes(s.id);
+                html += `
+                    <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-cyber-accent rounded px-2">
+                        <input type="checkbox" value="${escapeHtml(s.id)}" ${checked ? 'checked' : ''} 
+                               class="accent-neon-purple">
+                        <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
+                        <span class="text-xs text-gray-500 ml-auto">
+                            ${s.standby ? 'Sleep' : s.temp + '°C'}
+                        </span>
+                    </label>
+                `;
+            });
+        }
+        
+        list.innerHTML = html;
+        popup.classList.remove('hidden');
+        
+        // Override close behavior for schedule context
+        popup._scheduleMode = true;
+    } else {
+        // Collect checked sensors
+        const checked = popup.querySelectorAll('input[type=checkbox]:checked');
+        scheduleEditorSensors = Array.from(checked).map(cb => cb.value);
+        updateScheduleEditorSensors();
+        popup.classList.add('hidden');
+        popup._scheduleMode = false;
+    }
+}
+
+function saveScheduleEdit() {
+    const mode = document.querySelector('#sched-btn-auto.bg-neon-cyan') ? 'auto'
+        : document.querySelector('#sched-btn-manual.bg-neon-cyan') ? 'manual' : 'off';
+    
+    const newItems = editingCells.map(cell => {
+        const key = `${cell.day}_${String(cell.hour).padStart(2, '0')}:00`;
+        const item = {
+            day: cell.day,
+            time_start: String(cell.hour).padStart(2, '0') + ':00',
+            time_end: String(cell.hour).padStart(2, '0') + ':59',
+            mode: mode
+        };
+        
+        if (mode === 'auto') {
+            item.target_temp = parseInt(document.getElementById('sched-target-temp').value) || 31;
+            item.sensors = [...scheduleEditorSensors];
+            const activeSensorMode = document.querySelector('#sched-btn-sensor-max.bg-neon-cyan') ? 'max'
+                : document.querySelector('#sched-btn-sensor-min.bg-neon-cyan') ? 'min' : 'avg';
+            item.sensor_mode = activeSensorMode;
+        } else if (mode === 'manual') {
+            item.speed_pct = parseInt(document.getElementById('sched-speed-slider').value) || 50;
+        }
+        
+        scheduleData[key] = item;
+        return item;
+    });
+    
+    closeScheduleEditor();
+    applyScheduleToFan();
+}
+
+function deleteScheduleEdit() {
+    for (const cell of editingCells) {
+        const key = `${cell.day}_${String(cell.hour).padStart(2, '0')}:00`;
+        delete scheduleData[key];
+    }
+    closeScheduleEditor();
+    applyScheduleToFan();
+}
+
+function closeScheduleEditor() {
+    document.getElementById('schedule-editor').classList.add('hidden');
+    editingCells = [];
+}
+
+function clearSchedule() {
+    scheduleData = {};
+    applyScheduleToFan();
+}
+
+function fillScheduleDefaults() {
+    const fan = currentState?.fans?.[currentFanId];
+    const defaultSensors = fan?.sensors || [];
+    const defaultSensorMode = fan?.sensor_mode || 'max';
+    const defaultTemp = fan?.target_temp || 31;
+    
+    for (const day of DAYS) {
+        for (let hour = 0; hour < 24; hour++) {
+            const key = `${day}_${String(hour).padStart(2, '0')}:00`;
+            if (!scheduleData[key]) {
+                scheduleData[key] = {
+                    day: day,
+                    time_start: String(hour).padStart(2, '0') + ':00',
+                    time_end: String(hour).padStart(2, '0') + ':59',
+                    mode: 'auto',
+                    target_temp: defaultTemp,
+                    sensors: [...defaultSensors],
+                    sensor_mode: defaultSensorMode
+                };
+            }
+        }
+    }
+    applyScheduleToFan();
+}
+
+function applyScheduleToFan() {
+    const schedule = Object.values(scheduleData);
+    sendControl({
+        action: 'set_fan_config',
+        fan: currentFanId,
+        schedule: schedule
+    });
+    renderScheduleGrid();
+}
+
+function validateSchedule() {
+    const fan = currentState?.fans?.[currentFanId];
+    const schedule = fan?.schedule || [];
+    const coverage = document.getElementById('schedule-coverage');
+    const warning = document.getElementById('schedule-incomplete-warning');
+    const detail = document.getElementById('schedule-incomplete-detail');
+    
+    if (!coverage) return;
+    
+    const total = 7 * 24;
+    const filled = schedule.length;
+    const pct = Math.round((filled / total) * 100);
+    
+    coverage.textContent = `${filled}/${total} (${pct}%)`;
+    coverage.className = pct === 100 ? 'text-xs text-neon-green' : 'text-xs text-neon-orange';
+    
+    if (pct < 100) {
+        const emptyDays = [];
+        for (const day of DAYS) {
+            const dayHours = schedule.filter(s => s.day === day).length;
+            if (dayHours < 24) emptyDays.push(day);
+        }
+        warning.classList.remove('hidden');
+        detail.textContent = `Missing: ${emptyDays.join(', ')}. Empty hours = fan off.`;
+    } else {
+        warning.classList.add('hidden');
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -903,7 +1255,23 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Click outside to close sensor popup
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
-        if (e.target === this) closeSensorPopup();
+        if (e.target === this) {
+            if (this._scheduleMode) {
+                toggleScheduleSensorPopup();
+            } else {
+                closeSensorPopup();
+            }
+        }
+    });
+    
+    // Click outside to close schedule editor
+    document.getElementById('schedule-editor')?.addEventListener('click', function(e) {
+        if (e.target === this) closeScheduleEditor();
+    });
+    
+    // Schedule speed slider
+    document.getElementById('sched-speed-slider')?.addEventListener('input', (e) => {
+        document.getElementById('sched-speed-value').textContent = `${e.target.value}%`;
     });
     
     // Initial chart load (after short delay to ensure DOM is ready)

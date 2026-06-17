@@ -1116,10 +1116,11 @@ def refresh_disks():
             state['standby_mode'] = False
 
 
-def fan_temp(fan: Dict) -> float:
+def fan_temp(fan: Dict, override_sensors: Optional[List] = None, 
+             override_sensor_mode: Optional[str] = None) -> float:
     """Calculate effective temperature for a fan based on assigned sensors"""
-    sensors = fan.get('sensors', [])
-    mode = fan.get('sensor_mode', 'max')
+    sensors = override_sensors if override_sensors is not None else fan.get('sensors', [])
+    mode = override_sensor_mode if override_sensor_mode is not None else fan.get('sensor_mode', 'max')
     
     if not sensors:
         return SENSOR_FAILURE_TEMP
@@ -1217,10 +1218,8 @@ def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
         
         if schedule_item:
             sm = schedule_item.get('mode', 'auto')
-            if sm == 'fixed':
+            if sm == 'manual':
                 target_pct = schedule_item.get('speed_pct', 50)
-            elif sm == 'low':
-                target_pct = schedule_item.get('speed_pct', 20)
             elif sm == 'off':
                 target_pct = 0
             else:
@@ -1338,20 +1337,20 @@ def loop():
                                 if sm == 'off':
                                     target_pct = 0
                                     status = 'off'
-                                elif sm == 'fixed':
+                                elif sm == 'manual':
                                     target_pct = item.get('speed_pct', 50)
-                                    status = 'fixed'
-                                elif sm == 'low':
-                                    target_pct = item.get('speed_pct', 20)
-                                    status = 'low'
+                                    status = 'manual'
                                 else:
-                                    current_temp = fan_temp(fan)
+                                    # auto mode: use per-item sensors, fallback to fan globals
+                                    item_sensors = item.get('sensors') or fan.get('sensors', [])
+                                    item_sensor_mode = item.get('sensor_mode') or fan.get('sensor_mode', 'max')
+                                    current_temp = fan_temp(fan, item_sensors, item_sensor_mode)
                                     target_temp = item.get('target_temp', fan.get('target_temp', 31))
                                     target_pct, status = process_auto_mode(
                                         fan_id, fan, current_temp, target_temp, item,
                                         failsafe=sys_failsafe, standby_mode=sys_standby
                                     )
-                                    if status == 'critical' and not fan.get('sensors'):
+                                    if status == 'critical' and not item_sensors:
                                         status = 'no_sensor'
                                 break
                     
@@ -1602,13 +1601,27 @@ def validate_control_request(data: Dict):
         if 'schedule' in data:
             if not isinstance(data['schedule'], list):
                 raise BadRequest("Schedule must be a list of rules")
+            valid_days = {'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun', 'all', 'weekday', 'weekend'}
+            valid_modes = {'auto', 'off', 'manual'}
             for rule in data['schedule']:
                 if not isinstance(rule, dict) or 'mode' not in rule:
                     raise BadRequest("Invalid rule structure in schedule")
-                if rule['mode'] in ['fixed', 'low'] and 'speed_pct' in rule:
+                if rule.get('mode') not in valid_modes:
+                    raise BadRequest(f"Schedule mode must be one of: {valid_modes}")
+                if rule.get('day') and rule['day'] not in valid_days:
+                    raise BadRequest(f"Invalid day: {rule['day']}")
+                if rule['mode'] == 'manual' and 'speed_pct' in rule:
                     speed = rule['speed_pct']
                     if not isinstance(speed, (int, float)) or not (0 <= speed <= 100):
                         raise BadRequest("Schedule speed_pct must be between 0 and 100")
+                if rule['mode'] == 'auto' and 'target_temp' in rule:
+                    t = rule['target_temp']
+                    if not isinstance(t, (int, float)) or not (20 <= t <= 60):
+                        raise BadRequest("Schedule target_temp must be between 20 and 60")
+                if 'sensor_mode' in rule and rule['sensor_mode'] not in ('max', 'min', 'avg'):
+                    raise BadRequest("Schedule sensor_mode must be 'max', 'min', or 'avg'")
+                if 'sensors' in rule and not isinstance(rule['sensors'], list):
+                    raise BadRequest("Schedule sensors must be a list")
 
 # ============================================================================
 # SOCKET.IO HANDLERS
