@@ -24,6 +24,7 @@ let isDraggingSchedule = false;
 let dragStartCell = null;
 let editingCells = [];
 let scheduleEditorSensors = [];
+let expandedRuleGroups = new Set();
 
 // ============================================================================
 // UTILITIES
@@ -333,6 +334,32 @@ function updateInspector(fan) {
 
 function setFanMode(mode) {
     if (!currentFanId) return;
+    
+    // Update local state immediately for instant UI feedback
+    if (currentState?.fans?.[currentFanId]) {
+        currentState.fans[currentFanId].mode = mode;
+    }
+    if (fanConfigs[currentFanId]) {
+        fanConfigs[currentFanId].mode = mode;
+    }
+    
+    // Update button styles immediately
+    const btnManual = document.getElementById('btn-mode-manual');
+    const btnAuto = document.getElementById('btn-mode-auto');
+    if (btnManual && btnAuto) {
+        if (mode === 'manual') {
+            btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
+            btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+        } else {
+            btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
+            btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
+        }
+    }
+    
+    document.getElementById('auto-settings').style.display = (mode === 'auto') ? 'block' : 'none';
+    if (mode === 'auto') {
+        setTimeout(() => renderScheduleGrid(), 50);
+    }
     
     sendControl({
         action: 'set_fan_config',
@@ -1048,6 +1075,16 @@ function renderScheduleRules() {
     html += '</div>';
     container.innerHTML = html;
     container._groups = groupList;
+    
+    // Restore expanded state
+    expandedRuleGroups.forEach(idx => {
+        const el = document.getElementById(`rule-subperiods-${idx}`);
+        const chevron = document.getElementById(`rule-chevron-${idx}`);
+        if (el) {
+            el.classList.remove('hidden');
+            if (chevron) chevron.textContent = '▾';
+        }
+    });
 }
 
 function toggleRuleGroup(idx) {
@@ -1055,6 +1092,11 @@ function toggleRuleGroup(idx) {
     const chevron = document.getElementById(`rule-chevron-${idx}`);
     if (!el) return;
     el.classList.toggle('hidden');
+    if (el.classList.contains('hidden')) {
+        expandedRuleGroups.delete(idx);
+    } else {
+        expandedRuleGroups.add(idx);
+    }
     if (chevron) chevron.textContent = el.classList.contains('hidden') ? '▸' : '▾';
 }
 
