@@ -945,10 +945,8 @@ function openScheduleEditor(cells) {
     const editor = document.getElementById('schedule-editor');
     editor.classList.remove('hidden');
     
-    document.getElementById('schedule-editor-cells').textContent = 
-        cells.length === 1 
-            ? `${cells[0].day} ${String(cells[0].hour).padStart(2, '0')}:00`
-            : `${cells.length} cells`;
+    // Build human-readable period description
+    document.getElementById('schedule-editor-cells').textContent = describeCells(cells);
     
     // Get existing data from first cell
     const key = `${cells[0].day}_${String(cells[0].hour).padStart(2, '0')}:00`;
@@ -1164,6 +1162,37 @@ function applyScheduleToFan() {
     renderScheduleGrid();
 }
 
+function describeCells(cells) {
+    if (cells.length === 0) return '';
+    if (cells.length === 1) {
+        return `${DAY_LABELS[DAYS.indexOf(cells[0].day)]} ${String(cells[0].hour).padStart(2, '0')}:00`;
+    }
+    
+    const days = [...new Set(cells.map(c => c.day))].sort((a, b) => DAYS.indexOf(a) - DAYS.indexOf(b));
+    const hours = [...new Set(cells.map(c => c.hour))].sort((a, b) => a - b);
+    
+    let dayStr = '';
+    if (days.length === 7) {
+        dayStr = 'Every day';
+    } else if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) {
+        dayStr = 'Weekdays';
+    } else if (days.length === 2 && days.includes('sat') && days.includes('sun')) {
+        dayStr = 'Weekends';
+    } else if (days.length <= 3) {
+        dayStr = days.map(d => DAY_LABELS[DAYS.indexOf(d)]).join(', ');
+    } else {
+        dayStr = `${days.length} days`;
+    }
+    
+    if (hours.length === 24) {
+        return `${dayStr}, 00:00-23:59`;
+    }
+    
+    const minH = String(Math.min(...hours)).padStart(2, '0');
+    const maxH = String(Math.max(...hours) + 1).padStart(2, '0');
+    return `${dayStr}, ${minH}:00-${maxH.length > 5 ? '00:00 next day' : maxH + ':00'}`;
+}
+
 function validateSchedule() {
     const fan = currentState?.fans?.[currentFanId];
     const schedule = fan?.schedule || [];
@@ -1200,8 +1229,9 @@ function validateSchedule() {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[FanControl] v3.0.1 - Neon Cyberpunk Edition initialized');
     
-    // Click outside to close sensor popup
+    // Click outside to close sensor popup (stop propagation to avoid closing editor underneath)
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
+        e.stopPropagation();
         if (e.target === this) {
             if (this._scheduleMode) {
                 toggleScheduleSensorPopup();
@@ -1211,9 +1241,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Click outside to close schedule editor
+    // Click outside to close schedule editor (only if sensor popup is not open)
     document.getElementById('schedule-editor')?.addEventListener('click', function(e) {
-        if (e.target === this) closeScheduleEditor();
+        if (e.target === this && document.getElementById('sensor-popup')?.classList.contains('hidden')) {
+            closeScheduleEditor();
+        }
     });
     
     // Schedule speed slider
