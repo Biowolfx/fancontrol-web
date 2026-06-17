@@ -949,14 +949,11 @@ function renderScheduleRules() {
     
     const groupList = Object.values(groups);
     
-    let html = '<div class="space-y-2">';
-    groupList.forEach((group, idx) => {
-        const color = getRuleColor(idx);
+    let html = '<div class="space-y-1">';
+    groupList.forEach((group, gIdx) => {
+        const color = getRuleColor(gIdx);
         const item = group.item;
         const cells = group.cells;
-        
-        // Build period description for this group
-        const period = describeGroupPeriod(cells);
         
         let settings = '';
         if (item.mode === 'auto') {
@@ -964,99 +961,116 @@ function renderScheduleRules() {
                 const sen = allSensors.find(x => x.id === s);
                 return sen ? sen.label : s.split(':').pop();
             });
-            settings = `Target ${item.target_temp || 31}°C`;
+            settings = `${item.target_temp || 31}°C`;
             if (sensorNames.length > 0) {
-                settings += ` | ${sensorNames.join(', ')}`;
+                settings += ` · ${sensorNames.join(', ')}`;
                 if (item.sensor_mode && sensorNames.length > 1) {
                     settings += ` (${item.sensor_mode})`;
                 }
             }
         } else if (item.mode === 'manual') {
-            settings = `Speed ${item.speed_pct ?? 50}%`;
+            settings = `${item.speed_pct ?? 50}%`;
         } else {
-            settings = 'Fan off';
+            settings = 'off';
         }
         
+        // Group cells by day to build sub-periods
+        const byDay = {};
+        cells.forEach(c => {
+            if (!byDay[c.day]) byDay[c.day] = [];
+            byDay[c.day].push(c);
+        });
+        
+        // Build contiguous time ranges per day
+        const subPeriods = [];
+        for (const [day, dayCells] of Object.entries(byDay)) {
+            const hours = dayCells.map(c => parseInt(c.time_start)).sort((a, b) => a - b);
+            let start = hours[0], prev = hours[0];
+            for (let i = 1; i < hours.length; i++) {
+                if (hours[i] === prev + 1) {
+                    prev = hours[i];
+                } else {
+                    subPeriods.push({ day, from: start, to: prev });
+                    start = hours[i];
+                    prev = hours[i];
+                }
+            }
+            subPeriods.push({ day, from: start, to: prev });
+        }
+        subPeriods.sort((a, b) => {
+            const d = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
+            return d !== 0 ? d : a.from - b.from;
+        });
+        
+        const modeIcon = item.mode === 'auto' ? '🌡️' : item.mode === 'manual' ? '🎮' : '⏻';
+        
         html += `
-            <div class="flex items-center gap-2 bg-cyber-accent rounded-lg px-3 py-2">
-                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color.dot}"></span>
-                <div class="flex-1 min-w-0">
-                    <div class="text-xs font-semibold" style="color:${color.text}">${escapeHtml(period)}</div>
-                    <div class="text-[10px] text-gray-500 truncate">${escapeHtml(settings)}</div>
+            <div class="bg-cyber-accent rounded-lg overflow-hidden">
+                <div class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-opacity-80 transition-all"
+                     onclick="toggleRuleGroup(${gIdx})">
+                    <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${color.dot}"></span>
+                    <span class="text-xs flex-shrink-0">${modeIcon}</span>
+                    <div class="flex-1 min-w-0">
+                        <span class="text-xs font-semibold" style="color:${color.text}">${escapeHtml(settings)}</span>
+                        <span class="text-[10px] text-gray-500 ml-2">${cells.length}h</span>
+                    </div>
+                    <span id="rule-chevron-${gIdx}" class="text-[10px] text-gray-500 transition-transform duration-200">▸</span>
                 </div>
-                <span class="text-[10px] text-gray-600 flex-shrink-0">${cells.length}h</span>
-                <button onclick="editRuleGroup(${idx})" 
-                        class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
-                    Edit
-                </button>
-                <button onclick="deleteRuleGroup(${idx})" 
-                        class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
-                    Del
-                </button>
+                <div id="rule-subperiods-${gIdx}" class="hidden border-t border-gray-700">
+        `;
+        
+        subPeriods.forEach((sp, sIdx) => {
+            const dayLabel = DAY_LABELS[DAYS.indexOf(sp.day)];
+            const fromStr = String(sp.from).padStart(2, '0') + ':00';
+            const toStr = String(sp.to + 1).padStart(2, '0') + ':00';
+            
+            html += `
+                <div class="flex items-center gap-2 px-3 py-1.5 hover:bg-cyber-bg transition-all">
+                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${color.dot}; opacity:0.6"></span>
+                    <span class="text-[11px] text-gray-300 flex-1">${dayLabel} ${fromStr}–${toStr}</span>
+                    <button onclick="editSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()" 
+                            class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-accent transition-all">
+                        Edit
+                    </button>
+                    <button onclick="deleteSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()" 
+                            class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-accent transition-all">
+                        Del
+                    </button>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
             </div>
         `;
     });
     html += '</div>';
     container.innerHTML = html;
-    
-    // Store groups for edit/delete
     container._groups = groupList;
 }
 
-function describeGroupPeriod(cells) {
-    if (cells.length === 0) return '';
-    
-    const days = [...new Set(cells.map(c => c.day))].sort((a, b) => DAYS.indexOf(a) - DAYS.indexOf(b));
-    const hours = [...new Set(cells.map(c => parseInt(c.time_start)))].sort((a, b) => a - b);
-    
-    let dayStr = '';
-    if (days.length === 7) dayStr = 'Every day';
-    else if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) dayStr = 'Weekdays';
-    else if (days.length === 2 && days.includes('sat') && days.includes('sun')) dayStr = 'Weekends';
-    else dayStr = days.map(d => DAY_LABELS[DAYS.indexOf(d)]).join(', ');
-    
-    // Group consecutive hours into ranges
-    const ranges = [];
-    let start = hours[0], prev = hours[0];
-    for (let i = 1; i < hours.length; i++) {
-        if (hours[i] === prev + 1) {
-            prev = hours[i];
-        } else {
-            ranges.push(`${String(start).padStart(2, '0')}:00-${String(prev + 1).padStart(2, '0')}:00`);
-            start = hours[i];
-            prev = hours[i];
-        }
-    }
-    ranges.push(`${String(start).padStart(2, '0')}:00-${String(prev + 1).padStart(2, '0')}:00`);
-    
-    const timeStr = ranges.length <= 2 ? ranges.join(', ') : `${ranges.length} periods`;
-    return `${dayStr}, ${timeStr}`;
+function toggleRuleGroup(idx) {
+    const el = document.getElementById(`rule-subperiods-${idx}`);
+    const chevron = document.getElementById(`rule-chevron-${idx}`);
+    if (!el) return;
+    el.classList.toggle('hidden');
+    if (chevron) chevron.textContent = el.classList.contains('hidden') ? '▸' : '▾';
 }
 
-function editRuleGroup(idx) {
-    const container = document.getElementById('schedule-rules');
-    const group = container._groups[idx];
-    if (!group) return;
-    
-    // Convert group cells to editor format
-    const cells = group.cells.map(c => ({
-        day: c.day,
-        hour: parseInt(c.time_start)
-    }));
+function editSinglePeriod(day, fromHour, toHour) {
+    const cells = [];
+    for (let h = fromHour; h <= toHour; h++) {
+        cells.push({ day, hour: h });
+    }
     openScheduleEditor(cells);
 }
 
-function deleteRuleGroup(idx) {
-    const container = document.getElementById('schedule-rules');
-    const group = container._groups[idx];
-    if (!group) return;
-    
-    // Remove all cells in this group from scheduleData
-    group.cells.forEach(cell => {
-        const key = `${cell.day}_${cell.time_start}`;
+function deleteSinglePeriod(day, fromHour, toHour) {
+    for (let h = fromHour; h <= toHour; h++) {
+        const key = `${day}_${String(h).padStart(2, '0')}:00`;
         delete scheduleData[key];
-    });
-    
+    }
     applyScheduleToFan();
 }
 
