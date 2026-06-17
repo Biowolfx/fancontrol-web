@@ -87,6 +87,13 @@
             50% { opacity: 0.6; }
         }
         .alert-pulse { animation: alertPulse 1.5s ease-in-out infinite; }
+        
+        /* Compact mode */
+        body.compact-mode .fan-card { padding: 0.375rem 0.5rem !important; }
+        body.compact-mode .fan-card .text-sm { font-size: 0.7rem !important; }
+        body.compact-mode .fan-card .text-xs { font-size: 0.6rem !important; }
+        body.compact-mode #fan-list > div { margin-bottom: 0.25rem !important; }
+        body.compact-mode #disks-mini-list > div { margin-bottom: 0.125rem !important; }
     </style>
 </head>
 <body class="bg-cyber-bg text-gray-200 min-h-screen">
@@ -479,6 +486,66 @@
                         Русский
                     </button>
                 </div>
+            </div>
+            
+            <!-- Temperature Unit -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.temp_unit">Temperature Unit</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.temp_unit_hint">Choose Celsius or Fahrenheit</p>
+                <div class="flex gap-2">
+                    <button id="unit-btn-celsius" onclick="setTempUnit('celsius')"
+                            class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                        °C
+                    </button>
+                    <button id="unit-btn-fahrenheit" onclick="setTempUnit('fahrenheit')"
+                            class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border">
+                        °F
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Refresh Interval -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.refresh">Update Interval</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.refresh_hint">Reduce CPU usage by throttling updates</p>
+                <div class="flex gap-1">
+                    <button id="refresh-btn-0" onclick="setRefreshInterval(0)"
+                            class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                        <span data-i18n="settings.refresh_realtime">Realtime</span>
+                    </button>
+                    <button id="refresh-btn-1000" onclick="setRefreshInterval(1000)"
+                            class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                        1s
+                    </button>
+                    <button id="refresh-btn-5000" onclick="setRefreshInterval(5000)"
+                            class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">
+                        5s
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Compact Mode -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.compact">Compact Dashboard</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.compact_hint">Smaller cards for small screens</p>
+                <button id="compact-toggle" onclick="toggleCompactMode()"
+                        class="w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-white">
+                    <span data-i18n="settings.off">Off</span>
+                </button>
+            </div>
+            
+            <!-- System Update -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.update">System Update</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.update_hint">Check and apply updates from Git</p>
+                <button id="update-check-btn" onclick="checkForUpdates()"
+                        class="w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan hover:text-white mb-2">
+                    <span data-i18n="settings.check_update">Check for Updates</span>
+                </button>
+                <div id="update-result" class="hidden text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent"></div>
+                <button id="update-apply-btn" onclick="applyUpdate()" class="hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50 mt-2">
+                    <span data-i18n="settings.apply_update">Apply Update & Restart</span>
+                </button>
             </div>
         </div>
     </div>

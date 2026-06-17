@@ -17,6 +17,43 @@ let currentState = null;
 let lastChartUpdate = 0;
 const CHART_UPDATE_INTERVAL = 60000;
 
+// ============================================================================
+// PERSISTENT SETTINGS
+// ============================================================================
+
+const settingsDefaults = {
+    tempUnit: 'celsius',
+    refreshInterval: 0,
+    compactMode: false
+};
+
+function getSettings() {
+    try {
+        const raw = localStorage.getItem('fancontrol_settings');
+        return raw ? { ...settingsDefaults, ...JSON.parse(raw) } : { ...settingsDefaults };
+    } catch { return { ...settingsDefaults }; }
+}
+
+function saveSettings(partial) {
+    const s = getSettings();
+    Object.assign(s, partial);
+    localStorage.setItem('fancontrol_settings', JSON.stringify(s));
+    return s;
+}
+
+function formatTemp(celsius) {
+    if (celsius == null || celsius === 0) return '--';
+    const s = getSettings();
+    if (s.tempUnit === 'fahrenheit') {
+        return Math.round(celsius * 9 / 5 + 32) + '°F';
+    }
+    return celsius + '°C';
+}
+
+function getTempUnitSymbol() {
+    return getSettings().tempUnit === 'fahrenheit' ? '°F' : '°C';
+}
+
 // Schedule state
 let scheduleData = {};
 let scheduleSelection = [];
@@ -100,9 +137,19 @@ socket.on('connect', () => {
     console.log('[FanControl] Socket connected');
 });
 
+let lastUIUpdate = 0;
 socket.on('update', (data) => {
     currentState = data;
-    updateUI(data);
+    const interval = getSettings().refreshInterval;
+    if (interval === 0) {
+        updateUI(data);
+    } else {
+        const now = Date.now();
+        if (now - lastUIUpdate >= interval) {
+            lastUIUpdate = now;
+            updateUI(data);
+        }
+    }
 });
 
 socket.on('hardware_discovered', (data) => {
@@ -527,7 +574,7 @@ function toggleSensorPopup() {
                                class="accent-neon-purple">
                         <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
                         <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? t('sensor.sleep', 'Sleep') : s.temp + '°C'}
+                            ${s.standby ? t('sensor.sleep', 'Sleep') : formatTemp(s.temp)}
                         </span>
                     </label>
                 `;
@@ -667,7 +714,7 @@ function updateChart() {
                     },
                     yaxis: [
                         {
-                            title: { text: '°C', style: { color: '#ff2d55' } },
+                            title: { text: getTempUnitSymbol(), style: { color: '#ff2d55' } },
                             labels: { style: { colors: '#6b7280' } }
                         },
                         {
@@ -727,7 +774,7 @@ function buildDisksList(disks) {
                     <div class="h-full ${barColor} rounded-full progress-fill" style="width: ${pct}%"></div>
                 </div>
                 <span class="text-xs font-mono w-10 text-right ${getTempColorClass(disk.temp)}">
-                    ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? disk.temp + '°' : '--'}
+                    ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? formatTemp(disk.temp) : '--'}
                 </span>
             </div>
         `;
@@ -809,7 +856,7 @@ function renderDiscoveredHardware(data) {
             html += `
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
                     <span class="text-sm text-white">${escapeHtml(sensor.label)}</span>
-                    <span class="text-sm font-mono text-neon-cyan">${sensor.value || 0}°C</span>
+                    <span class="text-sm font-mono text-neon-cyan">${formatTemp(sensor.value)}</span>
                 </div>
             `;
         }
@@ -823,7 +870,7 @@ function renderDiscoveredHardware(data) {
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
                     <span class="text-sm text-white">${escapeHtml(disk.label)} <span class="text-xs text-gray-500">(${escapeHtml(disk.type)})</span></span>
                     <span class="text-sm font-mono ${getTempColorClass(disk.temp)}">
-                            ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? disk.temp + '°C' : '--'}
+                            ${disk.standby ? t('sensor.sleep', 'Sleep') : disk.temp > 0 ? formatTemp(disk.temp) : '--'}
                     </span>
                 </div>
             `;
@@ -1045,7 +1092,7 @@ function renderScheduleRules() {
                 const sen = allSensors.find(x => x.id === s);
                 return sen ? sen.label : s.split(':').pop();
             });
-            settings = `${item.target_temp || 31}°C`;
+            settings = `${formatTemp(item.target_temp || 31)}`;
             if (sensorNames.length > 0) {
                 settings += ` · ${sensorNames.join(', ')}`;
                 if (item.sensor_mode && sensorNames.length > 1) {
@@ -1391,7 +1438,7 @@ function toggleScheduleSensorPopup() {
                                class="accent-neon-purple">
                         <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
                         <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? t('sensor.sleep', 'Sleep') : s.temp + '°C'}
+                            ${s.standby ? t('sensor.sleep', 'Sleep') : formatTemp(s.temp)}
                         </span>
                     </label>
                 `;
@@ -1581,6 +1628,7 @@ function toggleSettings() {
         overlay.classList.remove('hidden');
         panel.classList.remove('hidden');
         updateLangButtons();
+        updateSettingsUI();
     }
 }
 
@@ -1597,6 +1645,122 @@ function updateLangButtons() {
     if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'ru' ? activeClass : inactiveClass}`;
     if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'en' ? activeClass : inactiveClass}`;
     if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'ru' ? activeClass : inactiveClass}`;
+    
+    updateSettingsUI();
+}
+
+function updateSettingsUI() {
+    const s = getSettings();
+    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
+    
+    // Temperature unit buttons
+    const celsiusBtn = document.getElementById('unit-btn-celsius');
+    const fahrBtn = document.getElementById('unit-btn-fahrenheit');
+    if (celsiusBtn) celsiusBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'celsius' ? activeClass : inactiveClass}`;
+    if (fahrBtn) fahrBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'fahrenheit' ? activeClass : inactiveClass}`;
+    
+    // Refresh interval buttons
+    [0, 1000, 5000].forEach(v => {
+        const btn = document.getElementById(`refresh-btn-${v}`);
+        if (btn) btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${s.refreshInterval === v ? activeClass : inactiveClass}`;
+    });
+    
+    // Compact mode toggle
+    const compactBtn = document.getElementById('compact-toggle');
+    if (compactBtn) {
+        compactBtn.className = s.compactMode
+            ? 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30'
+            : 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
+        compactBtn.querySelector('span').textContent = s.compactMode ? t('settings.on', 'On') : t('settings.off', 'Off');
+    }
+    
+    // Apply compact mode to body
+    document.body.classList.toggle('compact-mode', s.compactMode);
+}
+
+function setTempUnit(unit) {
+    saveSettings({ tempUnit: unit });
+    updateSettingsUI();
+    // Re-render current data
+    if (currentState) updateUI(currentState);
+}
+
+function setRefreshInterval(ms) {
+    saveSettings({ refreshInterval: ms });
+    updateSettingsUI();
+}
+
+function toggleCompactMode() {
+    const s = getSettings();
+    saveSettings({ compactMode: !s.compactMode });
+    updateSettingsUI();
+}
+
+async function checkForUpdates() {
+    const btn = document.getElementById('update-check-btn');
+    const result = document.getElementById('update-result');
+    const applyBtn = document.getElementById('update-apply-btn');
+    
+    btn.disabled = true;
+    btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
+    result.classList.add('hidden');
+    applyBtn.classList.add('hidden');
+    
+    try {
+        const resp = await fetch('/api/update/check');
+        const data = await resp.json();
+        
+        result.classList.remove('hidden');
+        if (data.has_update) {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-30 border border-green-700 text-neon-green';
+            result.innerHTML = `<div class="font-semibold mb-1">Update available</div>
+                <div>Current: ${escapeHtml(data.current_hash || 'unknown')}</div>
+                <div>Remote: ${escapeHtml(data.remote_hash || 'unknown')}</div>
+                <div class="mt-1 text-gray-400">${escapeHtml(data.commit_message || '')}</div>`;
+            applyBtn.classList.remove('hidden');
+        } else {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent text-gray-400';
+            result.textContent = t('settings.up_to_date', 'System is up to date');
+        }
+    } catch (e) {
+        result.classList.remove('hidden');
+        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+        result.textContent = t('settings.update_error', 'Failed to check for updates');
+    }
+    
+    btn.disabled = false;
+    btn.querySelector('span').textContent = t('settings.check_update', 'Check for Updates');
+}
+
+async function applyUpdate() {
+    if (!confirm(t('settings.update_confirm', 'Update will restart the container. Continue?'))) return;
+    
+    const applyBtn = document.getElementById('update-apply-btn');
+    const result = document.getElementById('update-result');
+    
+    applyBtn.disabled = true;
+    applyBtn.querySelector('span').textContent = t('settings.updating', 'Updating...');
+    
+    try {
+        const resp = await fetch('/api/update/apply', { method: 'POST' });
+        const data = await resp.json();
+        
+        if (data.status === 'ok') {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent text-neon-cyan';
+            result.textContent = t('settings.update_applied', 'Update applied. Container will restart...');
+            // Socket will reconnect after restart
+        } else {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+            result.textContent = data.message || t('settings.update_failed', 'Update failed');
+        }
+    } catch (e) {
+        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+        result.textContent = t('settings.update_error', 'Failed to apply update');
+    }
+    
+    applyBtn.disabled = false;
+    applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Apply Update & Restart');
 }
 
 async function switchLanguage(code) {
@@ -1630,6 +1794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load language
     await loadLang(currentLang);
     updateLangButtons();
+    updateSettingsUI();
     
     // Click outside to close sensor popup (stop propagation to avoid closing editor underneath)
     document.getElementById('sensor-popup')?.addEventListener('click', function(e) {
