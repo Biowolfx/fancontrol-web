@@ -313,7 +313,7 @@ def api_history():
 def api_update_check():
     """Check for updates via GitHub API"""
     try:
-        # Get current commit hash from the build-time arg or file
+        # Get current commit hash from the build-time arg
         current_hash = os.getenv('FANCONTROL_GIT_HASH', '')
         if not current_hash:
             try:
@@ -325,17 +325,34 @@ def api_update_check():
             except Exception:
                 pass
         
-        # Query GitHub API for latest commit on main
-        import requests
-        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
-        url = f'https://api.github.com/repos/{repo}/commits/main'
+        # Resolve DNS manually (eventlet breaks requests/urllib3 DNS)
+        import socket
+        import http.client
         
-        resp = requests.get(url, timeout=15, headers={
+        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
+        host = 'api.github.com'
+        
+        # Resolve IP via standard socket
+        orig_getaddrinfo = socket.getaddrinfo
+        try:
+            # Temporarily unmonkey-patch if eventlet is active
+            if hasattr(socket, '_original_getaddrinfo'):
+                socket.getaddrinfo = socket._original_getaddrinfo
+            addrs = socket.getaddrinfo(host, 443, socket.AF_INET)
+            ip = addrs[0][4][0]
+        finally:
+            socket.getaddrinfo = orig_getaddrinfo
+        
+        # Make HTTPS request with resolved IP
+        conn = http.client.HTTPSConnection(ip, 443, timeout=15)
+        conn.request('GET', f'/repos/{repo}/commits/main', headers={
+            'Host': host,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'fancontrol-web'
         })
-        resp.raise_for_status()
-        data = resp.json()
+        resp = conn.getresponse()
+        data = json.loads(resp.read())
+        conn.close()
         
         remote_hash = data['sha'][:8]
         commit_msg = data['commit']['message'].split('\n')[0]
