@@ -833,6 +833,23 @@ function renderScheduleGrid() {
         scheduleData[key] = item;
     });
     
+    // Build color map for cells
+    const colorMap = {};
+    const groups = {};
+    schedule.forEach(item => {
+        const key = ruleKey(item);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+    });
+    const groupKeys = Object.keys(groups);
+    groupKeys.forEach((gk, idx) => {
+        const color = RULE_COLORS[idx % RULE_COLORS.length];
+        groups[gk].forEach(item => {
+            const cellKey = `${item.day}_${item.time_start}`;
+            colorMap[cellKey] = color;
+        });
+    });
+    
     let html = '<table class="border-collapse" style="border-spacing: 1px;">';
     
     // Header row: empty corner + 24 hours
@@ -854,9 +871,8 @@ function renderScheduleGrid() {
             
             let bg = 'bg-gray-800';
             if (item) {
-                if (item.mode === 'auto') bg = 'bg-green-700';
-                else if (item.mode === 'manual') bg = 'bg-orange-600';
-                else if (item.mode === 'off') bg = 'bg-red-800';
+                const cm = colorMap[key];
+                bg = cm ? cm.bg : (item.mode === 'auto' ? 'bg-green-700' : item.mode === 'manual' ? 'bg-orange-600' : 'bg-red-800');
             }
             
             html += `<td class="${bg} cursor-pointer schedule-cell transition-colors duration-75"
@@ -872,7 +888,162 @@ function renderScheduleGrid() {
     html += '</table>';
     container.innerHTML = html;
     
+    renderScheduleRules();
     validateSchedule();
+}
+
+const RULE_COLORS = [
+    { bg: 'bg-green-700', dot: 'bg-green-400', text: 'text-green-300' },
+    { bg: 'bg-orange-600', dot: 'bg-orange-400', text: 'text-orange-300' },
+    { bg: 'bg-red-800', dot: 'bg-red-400', text: 'text-red-300' },
+    { bg: 'bg-blue-700', dot: 'bg-blue-400', text: 'text-blue-300' },
+    { bg: 'bg-purple-700', dot: 'bg-purple-400', text: 'text-purple-300' },
+    { bg: 'bg-yellow-700', dot: 'bg-yellow-400', text: 'text-yellow-300' },
+    { bg: 'bg-pink-700', dot: 'bg-pink-400', text: 'text-pink-300' },
+    { bg: 'bg-teal-700', dot: 'bg-teal-400', text: 'text-teal-300' },
+];
+
+function ruleKey(item) {
+    return JSON.stringify({
+        mode: item.mode,
+        target_temp: item.target_temp,
+        speed_pct: item.speed_pct,
+        sensors: (item.sensors || []).sort(),
+        sensor_mode: item.sensor_mode
+    });
+}
+
+function renderScheduleRules() {
+    const container = document.getElementById('schedule-rules');
+    if (!container) return;
+    
+    const fan = currentState?.fans?.[currentFanId];
+    const schedule = fan?.schedule || [];
+    
+    if (schedule.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-500 italic">No rules configured</p>';
+        return;
+    }
+    
+    // Group by identical settings
+    const groups = {};
+    schedule.forEach(item => {
+        const key = ruleKey(item);
+        if (!groups[key]) groups[key] = { item, cells: [] };
+        groups[key].cells.push(item);
+    });
+    
+    const groupList = Object.values(groups);
+    
+    let html = '<div class="space-y-2">';
+    groupList.forEach((group, idx) => {
+        const color = RULE_COLORS[idx % RULE_COLORS.length];
+        const item = group.item;
+        const cells = group.cells;
+        
+        // Build period description for this group
+        const period = describeGroupPeriod(cells);
+        
+        let settings = '';
+        if (item.mode === 'auto') {
+            const sensorNames = (item.sensors || []).map(s => {
+                const sen = allSensors.find(x => x.id === s);
+                return sen ? sen.label : s.split(':').pop();
+            });
+            settings = `Target ${item.target_temp || 31}°C`;
+            if (sensorNames.length > 0) {
+                settings += ` | ${sensorNames.join(', ')}`;
+                if (item.sensor_mode && sensorNames.length > 1) {
+                    settings += ` (${item.sensor_mode})`;
+                }
+            }
+        } else if (item.mode === 'manual') {
+            settings = `Speed ${item.speed_pct ?? 50}%`;
+        } else {
+            settings = 'Fan off';
+        }
+        
+        html += `
+            <div class="flex items-center gap-2 bg-cyber-accent rounded-lg px-3 py-2">
+                <span class="w-3 h-3 rounded-full ${color.dot} flex-shrink-0"></span>
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs font-semibold ${color.text}">${escapeHtml(period)}</div>
+                    <div class="text-[10px] text-gray-500 truncate">${escapeHtml(settings)}</div>
+                </div>
+                <span class="text-[10px] text-gray-600 flex-shrink-0">${cells.length}h</span>
+                <button onclick="editRuleGroup(${idx})" 
+                        class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
+                    Edit
+                </button>
+                <button onclick="deleteRuleGroup(${idx})" 
+                        class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
+                    Del
+                </button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // Store groups for edit/delete
+    container._groups = groupList;
+}
+
+function describeGroupPeriod(cells) {
+    if (cells.length === 0) return '';
+    
+    const days = [...new Set(cells.map(c => c.day))].sort((a, b) => DAYS.indexOf(a) - DAYS.indexOf(b));
+    const hours = [...new Set(cells.map(c => parseInt(c.time_start)))].sort((a, b) => a - b);
+    
+    let dayStr = '';
+    if (days.length === 7) dayStr = 'Every day';
+    else if (days.length === 5 && !days.includes('sat') && !days.includes('sun')) dayStr = 'Weekdays';
+    else if (days.length === 2 && days.includes('sat') && days.includes('sun')) dayStr = 'Weekends';
+    else dayStr = days.map(d => DAY_LABELS[DAYS.indexOf(d)]).join(', ');
+    
+    // Group consecutive hours into ranges
+    const ranges = [];
+    let start = hours[0], prev = hours[0];
+    for (let i = 1; i < hours.length; i++) {
+        if (hours[i] === prev + 1) {
+            prev = hours[i];
+        } else {
+            ranges.push(`${String(start).padStart(2, '0')}:00-${String(prev + 1).padStart(2, '0')}:00`);
+            start = hours[i];
+            prev = hours[i];
+        }
+    }
+    ranges.push(`${String(start).padStart(2, '0')}:00-${String(prev + 1).padStart(2, '0')}:00`);
+    
+    const timeStr = ranges.length <= 2 ? ranges.join(', ') : `${ranges.length} periods`;
+    return `${dayStr}, ${timeStr}`;
+}
+
+function editRuleGroup(idx) {
+    const container = document.getElementById('schedule-rules');
+    const group = container._groups[idx];
+    if (!group) return;
+    
+    // Convert group cells to editor format
+    const cells = group.cells.map(c => ({
+        day: c.day,
+        hour: parseInt(c.time_start)
+    }));
+    openScheduleEditor(cells);
+}
+
+function deleteRuleGroup(idx) {
+    const container = document.getElementById('schedule-rules');
+    const group = container._groups[idx];
+    if (!group) return;
+    
+    // Remove all cells in this group from scheduleData
+    group.cells.forEach(cell => {
+        const key = `${cell.day}_${cell.time_start}`;
+        delete scheduleData[key];
+    });
+    
+    applyScheduleToFan();
 }
 
 function onScheduleMouseDown(e, day, hour) {
