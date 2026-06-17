@@ -178,8 +178,11 @@
                 <div class="flex items-center justify-between mb-2">
                     <h1 class="text-lg font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
                     <div class="flex items-center gap-2">
-                        <span class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-2 py-1 rounded">v3.2.1</span>
-                        <button onclick="toggleSettings()" class="text-gray-400 hover:text-neon-cyan transition-colors p-1" data-i18n-title="header.settings">⚙</button>
+                        <span class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-2 py-1 rounded">v3.3.0</span>
+                        <button onclick="toggleSettings()" class="relative text-gray-400 hover:text-neon-cyan transition-colors p-1" data-i18n-title="header.settings">
+                            ⚙
+                            <span id="update-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-neon-red rounded-full animate-pulse"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-gray-500">
@@ -558,6 +561,14 @@
                 <button id="update-apply-btn" onclick="applyUpdate()" class="hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50 mt-2">
                     <span data-i18n="settings.apply_update">Apply Update & Restart</span>
                 </button>
+            </div>
+            
+            <!-- Version -->
+            <div class="mb-6 text-center">
+                <a id="version-link" href="https://github.com/Biowolfx/fancontrol-web" target="_blank" rel="noopener"
+                   class="text-xs text-gray-600 hover:text-neon-cyan transition-colors cursor-pointer">
+                    FanControl Web v3.3.0
+                </a>
             </div>
         </div>
     </div>

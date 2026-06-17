@@ -1629,6 +1629,7 @@ function toggleSettings() {
         panel.classList.remove('hidden');
         updateLangButtons();
         updateSettingsUI();
+        autoCheckUpdate();
     }
 }
 
@@ -1702,35 +1703,59 @@ async function checkForUpdates() {
     const result = document.getElementById('update-result');
     const applyBtn = document.getElementById('update-apply-btn');
     
-    btn.disabled = true;
-    btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
-    result.classList.add('hidden');
-    applyBtn.classList.add('hidden');
+    if (btn) {
+        btn.disabled = true;
+        btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
+    }
+    if (result) result.classList.add('hidden');
+    if (applyBtn) applyBtn.classList.add('hidden');
     
     try {
         const resp = await fetch('/api/update/check');
         const data = await resp.json();
         
-        result.classList.remove('hidden');
+        const badge = document.getElementById('update-badge');
+        
         if (data.has_update) {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-30 border border-green-700 text-neon-green';
-            result.innerHTML = `<div class="font-semibold mb-1">Update available</div>
-                <div>Current: ${escapeHtml(data.current_hash || 'unknown')}</div>
-                <div>Remote: ${escapeHtml(data.remote_hash || 'unknown')}</div>
-                <div class="mt-1 text-gray-400">${escapeHtml(data.commit_message || '')}</div>`;
-            applyBtn.classList.remove('hidden');
+            if (badge) badge.classList.remove('hidden');
+            if (result) {
+                result.classList.remove('hidden');
+                result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-30 border border-green-700 text-neon-green';
+                result.innerHTML = `<div class="font-semibold mb-1">${t('settings.update_available', 'Update available')}</div>
+                    <div>Current: ${escapeHtml(data.current_hash || 'unknown')}</div>
+                    <div>Remote: ${escapeHtml(data.remote_hash || 'unknown')}</div>
+                    <div class="mt-1 text-gray-400">${escapeHtml(data.commit_message || '')}</div>`;
+            }
+            if (applyBtn) applyBtn.classList.remove('hidden');
         } else {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent text-gray-400';
-            result.textContent = t('settings.up_to_date', 'System is up to date');
+            if (badge) badge.classList.add('hidden');
+            if (result) {
+                result.classList.remove('hidden');
+                result.className = 'text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent text-gray-400';
+                result.textContent = t('settings.up_to_date', 'System is up to date');
+            }
         }
+        return data.has_update;
     } catch (e) {
-        result.classList.remove('hidden');
-        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
-        result.textContent = t('settings.update_error', 'Failed to check for updates');
+        if (result) {
+            result.classList.remove('hidden');
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+            result.textContent = t('settings.update_error', 'Failed to check for updates');
+        }
+        return false;
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.querySelector('span').textContent = t('settings.check_update', 'Check for Updates');
+        }
     }
-    
-    btn.disabled = false;
-    btn.querySelector('span').textContent = t('settings.check_update', 'Check for Updates');
+}
+
+let _updateChecked = false;
+async function autoCheckUpdate() {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    await checkForUpdates();
 }
 
 async function applyUpdate() {
@@ -1818,6 +1843,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Initial chart load (after short delay to ensure DOM is ready)
     setTimeout(updateChart, 2000);
+    
+    // Auto-check for updates in background (5s after load)
+    setTimeout(() => autoCheckUpdate(), 5000);
 });
 
 console.log('[FanControl] main.js loaded successfully');
