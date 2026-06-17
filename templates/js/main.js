@@ -24,7 +24,8 @@ const CHART_UPDATE_INTERVAL = 60000;
 const settingsDefaults = {
     tempUnit: 'celsius',
     refreshInterval: 0,
-    compactMode: false
+    compactMode: false,
+    autoUpdateCheck: 21600000
 };
 
 function getSettings() {
@@ -1678,6 +1679,12 @@ function updateSettingsUI() {
     
     // Apply compact mode to body
     document.body.classList.toggle('compact-mode', s.compactMode);
+    
+    // Auto-update interval buttons
+    [0, 21600000, 43200000, 86400000].forEach(v => {
+        const btn = document.getElementById(`autoupd-btn-${v}`);
+        if (btn) btn.className = `flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border ${s.autoUpdateCheck === v ? activeClass : inactiveClass}`;
+    });
 }
 
 function setTempUnit(unit) {
@@ -1698,6 +1705,21 @@ function toggleCompactMode() {
     updateSettingsUI();
 }
 
+function setAutoUpdateInterval(ms) {
+    saveSettings({ autoUpdateCheck: ms });
+    updateSettingsUI();
+    scheduleAutoUpdate();
+}
+
+let _autoUpdateTimer = null;
+function scheduleAutoUpdate() {
+    if (_autoUpdateTimer) { clearInterval(_autoUpdateTimer); _autoUpdateTimer = null; }
+    const ms = getSettings().autoUpdateCheck;
+    if (ms > 0) {
+        _autoUpdateTimer = setInterval(() => { _updateChecked = false; autoCheckUpdate(); }, ms);
+    }
+}
+
 async function checkForUpdates() {
     const btn = document.getElementById('update-check-btn');
     const result = document.getElementById('update-result');
@@ -1708,7 +1730,11 @@ async function checkForUpdates() {
         btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
     }
     if (result) result.classList.add('hidden');
-    if (applyBtn) applyBtn.classList.add('hidden');
+    if (applyBtn) {
+        applyBtn.classList.add('hidden');
+        applyBtn.disabled = true;
+        applyBtn.className = 'hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-cyber-accent text-gray-500 border-gray-700';
+    }
     
     try {
         const resp = await fetch('/api/update/check');
@@ -1720,13 +1746,18 @@ async function checkForUpdates() {
             if (badge) badge.classList.remove('hidden');
             if (result) {
                 result.classList.remove('hidden');
-                result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-30 border border-green-700 text-neon-green';
-                result.innerHTML = `<div class="font-semibold mb-1">${t('settings.update_available', 'Update available')}</div>
-                    <div>Current: ${escapeHtml(data.current_hash || 'unknown')}</div>
-                    <div>Remote: ${escapeHtml(data.remote_hash || 'unknown')}</div>
-                    <div class="mt-1 text-gray-400">${escapeHtml(data.commit_message || '')}</div>`;
+                result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
+                result.innerHTML = `
+                    <div class="font-semibold mb-2">${t('settings.update_available', 'Update available')}</div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">Current:</span><span class="font-mono">${escapeHtml(data.current_hash || '?')}</span></div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">New:</span><span class="font-mono text-white">${escapeHtml(data.remote_hash || '?')}</span></div>
+                    ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}`;
             }
-            if (applyBtn) applyBtn.classList.remove('hidden');
+            if (applyBtn) {
+                applyBtn.classList.remove('hidden');
+                applyBtn.disabled = false;
+                applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
+            }
         } else {
             if (badge) badge.classList.add('hidden');
             if (result) {
@@ -1846,6 +1877,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Auto-check for updates in background (5s after load)
     setTimeout(() => autoCheckUpdate(), 5000);
+    
+    // Schedule periodic auto-check
+    scheduleAutoUpdate();
 });
 
 console.log('[FanControl] main.js loaded successfully');

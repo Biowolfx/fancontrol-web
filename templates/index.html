@@ -553,12 +553,21 @@
             <div class="mb-6">
                 <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.update">System Update</label>
                 <p class="text-xs text-gray-500 mb-3" data-i18n="settings.update_hint">Check and apply updates from Git</p>
+                
+                <!-- Auto-check interval -->
+                <div class="flex gap-1 mb-3">
+                    <button id="autoupd-btn-off" onclick="setAutoUpdateInterval(0)" class="flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border">Off</button>
+                    <button id="autoupd-btn-21600000" onclick="setAutoUpdateInterval(21600000)" class="flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border">6h</button>
+                    <button id="autoupd-btn-43200000" onclick="setAutoUpdateInterval(43200000)" class="flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border">12h</button>
+                    <button id="autoupd-btn-86400000" onclick="setAutoUpdateInterval(86400000)" class="flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border">24h</button>
+                </div>
+                
                 <button id="update-check-btn" onclick="checkForUpdates()"
                         class="w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan hover:text-white mb-2">
                     <span data-i18n="settings.check_update">Check for Updates</span>
                 </button>
                 <div id="update-result" class="hidden text-xs mt-2 p-3 rounded-lg bg-cyber-accent border border-cyber-accent"></div>
-                <button id="update-apply-btn" onclick="applyUpdate()" class="hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50 mt-2">
+                <button id="update-apply-btn" onclick="applyUpdate()" disabled class="hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2">
                     <span data-i18n="settings.apply_update">Apply Update & Restart</span>
                 </button>
             </div>
