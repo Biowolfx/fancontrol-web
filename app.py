@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FanControl Web v3.2.0 - Neon Cyberpunk Edition
+FanControl Web v3.2.1 - Neon Cyberpunk Edition
 Modern fan control with real-time monitoring and intelligent thermal management
 """
 
@@ -1747,7 +1747,7 @@ def _auto_init():
 
 if __name__ == '__main__':
     logger.info('=' * 60)
-    logger.info('STARTING FanControl Web v3.2.0 - Neon Cyberpunk Edition')
+    logger.info('STARTING FanControl Web v3.2.1 - Neon Cyberpunk Edition')
     logger.info('=' * 60)
     
     init_database()
