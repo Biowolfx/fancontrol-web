@@ -333,12 +333,17 @@ def api_update_check():
         
         # Make HTTPS request with resolved IP
         repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
-        conn = http.client.HTTPSConnection(ip, 443, timeout=15)
-        conn.request('GET', f'/repos/{repo}/commits/main', headers={
+        headers = {
             'Host': host,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'fancontrol-web'
-        })
+        }
+        gh_token = os.getenv('GITHUB_TOKEN', '')
+        if gh_token:
+            headers['Authorization'] = f'token {gh_token}'
+        
+        conn = http.client.HTTPSConnection(ip, 443, timeout=15)
+        conn.request('GET', f'/repos/{repo}/commits/main', headers=headers)
         resp = conn.getresponse()
         data = json.loads(resp.read())
         conn.close()
