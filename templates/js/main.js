@@ -111,8 +111,9 @@ function applyTranslations() {
         }
     });
     // Update page title
+    const ver = currentState?.config_version || '3.3.0';
     if (translations['app.title']) {
-        document.title = `${translations['app.title']} v3.3.0`;
+        document.title = `${translations['app.title']} v${ver}`;
     }
 }
 
@@ -182,6 +183,13 @@ socket.on('test_complete', (result) => {
 
 function updateUI(data) {
     if (!data) return;
+    
+    // Update version displays
+    const ver = data.config_version || '';
+    const headerVer = document.getElementById('header-version');
+    if (headerVer && ver) headerVer.textContent = `v${ver}`;
+    const versionLink = document.getElementById('version-link');
+    if (versionLink && ver) versionLink.textContent = `FanControl Web v${ver}`;
     
     // Show appropriate screen
     if (!data.initialized) {
@@ -1852,7 +1860,7 @@ async function switchLanguage(code) {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[FanControl] v3.3.0 - Neon Cyberpunk Edition initialized');
+    console.log('[FanControl] Neon Cyberpunk Edition initialized');
     
     // Load language
     await loadLang(currentLang);
