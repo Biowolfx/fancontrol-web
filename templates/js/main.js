@@ -1743,8 +1743,8 @@ async function checkForUpdates() {
                 result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
                 result.innerHTML = `
                     <div class="font-semibold mb-2">${t('settings.update_available', 'Update available')}</div>
-                    <div class="flex justify-between mb-1"><span class="text-gray-400">Current:</span><span class="font-mono">${escapeHtml(data.current_hash || '?')}</span></div>
-                    <div class="flex justify-between mb-1"><span class="text-gray-400">New:</span><span class="font-mono text-white">${escapeHtml(data.remote_hash || '?')}</span></div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.current_version', 'Current')}:</span><span class="font-mono text-white">${escapeHtml(data.current_version || data.current_hash || '?')}</span></div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.new_version', 'New')}:</span><span class="font-mono text-neon-green font-bold">${escapeHtml(data.remote_version || data.remote_hash || '?')}</span></div>
                     ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}
                     <div class="mt-2 pt-2 border-t border-green-800">
                         <div class="text-gray-400 mb-1">${t('settings.update_host_hint', 'Run on host to apply:')}</div>

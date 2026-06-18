@@ -313,11 +313,12 @@ def api_history():
 def api_update_check():
     """Check for updates via GitHub API"""
     try:
-        # Get current commit hash from the build-time arg
         current_hash = os.getenv('FANCONTROL_GIT_HASH', '')
-        
-        # Resolve DNS outside eventlet (eventlet greendns breaks getaddrinfo)
-        import http.client
+        current_version = CONFIG_VERSION
+
+        # DNS resolution outside eventlet
+        import http.client, ssl, re
+
         host = 'api.github.com'
         try:
             result = subprocess.run(
@@ -326,46 +327,65 @@ def api_update_check():
             )
             ip = result.stdout.strip()
             if not ip:
-                raise Exception(f'DNS resolution failed: {result.stderr.strip()}')
+                raise Exception(f'DNS failed: {result.stderr.strip()}')
         except Exception as e:
             logger.error(f'DNS resolution failed: {e}')
-            return jsonify({'status': 'error', 'message': f'DNS resolution failed: {e}'}), 500
-        
-        # Make HTTPS request with resolved IP (SSL check disabled - cert is for hostname, not IP)
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
         repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
         headers = {
             'Host': host,
             'Accept': 'application/vnd.github.v3+json',
             'User-Agent': 'fancontrol-web'
         }
-        gh_token = os.getenv('GITHUB_TOKEN', '')
-        if gh_token:
-            headers['Authorization'] = f'token {gh_token}'
-        
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        
+
+        # 1. Get latest commit info
         conn = http.client.HTTPSConnection(ip, 443, timeout=15, context=ctx)
         conn.request('GET', f'/repos/{repo}/commits/main', headers=headers)
-        resp = conn.getresponse()
-        data = json.loads(resp.read())
+        commit_data = json.loads(conn.getresponse().read())
         conn.close()
-        
-        remote_hash = data['sha'][:8]
-        commit_msg = data['commit']['message'].split('\n')[0]
-        
-        has_update = current_hash != remote_hash and current_hash != ''
-        
+
+        remote_hash = commit_data['sha'][:8]
+        commit_msg = commit_data['commit']['message'].split('\n')[0]
+
+        # 2. Get remote CONFIG_VERSION from raw app.py
+        remote_version = ''
+        raw_host = 'raw.githubusercontent.com'
+        try:
+            raw_result = subprocess.run(
+                ['python3', '-c', f'import socket; print(socket.getaddrinfo("{raw_host}", 443, socket.AF_INET)[0][4][0])'],
+                capture_output=True, text=True, timeout=10
+            )
+            raw_ip = raw_result.stdout.strip()
+            if raw_ip:
+                raw_headers = {**headers, 'Host': raw_host}
+                conn2 = http.client.HTTPSConnection(raw_ip, 443, timeout=15, context=ctx)
+                conn2.request('GET', f'/{repo}/main/app.py', headers=raw_headers)
+                raw_body = conn2.getresponse().read().decode('utf-8', errors='ignore')
+                conn2.close()
+                m = re.search(r'CONFIG_VERSION\s*=\s*["\'](.+?)["\']', raw_body)
+                if m:
+                    remote_version = m.group(1)
+        except Exception as e:
+            logger.warning(f'Could not fetch remote version: {e}')
+
+        has_update = (current_version != remote_version and remote_version != '') or \
+                     (current_hash != remote_hash and current_hash != '' and not remote_version)
+
         return jsonify({
             'status': 'ok',
             'has_update': has_update,
+            'current_version': current_version,
+            'remote_version': remote_version or 'unknown',
             'current_hash': current_hash or 'unknown',
             'remote_hash': remote_hash,
             'commit_message': commit_msg
         })
-        
+
     except Exception as e:
         logger.error(f'Update check error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
