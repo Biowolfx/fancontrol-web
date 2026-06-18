@@ -133,6 +133,7 @@
   "settings.new_version": "New",
   "settings.update_applied": "Update applied!",
   "settings.restarting": "Container is restarting...",
+  "settings.rebuilding": "Dependencies changed, rebuilding image...",
   "settings.update_host_hint": "Run on host to apply update:",
 
   "common.edit": "Edit",

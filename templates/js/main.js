@@ -1799,11 +1799,14 @@ async function applyUpdate() {
         
         if (data.status === 'ok') {
             result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
-            result.innerHTML = `<div class="font-semibold">${t('settings.update_applied', 'Update applied!')}</div>
-                <div class="text-gray-400 mt-1">${t('settings.restarting', 'Container is restarting...')}</div>`;
+            let msg = `<div class="font-semibold">${t('settings.update_applied', 'Update applied!')}</div>`;
+            if (data.deps_changed) {
+                msg += `<div class="text-neon-orange mt-1">${t('settings.rebuilding', 'Dependencies changed, rebuilding image...')}</div>`;
+            }
+            msg += `<div class="text-gray-400 mt-1">${t('settings.restarting', 'Container is restarting...')}</div>`;
+            result.innerHTML = msg;
             applyBtn.classList.add('hidden');
-            // Page will reconnect after restart
-            setTimeout(() => { window.location.reload(); }, 8000);
+            setTimeout(() => { window.location.reload(); }, data.deps_changed ? 30000 : 8000);
         } else {
             result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
             result.textContent = data.message || t('settings.update_failed', 'Update failed');

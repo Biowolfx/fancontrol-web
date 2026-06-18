@@ -393,35 +393,74 @@ def api_update_check():
 
 @app.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
-    """Pull latest code and restart container"""
+    """Pull latest code, rebuild if needed, and restart container"""
     try:
         repo_dir = '/repo'
-        
+
+        # Remember old requirements before pull
+        old_req = ''
+        try:
+            with open(os.path.join(repo_dir, 'requirements.txt'), 'r') as f:
+                old_req = f.read()
+        except Exception:
+            pass
+
         # Git pull
         pull = subprocess.run(
             ['git', 'pull', 'origin', 'main'],
             capture_output=True, text=True, timeout=60,
             cwd=repo_dir, env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
         )
-        
+
         if pull.returncode != 0:
             return jsonify({'status': 'error', 'message': pull.stderr.strip()}), 500
-        
+
         output = pull.stdout.strip()
         already_up = 'Already up to date' in output
-        
-        # Kill container to trigger restart (restart: unless-stopped)
-        def _restart():
-            time.sleep(2)
-            os.kill(os.getpid(), 15)
-        executor.submit(_restart)
-        
+
+        # Check if requirements changed
+        new_req = ''
+        try:
+            with open(os.path.join(repo_dir, 'requirements.txt'), 'r') as f:
+                new_req = f.read()
+        except Exception:
+            pass
+
+        deps_changed = old_req != new_req
+
+        # Rebuild image if dependencies changed
+        rebuild_output = ''
+        if deps_changed:
+            logger.info('Dependencies changed, rebuilding Docker image...')
+            rebuild = subprocess.run(
+                ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
+                 'build', '--build-arg', f'GIT_HASH={os.getenv("FANCONTROL_GIT_HASH", "unknown")}'],
+                capture_output=True, text=True, timeout=300,
+                cwd=repo_dir
+            )
+            rebuild_output = rebuild.stdout + rebuild.stderr
+            if rebuild.returncode != 0:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Docker build failed: {rebuild_output[-500:]}'
+                }), 500
+
+        # Recreate and restart container
+        up = subprocess.run(
+            ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
+             'up', '-d', '--force-recreate'],
+            capture_output=True, text=True, timeout=120,
+            cwd=repo_dir
+        )
+
         return jsonify({
             'status': 'ok',
             'already_up_to_date': already_up,
+            'deps_changed': deps_changed,
+            'rebuild_output': rebuild_output[-500:] if rebuild_output else '',
             'message': output
         })
-        
+
     except Exception as e:
         logger.error(f'Update apply error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
