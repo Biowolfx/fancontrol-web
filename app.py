@@ -393,17 +393,34 @@ def api_update_check():
 
 @app.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
-    """Signal container restart for update application"""
+    """Pull latest code and restart container"""
     try:
-        logger.info('Update apply requested, triggering restart...')
+        repo_dir = '/repo'
         
+        # Git pull
+        pull = subprocess.run(
+            ['git', 'pull', 'origin', 'main'],
+            capture_output=True, text=True, timeout=60,
+            cwd=repo_dir, env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+        )
+        
+        if pull.returncode != 0:
+            return jsonify({'status': 'error', 'message': pull.stderr.strip()}), 500
+        
+        output = pull.stdout.strip()
+        already_up = 'Already up to date' in output
+        
+        # Kill container to trigger restart (restart: unless-stopped)
         def _restart():
             time.sleep(2)
             os.kill(os.getpid(), 15)
-        
         executor.submit(_restart)
         
-        return jsonify({'status': 'ok', 'message': 'Restarting...'})
+        return jsonify({
+            'status': 'ok',
+            'already_up_to_date': already_up,
+            'message': output
+        })
         
     except Exception as e:
         logger.error(f'Update apply error: {e}', exc_info=True)

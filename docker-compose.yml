@@ -12,6 +12,7 @@ services:
       - /sys:/sys:rw
       - /dev:/dev:rw
       - /volume1/docker/fancontrol-web/data:/app/data
+      - /volume1/docker/fancontrol-web:/repo
     environment:
       - TZ=Europe/Moscow
       - FANCONTROL_CORS_ORIGINS=*

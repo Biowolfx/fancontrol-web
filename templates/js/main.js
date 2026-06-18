@@ -1723,12 +1723,18 @@ function scheduleAutoUpdate() {
 async function checkForUpdates() {
     const btn = document.getElementById('update-check-btn');
     const result = document.getElementById('update-result');
+    const applyBtn = document.getElementById('update-apply-btn');
     
     if (btn) {
         btn.disabled = true;
         btn.querySelector('span').textContent = t('settings.checking', 'Checking...');
     }
     if (result) result.classList.add('hidden');
+    if (applyBtn) {
+        applyBtn.classList.add('hidden');
+        applyBtn.disabled = true;
+        applyBtn.className = 'hidden w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-500 border-gray-700 mt-2';
+    }
     
     try {
         const resp = await fetch('/api/update/check');
@@ -1743,13 +1749,14 @@ async function checkForUpdates() {
                 result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
                 result.innerHTML = `
                     <div class="font-semibold mb-2">${t('settings.update_available', 'Update available')}</div>
-                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.current_version', 'Current')}:</span><span class="font-mono text-white">${escapeHtml(data.current_version || data.current_hash || '?')}</span></div>
-                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.new_version', 'New')}:</span><span class="font-mono text-neon-green font-bold">${escapeHtml(data.remote_version || data.remote_hash || '?')}</span></div>
-                    ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}
-                    <div class="mt-2 pt-2 border-t border-green-800">
-                        <div class="text-gray-400 mb-1">${t('settings.update_host_hint', 'Run on host to apply:')}</div>
-                        <code class="block p-2 bg-black bg-opacity-30 rounded text-neon-green text-[10px] font-mono break-all">cd /volume1/docker/fancontrol-web && git pull && docker compose up -d --build</code>
-                    </div>`;
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.current_version', 'Current')}:</span><span class="font-mono">${escapeHtml(data.current_version || '?')}</span></div>
+                    <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.new_version', 'New')}:</span><span class="font-mono text-white font-bold">${escapeHtml(data.remote_version || '?')}</span></div>
+                    ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}`;
+            }
+            if (applyBtn) {
+                applyBtn.classList.remove('hidden');
+                applyBtn.disabled = false;
+                applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
             }
         } else {
             if (badge) badge.classList.add('hidden');
@@ -1776,6 +1783,40 @@ async function checkForUpdates() {
 }
 
 let _updateChecked = false;
+
+async function applyUpdate() {
+    const applyBtn = document.getElementById('update-apply-btn');
+    const result = document.getElementById('update-result');
+    
+    if (!confirm(t('settings.update_confirm', 'Update will restart the container. Continue?'))) return;
+    
+    applyBtn.disabled = true;
+    applyBtn.querySelector('span').textContent = t('settings.updating', 'Updating...');
+    
+    try {
+        const resp = await fetch('/api/update/apply', { method: 'POST' });
+        const data = await resp.json();
+        
+        if (data.status === 'ok') {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
+            result.innerHTML = `<div class="font-semibold">${t('settings.update_applied', 'Update applied!')}</div>
+                <div class="text-gray-400 mt-1">${t('settings.restarting', 'Container is restarting...')}</div>`;
+            applyBtn.classList.add('hidden');
+            // Page will reconnect after restart
+            setTimeout(() => { window.location.reload(); }, 8000);
+        } else {
+            result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+            result.textContent = data.message || t('settings.update_failed', 'Update failed');
+            applyBtn.disabled = false;
+            applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Update & Restart');
+        }
+    } catch (e) {
+        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+        result.textContent = t('settings.update_error', 'Failed to apply update');
+        applyBtn.disabled = false;
+        applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Update & Restart');
+    }
+}
 async function autoCheckUpdate() {
     if (_updateChecked) return;
     _updateChecked = true;
