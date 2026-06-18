@@ -331,7 +331,7 @@ def api_update_check():
             logger.error(f'DNS resolution failed: {e}')
             return jsonify({'status': 'error', 'message': f'DNS resolution failed: {e}'}), 500
         
-        # Make HTTPS request with resolved IP
+        # Make HTTPS request with resolved IP (SSL check disabled - cert is for hostname, not IP)
         repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
         headers = {
             'Host': host,
@@ -342,7 +342,12 @@ def api_update_check():
         if gh_token:
             headers['Authorization'] = f'token {gh_token}'
         
-        conn = http.client.HTTPSConnection(ip, 443, timeout=15)
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        
+        conn = http.client.HTTPSConnection(ip, 443, timeout=15, context=ctx)
         conn.request('GET', f'/repos/{repo}/commits/main', headers=headers)
         resp = conn.getresponse()
         data = json.loads(resp.read())
