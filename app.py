@@ -365,7 +365,9 @@ def api_update_check():
                 raw_headers = {**headers, 'Host': raw_host}
                 conn2 = http.client.HTTPSConnection(raw_ip, 443, timeout=15, context=ctx)
                 conn2.request('GET', f'/{repo}/main/app.py', headers=raw_headers)
-                raw_body = conn2.getresponse().read().decode('utf-8', errors='ignore')
+                resp2 = conn2.getresponse()
+                raw_body = resp2.read().decode('utf-8', errors='ignore')
+                resp2.read()  # drain
                 conn2.close()
                 m = re.search(r'CONFIG_VERSION\s*=\s*["\'](.+?)["\']', raw_body)
                 if m:
@@ -405,18 +407,21 @@ def api_update_apply():
         except Exception:
             pass
 
-        # Git pull
+        # Git pull (public repo, no auth needed)
         pull = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
+            ['git', '-C', repo_dir, 'pull', '--ff-only', 'origin', 'main'],
             capture_output=True, text=True, timeout=60,
-            cwd=repo_dir, env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
         )
 
-        if pull.returncode != 0:
-            return jsonify({'status': 'error', 'message': pull.stderr.strip()}), 500
+        pull_output = pull.stdout.strip() + '\n' + pull.stderr.strip()
+        already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
 
-        output = pull.stdout.strip()
-        already_up = 'Already up to date' in output
+        if pull.returncode != 0 and not already_up:
+            logger.error(f'Git pull failed: {pull_output}')
+            return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
+
+        logger.info(f'Git pull result: {pull_output.strip()}')
 
         # Check if requirements changed
         new_req = ''
@@ -432,33 +437,41 @@ def api_update_apply():
         rebuild_output = ''
         if deps_changed:
             logger.info('Dependencies changed, rebuilding Docker image...')
+            # Get the git hash from freshly pulled code
+            hash_result = subprocess.run(
+                ['git', '-C', repo_dir, 'rev-parse', '--short', 'HEAD'],
+                capture_output=True, text=True, timeout=10
+            )
+            new_hash = hash_result.stdout.strip() or os.getenv('FANCONTROL_GIT_HASH', 'unknown')
+
             rebuild = subprocess.run(
                 ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
-                 'build', '--build-arg', f'GIT_HASH={os.getenv("FANCONTROL_GIT_HASH", "unknown")}'],
+                 'build', '--build-arg', f'GIT_HASH={new_hash}'],
                 capture_output=True, text=True, timeout=300,
                 cwd=repo_dir
             )
-            rebuild_output = rebuild.stdout + rebuild.stderr
+            rebuild_output = (rebuild.stdout + rebuild.stderr)[-500:]
+            logger.info(f'Docker build: {rebuild_output}')
             if rebuild.returncode != 0:
                 return jsonify({
                     'status': 'error',
-                    'message': f'Docker build failed: {rebuild_output[-500:]}'
+                    'message': f'Docker build failed:\n{rebuild_output}'
                 }), 500
 
-        # Recreate and restart container
-        up = subprocess.run(
-            ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
-             'up', '-d', '--force-recreate'],
-            capture_output=True, text=True, timeout=120,
-            cwd=repo_dir
+        # Restart container (not recreate - that would kill this process mid-flight)
+        container_name = os.getenv('HOSTNAME', 'fancontrol-web')
+        restart = subprocess.run(
+            ['docker', 'restart', container_name],
+            capture_output=True, text=True, timeout=30
         )
+        logger.info(f'Docker restart: {restart.stdout.strip()} {restart.stderr.strip()}')
 
         return jsonify({
             'status': 'ok',
             'already_up_to_date': already_up,
             'deps_changed': deps_changed,
-            'rebuild_output': rebuild_output[-500:] if rebuild_output else '',
-            'message': output
+            'rebuild_output': rebuild_output if rebuild_output else '',
+            'message': pull_output.strip()
         })
 
     except Exception as e:
