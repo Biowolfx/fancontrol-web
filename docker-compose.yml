@@ -16,7 +16,6 @@ services:
       - TZ=Europe/Moscow
       - FANCONTROL_CORS_ORIGINS=*
       - FANCONTROL_REPO=Biowolfx/fancontrol-web
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
     privileged: true
     cap_add:
       - SYS_RAWIO
