@@ -352,28 +352,13 @@ def api_update_check():
         remote_hash = commit_data['sha'][:8]
         commit_msg = commit_data['commit']['message'].split('\n')[0]
 
-        # 2. Get remote CONFIG_VERSION from raw app.py
         remote_version = ''
-        raw_host = 'raw.githubusercontent.com'
-        try:
-            raw_result = subprocess.run(
-                ['python3', '-c', f'import socket; print(socket.getaddrinfo("{raw_host}", 443, socket.AF_INET)[0][4][0])'],
-                capture_output=True, text=True, timeout=10
-            )
-            raw_ip = raw_result.stdout.strip()
-            if raw_ip:
-                raw_headers = {**headers, 'Host': raw_host}
-                conn2 = http.client.HTTPSConnection(raw_ip, 443, timeout=15, context=ctx)
-                conn2.request('GET', f'/{repo}/main/app.py', headers=raw_headers)
-                resp2 = conn2.getresponse()
-                raw_body = resp2.read().decode('utf-8', errors='ignore')
-                resp2.read()  # drain
-                conn2.close()
-                m = re.search(r'CONFIG_VERSION\s*=\s*["\'](.+?)["\']', raw_body)
-                if m:
-                    remote_version = m.group(1)
-        except Exception as e:
-            logger.warning(f'Could not fetch remote version: {e}')
+        # Try to extract version from commit message (e.g. "v3.3.3" or "3.3.3")
+        m_ver = re.search(r'[vV]?(\d+\.\d+\.\d+)', commit_msg)
+        if m_ver:
+            remote_version = 'v' + m_ver.group(1)
+        else:
+            remote_version = remote_hash
 
         has_update = (current_version != remote_version and remote_version != '') or \
                      (current_hash != remote_hash and current_hash != '' and not remote_version)
