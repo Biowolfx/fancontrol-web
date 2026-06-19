@@ -136,7 +136,7 @@ def _save_local_config():
     import json
     from pathlib import Path
 
-    config_path = Path('/app/data/config.json')
+    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with state_lock:

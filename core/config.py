@@ -13,7 +13,7 @@ from core.state import state, state_lock, CONFIG_VERSION
 
 logger = logging.getLogger('fancontrol')
 
-DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/app/data'))
+DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/data'))
 CONFIG_PATH = DATA_DIR / 'config.json'
 DB_FILE = DATA_DIR / 'fancontrol.db'
 

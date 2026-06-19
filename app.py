@@ -34,7 +34,7 @@ from server.socket_handlers import register_handlers
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
 
-LOG_DIR = '/app/data/logs'
+LOG_DIR = '/data/logs'
 Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
 
 # Logger setup
