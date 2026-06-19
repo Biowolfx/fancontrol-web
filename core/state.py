@@ -25,6 +25,7 @@ state: Dict[str, Any] = {
     'initialized': False,
     'hardware_scanned': False,
     'config_version': CONFIG_VERSION,
+    'nodes': {},  # Runtime state for connected agents
 }
 
 STATE_CACHE_TTL = 2.0
@@ -50,7 +51,8 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'initialized': state.get('initialized', False),
         'hardware_scanned': state.get('hardware_scanned', False),
         'config_version': CONFIG_VERSION,
-        'language': state.get('language', 'en')
+        'language': state.get('language', 'en'),
+        'nodes': dict(state.get('nodes', {})),
     }
 
 
