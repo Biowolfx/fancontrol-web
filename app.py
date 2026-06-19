@@ -25,6 +25,11 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_socketio import SocketIO
 from werkzeug.exceptions import BadRequest
 
+from core.state import (
+    state, state_lock, CONFIG_VERSION, get_state,
+    invalidate_state_cache, _init_complete,
+)
+
 # ============================================================================
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
@@ -36,9 +41,6 @@ DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/app/data'))
 HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
 CONFIG_PATH = DATA_DIR / 'config.json'
 DB_FILE = DATA_DIR / 'fancontrol.db'
-
-# Thread safety
-state_lock = threading.RLock()
 
 # Logger setup
 logger = logging.getLogger('fancontrol')
@@ -81,27 +83,8 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.4.0"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
-
-state: Dict[str, Any] = {
-    'fans': {},
-    'temp_sensors': {},
-    'hdd_sensors': {},
-    'max_hdd_temp': 0,
-    'tested': False,
-    'testing': False,
-    'test_progress': {},
-    '_pause_loop': False,
-    'failsafe': False,
-    'standby_mode': False,
-    'disks_polling': False,
-    'last_hdd_poll': 0.0,
-    'initialized': False,
-    'hardware_scanned': False,
-    'config_version': CONFIG_VERSION
-}
 
 executor = ThreadPoolExecutor(max_workers=8)
 _last_cleanup = time.monotonic()
@@ -131,51 +114,6 @@ _control_rate_limit: Dict[str, float] = {}
 CONTROL_RATE_LIMIT_SECONDS = 0.1
 _RATE_LIMIT_CLEANUP_INTERVAL = 600
 _rate_limit_last_cleanup = time.monotonic()
-
-# Cached state snapshot (refreshed every STATE_CACHE_TTL seconds)
-STATE_CACHE_TTL = 2.0
-_cached_state: Optional[Dict[str, Any]] = None
-_cached_state_time: float = 0.0
-
-# ============================================================================
-# THREAD-SAFE STATE ACCESSOR
-# ============================================================================
-
-def _build_state_snapshot() -> Dict[str, Any]:
-    """Build a fresh state snapshot (caller must hold state_lock)."""
-    return {
-        'fans': copy.deepcopy(state['fans']),
-        'temp_sensors': copy.deepcopy(state['temp_sensors']),
-        'hdd_sensors': copy.deepcopy(state['hdd_sensors']),
-        'max_hdd_temp': state.get('max_hdd_temp', 0),
-        'tested': state.get('tested', False),
-        'testing': state.get('testing', False),
-        'test_progress': copy.deepcopy(state.get('test_progress', {})),
-        '_pause_loop': state.get('_pause_loop', False),
-        'failsafe': state.get('failsafe', False),
-        'standby_mode': state.get('standby_mode', False),
-        'initialized': state.get('initialized', False),
-        'hardware_scanned': state.get('hardware_scanned', False),
-        'config_version': CONFIG_VERSION,
-        'language': state.get('language', 'en')
-    }
-
-
-def get_state() -> Dict[str, Any]:
-    """
-    Thread-safe snapshot of global state for API and Socket.IO.
-    Uses cached snapshot to reduce deepcopy overhead on frequent calls.
-    """
-    global _cached_state, _cached_state_time
-    now = time.monotonic()
-    
-    with state_lock:
-        if _cached_state is not None and (now - _cached_state_time) < STATE_CACHE_TTL:
-            return _cached_state
-        
-        _cached_state = _build_state_snapshot()
-        _cached_state_time = now
-        return _cached_state
 
 # ============================================================================
 # FLASK ROUTES
@@ -1862,7 +1800,10 @@ def validate_control_request(data: Dict):
 
 @socketio.on('connect')
 def handle_socket_connect():
-    """Send initial state on client connection"""
+    """Send initial state on client connection.
+    Wait for init_hardware() to complete so the client always
+    receives the correct 'initialized' flag (avoids wizard flash)."""
+    _init_complete.wait(timeout=15)
     socketio.emit('update', get_state())
 
 
@@ -1938,9 +1879,9 @@ def _auto_init():
             logger.error(f'Database init error: {e}')
         init_hardware()
         _ensure_control_loop()
+        _init_complete.set()
         # Invalidate cached state and push correct state to all connected clients
-        global _cached_state
-        _cached_state = None
+        invalidate_state_cache()
         socketio.emit('update', get_state())
 
 
@@ -1951,6 +1892,7 @@ if __name__ == '__main__':
     
     init_database()
     init_hardware()
+    _init_complete.set()
     _ensure_control_loop()
     
     logger.info('Starting server on port 5059')
