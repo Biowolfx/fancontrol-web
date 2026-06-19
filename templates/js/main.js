@@ -301,7 +301,9 @@ function showSetupScreen() {
 function showMainScreen() {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('main-screen').classList.remove('hidden');
-    hideCalibrationModal();
+    if (!currentState || !currentState.testing) {
+        hideCalibrationModal();
+    }
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -1032,7 +1034,7 @@ function startCalibration() {
     document.getElementById('calibration-modal').classList.remove('hidden');
     document.getElementById('calibration-status').textContent = 'Starting...';
     document.getElementById('calibration-progress-bar').style.width = '0%';
-    document.getElementById('calibration-step').textContent = 'Step 0/11';
+    document.getElementById('calibration-step').textContent = 'Step 0/21';
     
     fetch('/api/initialize', { method: 'POST' })
         .catch(err => console.error('Calibration error:', err));

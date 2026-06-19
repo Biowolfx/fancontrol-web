@@ -32,7 +32,8 @@ _RATE_LIMIT_CLEANUP_INTERVAL = 600
 _rate_limit_last_cleanup = time.monotonic()
 
 MAX_HISTORY_HOURS = 168
-PWM_CURVE_POINTS = 11
+from core.hardware import CALIBRATION_STEPS
+PWM_CURVE_POINTS = len(CALIBRATION_STEPS)
 
 
 @routes.route('/')
