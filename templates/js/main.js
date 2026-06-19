@@ -192,6 +192,9 @@ function hideServerUnavailable() {
 let lastUIUpdate = 0;
 socket.on('update', (data) => {
     currentState = data;
+    if (data.test_progress && data.testing) {
+        updateCalibrationModal(data.test_progress);
+    }
     const interval = getSettings().refreshInterval;
     if (interval === 0) {
         updateUI(data);
@@ -221,8 +224,9 @@ socket.on('test_complete', (result) => {
     console.log('[FanControl] Calibration complete:', result);
     hideCalibrationModal();
     
-    if (result.success && result.initialized) {
+    if (result.success) {
         wizardStep = 'done';
+        currentState = { ...currentState, initialized: true, tested: true };
         showMainScreen();
     }
 });
@@ -242,7 +246,7 @@ function updateUI(data) {
     if (versionLink && ver) versionLink.textContent = `FanControl Web v${ver}`;
     
     // Show appropriate screen
-    if (!data.initialized) {
+    if (!data.initialized || !data.tested) {
         showSetupScreen();
         if (data.hardware_scanned && wizardStep === 'intro') {
             renderDiscoveredHardware({
@@ -297,6 +301,7 @@ function showSetupScreen() {
 function showMainScreen() {
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('main-screen').classList.remove('hidden');
+    hideCalibrationModal();
 }
 
 function updateFailsafeIndicator(failsafe) {
