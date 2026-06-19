@@ -10,13 +10,15 @@
   .step-dot { transition: all 0.3s ease; }
   .step-dot.active { background: #06b6d4; box-shadow: 0 0 12px #06b6d4; }
   .step-dot.done { background: #10b981; }
+  .card-hover { transition: all 0.3s ease; }
   .card-hover:hover { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6,182,212,0.15); }
   .card-selected { border-color: #06b6d4 !important; background: rgba(6,182,212,0.08) !important; box-shadow: 0 0 20px rgba(6,182,212,0.2); }
   .glow-text { text-shadow: 0 0 20px rgba(6,182,212,0.5); }
   .progress-bar { transition: width 0.5s ease; }
   .fade-in { animation: fadeIn 0.3s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  input:focus { outline: none; border-color: #06b6d4; box-shadow: 0 0 8px rgba(6,182,212,0.3); }
+  input:focus, textarea:focus { outline: none; border-color: #06b6d4 !important; box-shadow: 0 0 8px rgba(6,182,212,0.3); }
+  .field-desc { color: #9ca3af; font-size: 0.75rem; margin-top: 0.25rem; }
 </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -30,37 +32,49 @@
 
   <!-- Step Indicator -->
   <div class="flex justify-center gap-3 mb-8">
-    <div class="step-dot w-3 h-3 rounded-full bg-gray-600 active" data-step="1"></div>
-    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="2"></div>
-    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="3"></div>
-    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="4"></div>
+    <div class="flex items-center gap-2">
+      <div class="step-dot w-3 h-3 rounded-full bg-gray-600 active" data-step="1"></div>
+      <span class="text-xs text-gray-500" id="step_label_1"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="2"></div>
+      <span class="text-xs text-gray-500" id="step_label_2"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="3"></div>
+      <span class="text-xs text-gray-500" id="step_label_3"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="4"></div>
+      <span class="text-xs text-gray-500" id="step_label_4"></span>
+    </div>
   </div>
 
   <!-- Step 1: Language -->
   <div id="step1" class="fade-in">
     <h2 id="lang_title" class="text-xl font-semibold text-white text-center mb-6">Select Language</h2>
     <div class="flex justify-center gap-4">
-      <button onclick="selectLang('en')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+      <button onclick="selectLang('en')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center cursor-pointer">
         <div class="text-3xl mb-2">🇬🇧</div>
         <div class="text-white font-medium">English</div>
       </button>
-      <button onclick="selectLang('ru')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+      <button onclick="selectLang('ru')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center cursor-pointer">
         <div class="text-3xl mb-2">🇷🇺</div>
         <div class="text-white font-medium">Русский</div>
       </button>
     </div>
   </div>
 
-  <!-- Step 2: Component -->
+  <!-- Step 2: Mode -->
   <div id="step2" class="hidden fade-in">
     <h2 id="comp_title" class="text-xl font-semibold text-white text-center mb-6"></h2>
     <div class="flex justify-center gap-4">
-      <button onclick="selectMode('server')" id="btn_server" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+      <button onclick="selectMode('server')" id="btn_server" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center cursor-pointer">
         <div class="text-3xl mb-2">🖥️</div>
         <div id="lbl_server" class="text-white font-medium"></div>
         <div id="lbl_server_desc" class="text-gray-400 text-sm mt-1"></div>
       </button>
-      <button onclick="selectMode('agent')" id="btn_agent" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+      <button onclick="selectMode('agent')" id="btn_agent" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center cursor-pointer">
         <div class="text-3xl mb-2">🔗</div>
         <div id="lbl_agent" class="text-white font-medium"></div>
         <div id="lbl_agent_desc" class="text-gray-400 text-sm mt-1"></div>
@@ -78,29 +92,76 @@
           <label id="lbl_port" class="block text-gray-300 text-sm mb-1"></label>
           <input id="input_port" type="number" value="5059" min="1" max="65535"
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_port" class="field-desc"></p>
         </div>
         <div class="mt-4">
-          <label id="lbl_data_dir" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_data_dir" type="text" value="./data"
+          <label id="lbl_data_path" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_data_path" type="text" value="/data"
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_data_path" class="field-desc"></p>
         </div>
+        <div class="mt-4">
+          <label id="lbl_server_name" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_server_name" type="text" value="My Server"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_server_name" class="field-desc"></p>
+        </div>
+        <div class="mt-4">
+          <label id="lbl_description" class="block text-gray-300 text-sm mb-1"></label>
+          <textarea id="input_description" rows="2"
+                    class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white resize-none"></textarea>
+          <p id="desc_description" class="field-desc"></p>
+        </div>
+        <div class="mt-4">
+          <label id="lbl_admin_password" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_admin_password" type="password" placeholder=""
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_admin_password" class="field-desc"></p>
+        </div>
+        <div class="mt-4 flex items-center gap-3">
+          <input id="input_ssdp_enabled" type="checkbox" checked
+                 class="w-4 h-4 rounded bg-gray-900 border-gray-600 text-cyan-500 focus:ring-cyan-500">
+          <label id="lbl_ssdp_enabled" for="input_ssdp_enabled" class="text-gray-300 text-sm"></label>
+        </div>
+        <p id="desc_ssdp_enabled" class="field-desc ml-7"></p>
       </div>
       <!-- Agent fields -->
       <div id="fields_agent" class="hidden">
         <div>
           <label id="lbl_server_url" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_server_url" type="url" placeholder="http://server:5059"
+          <input id="input_server_url" type="text" placeholder="ws://192.168.1.100:5059"
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_server_url" class="field-desc"></p>
         </div>
         <div class="mt-4">
           <label id="lbl_api_token" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_api_token" type="password" placeholder=""
+          <input id="input_api_token" type="text" placeholder=""
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_api_token" class="field-desc"></p>
         </div>
         <div class="mt-4">
           <label id="lbl_node_name" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_node_name" type="text" placeholder="node-1"
+          <input id="input_node_name" type="text" value="Agent 1"
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_node_name" class="field-desc"></p>
+        </div>
+        <div class="mt-4">
+          <label id="lbl_agent_description" class="block text-gray-300 text-sm mb-1"></label>
+          <textarea id="input_agent_description" rows="2"
+                    class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white resize-none"></textarea>
+          <p id="desc_agent_description" class="field-desc"></p>
+        </div>
+        <div class="mt-4">
+          <label id="lbl_agent_data_path" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_agent_data_path" type="text" value="/data"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <p id="desc_agent_data_path" class="field-desc"></p>
+        </div>
+        <div class="mt-4">
+          <button onclick="testConnection()" id="test_conn_btn"
+                  class="bg-gray-600 hover:bg-gray-500 text-white font-medium px-4 py-2 rounded-lg transition-colors text-sm">
+          </button>
+          <span id="test_conn_result" class="ml-3 text-sm"></span>
         </div>
       </div>
       <div id="config_error" class="hidden text-red-400 text-sm mt-2"></div>
@@ -123,6 +184,7 @@
       <p id="progress_msg" class="text-gray-300 text-sm text-center"></p>
       <div id="complete_section" class="hidden text-center mt-6">
         <div class="text-emerald-400 text-xl font-semibold mb-4" id="complete_text"></div>
+        <p id="restart_msg" class="text-gray-400 text-sm mb-4"></p>
         <a id="dashboard_link" href="/" target="_blank"
            class="inline-block bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-8 py-3 rounded-lg transition-colors">
         </a>
@@ -141,37 +203,93 @@
 <script>
 const translations = {
   en: {
+    title: 'Setup Wizard',
+    step1: 'Language',
+    step2: 'Mode',
+    step3: 'Configuration',
+    step4: 'Install',
     component_title: 'Select Component',
     server: 'Server',
-    server_desc: 'Central dashboard + control',
+    server_desc: 'Central dashboard + control for multiple nodes',
     agent: 'Agent',
-    agent_desc: 'Connect to server',
+    agent_desc: 'Connect to existing server',
     config_title: 'Configuration',
     port: 'Port',
-    data_dir: 'Data Directory',
+    port_desc: 'Web interface port (default: 5059)',
+    data_path: 'Data Path',
+    data_path_desc: 'Container path for config and data',
+    server_name: 'Server Name',
+    server_name_desc: 'Display name for this server',
+    description: 'Description',
+    description_desc: 'Optional description',
+    admin_password: 'Admin Password',
+    admin_password_desc: 'Protect web interface (empty = no auth)',
+    ssdp_enabled: 'Enable LAN Discovery',
+    ssdp_desc: 'Allow agents to discover this server on LAN',
     server_url: 'Server URL',
+    server_url_desc: 'WebSocket URL of the server (ws://ip:port)',
     api_token: 'API Token',
+    api_token_desc: 'Token from the server for authentication',
     node_name: 'Node Name',
+    node_name_desc: 'Display name for this agent',
+    agent_description: 'Description',
+    agent_description_desc: 'Optional description',
+    agent_data_path: 'Data Path',
+    agent_data_path_desc: 'Container path for config and data',
+    test_connection: 'Test Connection',
+    test_ok: 'Connection successful!',
+    test_fail: 'Connection failed',
+    test_testing: 'Testing...',
     install_btn: 'Install',
     installing: 'Installing...',
-    complete: 'Installation Complete!',
+    restarting: 'Container restarting...',
+    complete: 'Setup Complete!',
+    redirecting: 'Redirecting in {seconds} seconds...',
     open_dashboard: 'Open Dashboard',
   },
   ru: {
+    title: 'Мастер установки',
+    step1: 'Язык',
+    step2: 'Режим',
+    step3: 'Конфигурация',
+    step4: 'Установка',
     component_title: 'Выберите компонент',
     server: 'Сервер',
-    server_desc: 'Центральная панель управления',
+    server_desc: 'Центральная панель управления для нескольких узлов',
     agent: 'Агент',
-    agent_desc: 'Подключение к серверу',
+    agent_desc: 'Подключение к существующему серверу',
     config_title: 'Конфигурация',
     port: 'Порт',
-    data_dir: 'Директория данных',
+    port_desc: 'Порт веб-интерфейса (по умолчанию: 5059)',
+    data_path: 'Путь к данным',
+    data_path_desc: 'Контейнерный путь для конфига и данных',
+    server_name: 'Имя сервера',
+    server_name_desc: 'Отображаемое имя сервера',
+    description: 'Описание',
+    description_desc: 'Описание (необязательно)',
+    admin_password: 'Пароль админа',
+    admin_password_desc: 'Защита веб-интерфейса (пусто = без пароля)',
+    ssdp_enabled: 'Включить обнаружение в LAN',
+    ssdp_desc: 'Разрешить агентам находить этот сервер в локальной сети',
     server_url: 'URL сервера',
+    server_url_desc: 'WebSocket URL сервера (ws://ip:port)',
     api_token: 'API токен',
+    api_token_desc: 'Токен сервера для аутентификации',
     node_name: 'Имя узла',
+    node_name_desc: 'Отображаемое имя агента',
+    agent_description: 'Описание',
+    agent_description_desc: 'Описание (необязательно)',
+    agent_data_path: 'Путь к данным',
+    agent_data_path_desc: 'Контейнерный путь для конфига и данных',
+    test_connection: 'Проверить соединение',
+    test_ok: 'Соединение успешно!',
+    test_fail: 'Ошибка соединения',
+    test_testing: 'Проверка...',
     install_btn: 'Установить',
     installing: 'Установка...',
+    restarting: 'Контейнер перезапускается...',
     complete: 'Установка завершена!',
+    redirecting: 'Перенаправление через {seconds} секунд...',
     open_dashboard: 'Открыть панель',
   }
 };
@@ -179,10 +297,16 @@ const translations = {
 let lang = 'en';
 let mode = null;
 let pollInterval = null;
+let redirectCountdown = null;
 
 function t(key) { return translations[lang][key] || key; }
 
 function updateTexts() {
+  document.getElementById('subtitle').textContent = t('title');
+  document.getElementById('step_label_1').textContent = t('step1');
+  document.getElementById('step_label_2').textContent = t('step2');
+  document.getElementById('step_label_3').textContent = t('step3');
+  document.getElementById('step_label_4').textContent = t('step4');
   document.getElementById('comp_title').textContent = t('component_title');
   document.getElementById('lbl_server').textContent = t('server');
   document.getElementById('lbl_server_desc').textContent = t('server_desc');
@@ -190,17 +314,36 @@ function updateTexts() {
   document.getElementById('lbl_agent_desc').textContent = t('agent_desc');
   document.getElementById('config_title').textContent = t('config_title');
   document.getElementById('lbl_port').textContent = t('port');
-  document.getElementById('lbl_data_dir').textContent = t('data_dir');
+  document.getElementById('desc_port').textContent = t('port_desc');
+  document.getElementById('lbl_data_path').textContent = t('data_path');
+  document.getElementById('desc_data_path').textContent = t('data_path_desc');
+  document.getElementById('lbl_server_name').textContent = t('server_name');
+  document.getElementById('desc_server_name').textContent = t('server_name_desc');
+  document.getElementById('lbl_description').textContent = t('description');
+  document.getElementById('desc_description').textContent = t('description_desc');
+  document.getElementById('lbl_admin_password').textContent = t('admin_password');
+  document.getElementById('desc_admin_password').textContent = t('admin_password_desc');
+  document.getElementById('lbl_ssdp_enabled').textContent = t('ssdp_enabled');
+  document.getElementById('desc_ssdp_enabled').textContent = t('ssdp_desc');
   document.getElementById('lbl_server_url').textContent = t('server_url');
+  document.getElementById('desc_server_url').textContent = t('server_url_desc');
   document.getElementById('lbl_api_token').textContent = t('api_token');
+  document.getElementById('desc_api_token').textContent = t('api_token_desc');
   document.getElementById('lbl_node_name').textContent = t('node_name');
+  document.getElementById('desc_node_name').textContent = t('node_name_desc');
+  document.getElementById('lbl_agent_description').textContent = t('agent_description');
+  document.getElementById('desc_agent_description').textContent = t('agent_description_desc');
+  document.getElementById('lbl_agent_data_path').textContent = t('agent_data_path');
+  document.getElementById('desc_agent_data_path').textContent = t('agent_data_path_desc');
+  document.getElementById('test_conn_btn').textContent = t('test_connection');
   document.getElementById('install_btn').textContent = t('install_btn');
 }
 
 function setStep(n) {
   for (let i = 1; i <= 4; i++) {
-    document.getElementById('step' + i).classList.toggle('hidden', i !== n);
-    document.getElementById('step' + i).classList.toggle('fade-in', i === n);
+    const el = document.getElementById('step' + i);
+    el.classList.toggle('hidden', i !== n);
+    el.classList.toggle('fade-in', i === n);
     const dot = document.querySelector(`.step-dot[data-step="${i}"]`);
     dot.classList.remove('active', 'done');
     if (i < n) dot.classList.add('done');
@@ -223,6 +366,48 @@ function selectMode(m) {
   setStep(3);
 }
 
+function testConnection() {
+  const btn = document.getElementById('test_conn_btn');
+  const result = document.getElementById('test_conn_result');
+  const url = document.getElementById('input_server_url').value.trim();
+  const token = document.getElementById('input_api_token').value.trim();
+
+  if (!url || !token) {
+    result.textContent = t('test_fail');
+    result.className = 'ml-3 text-sm text-red-400';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = t('test_testing');
+  result.textContent = '';
+  result.className = 'ml-3 text-sm';
+
+  fetch('/api/validate-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ server_url: url, api_token: token })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.valid) {
+      result.textContent = t('test_ok');
+      result.className = 'ml-3 text-sm text-emerald-400';
+    } else {
+      result.textContent = data.error || t('test_fail');
+      result.className = 'ml-3 text-sm text-red-400';
+    }
+  })
+  .catch(() => {
+    result.textContent = t('test_fail');
+    result.className = 'ml-3 text-sm text-red-400';
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.textContent = t('test_connection');
+  });
+}
+
 function startInstall() {
   const errEl = document.getElementById('config_error');
   errEl.classList.add('hidden');
@@ -232,7 +417,7 @@ function startInstall() {
     const token = document.getElementById('input_api_token').value.trim();
     const name = document.getElementById('input_node_name').value.trim();
     if (!url || !token || !name) {
-      errEl.textContent = lang === 'ru' ? 'Заполните все поля' : 'All fields are required';
+      errEl.textContent = lang === 'ru' ? 'Заполните все обязательные поля' : 'All required fields must be filled';
       errEl.classList.remove('hidden');
       return;
     }
@@ -241,11 +426,17 @@ function startInstall() {
   const config = { mode, lang };
   if (mode === 'server') {
     config.port = parseInt(document.getElementById('input_port').value) || 5059;
-    config.data_dir = document.getElementById('input_data_dir').value.trim() || './data';
+    config.data_path = document.getElementById('input_data_path').value.trim() || '/data';
+    config.server_name = document.getElementById('input_server_name').value.trim();
+    config.description = document.getElementById('input_description').value.trim();
+    config.admin_password = document.getElementById('input_admin_password').value;
+    config.ssdp_enabled = document.getElementById('input_ssdp_enabled').checked;
   } else {
     config.server_url = document.getElementById('input_server_url').value.trim();
     config.api_token = document.getElementById('input_api_token').value.trim();
     config.node_name = document.getElementById('input_node_name').value.trim();
+    config.description = document.getElementById('input_agent_description').value.trim();
+    config.data_path = document.getElementById('input_agent_data_path').value.trim() || '/data';
   }
 
   fetch('/api/install', {
@@ -290,9 +481,25 @@ function pollStatus() {
           document.getElementById('complete_section').classList.remove('hidden');
           document.getElementById('complete_text').textContent = t('complete');
           document.getElementById('dashboard_link').textContent = t('open_dashboard');
+          startRedirectCountdown();
         }
       }
     });
+}
+
+function startRedirectCountdown() {
+  let seconds = 10;
+  const restartMsg = document.getElementById('restart_msg');
+  restartMsg.textContent = t('redirecting').replace('{seconds}', seconds);
+  redirectCountdown = setInterval(() => {
+    seconds--;
+    if (seconds <= 0) {
+      clearInterval(redirectCountdown);
+      location.reload();
+    } else {
+      restartMsg.textContent = t('redirecting').replace('{seconds}', seconds);
+    }
+  }, 1000);
 }
 
 updateTexts();
