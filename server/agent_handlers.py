@@ -1,6 +1,8 @@
 """Socket.IO event handlers for agent (node) connections."""
 
 import logging
+import threading
+import time
 
 from core.state import state, state_lock, invalidate_state_cache
 from server.node_registry import (
@@ -14,8 +16,28 @@ from server.node_registry import (
 logger = logging.getLogger('fancontrol')
 
 
+def _start_ping_loop(socketio):
+    """Ping all online agents every 30 seconds."""
+    def _ping_loop():
+        while True:
+            time.sleep(30)
+            try:
+                from server.node_registry import list_nodes
+                nodes = list_nodes()
+                for node in nodes:
+                    if node['status'] == 'online':
+                        socketio.emit('server:ping', {'node_id': node['node_id']}, room=node['node_id'])
+            except Exception as e:
+                logger.error(f'Ping loop error: {e}')
+
+    thread = threading.Thread(target=_ping_loop, daemon=True)
+    thread.start()
+
+
 def register_agent_handlers(socketio):
     """Register Socket.IO event handlers for agent connections."""
+
+    _start_ping_loop(socketio)
 
     @socketio.on('agent:connect')
     def handle_agent_connect(data):
@@ -108,3 +130,9 @@ def register_agent_handlers(socketio):
 
         socketio.emit('node_mode_changed', {'node_id': node_id, 'mode': mode})
         logger.info(f'Agent mode changed: {node_id} -> {mode}')
+
+    @socketio.on('agent:pong')
+    def handle_agent_pong(data):
+        """Agent responds to ping — update last_seen."""
+        node_id = data.get('node_id', '')
+        update_node_status(node_id, 'online')
