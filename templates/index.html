@@ -660,6 +660,65 @@
         </div>
     </div>
     
+    <!-- Conflict Modal -->
+    <div id="conflict-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center bg-black bg-opacity-70">
+        <div class="bg-cyber-card border border-yellow-500/30 rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-2">
+                ⚠️ <span id="conflict-node-name"></span> — <span data-i18n="conflict.title">Config Conflict</span>
+            </h3>
+            <p class="text-gray-400 text-sm mb-4" data-i18n="conflict.desc">Agent config differs from server config.</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <h4 class="text-white text-sm font-semibold mb-2" data-i18n="conflict.server_config">Server Config</h4>
+                    <div id="conflict-server-config" class="bg-cyber-bg rounded p-3 text-sm"></div>
+                </div>
+                <div>
+                    <h4 class="text-white text-sm font-semibold mb-2" data-i18n="conflict.agent_config">Agent Config</h4>
+                    <div id="conflict-agent-config" class="bg-cyber-bg rounded p-3 text-sm"></div>
+                </div>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="applyServerConfig()"
+                    class="flex-1 py-2 px-4 bg-neon-cyan bg-opacity-20 text-neon-cyan rounded-lg font-semibold transition-all hover:bg-opacity-40">
+                    <span data-i18n="conflict.apply_server">Apply Server Config</span>
+                </button>
+                <button onclick="keepAgentConfig()"
+                    class="flex-1 py-2 px-4 bg-cyber-accent text-gray-300 rounded-lg font-semibold transition-all hover:bg-gray-700">
+                    <span data-i18n="conflict.keep_agent">Keep Agent Config</span>
+                </button>
+                <button onclick="hideConflictModal()"
+                    class="py-2 px-4 bg-cyber-accent hover:bg-gray-700 rounded-lg text-gray-400 transition-all">
+                    <span data-i18n="common.cancel">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Manual Mode Warning -->
+    <div id="manual-mode-warning" class="hidden fixed bottom-4 right-4 z-[80] max-w-sm">
+        <div class="bg-yellow-900/30 border border-yellow-500/30 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-yellow-400">⚠️</span>
+                <span class="text-white font-semibold">
+                    <span id="manual-mode-node-name"></span> — <span data-i18n="conflict.manual_mode">Manual Mode</span>
+                </span>
+            </div>
+            <p class="text-gray-400 text-sm mb-3" data-i18n="conflict.manual_warning">Agent is controlling fans locally.</p>
+            <div class="flex gap-2">
+                <button id="manual-mode-switch-btn"
+                    class="px-3 py-1 bg-neon-cyan bg-opacity-20 text-neon-cyan rounded text-sm transition-all hover:bg-opacity-40">
+                    <span data-i18n="conflict.switch_to_server">Switch to Server Control</span>
+                </button>
+                <button onclick="hideManualModeWarning()"
+                    class="px-3 py-1 bg-cyber-accent rounded text-gray-400 text-sm transition-all hover:bg-gray-700">
+                    <span data-i18n="common.done">Dismiss</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <script src="/js/main.js"></script>
 </body>
 </html>

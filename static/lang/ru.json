@@ -195,5 +195,16 @@
   "nodes.fans": "Вентиляторы",
   "nodes.confirm_delete": "Удалить этот узел?",
   "node.temperatures": "Температуры",
-  "node.manual_mode": "Ручной режим"
+  "node.manual_mode": "Ручной режим",
+
+  "conflict.title": "Конфликт конфигураций",
+  "conflict.desc": "Конфигурация агента отличается от серверной.",
+  "conflict.no_config": "Нет конфигурации",
+  "conflict.server_config": "Серверная конфигурация",
+  "conflict.agent_config": "Конфигурация агента",
+  "conflict.apply_server": "Применить серверную",
+  "conflict.keep_agent": "Оставить конфигурацию агента",
+  "conflict.manual_mode": "Ручной режим",
+  "conflict.manual_warning": "Агент управляет вентиляторами локально.",
+  "conflict.switch_to_server": "Переключить на серверное управление"
 }

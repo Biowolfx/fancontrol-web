@@ -195,5 +195,16 @@
   "nodes.fans": "Fans",
   "nodes.confirm_delete": "Delete this node?",
   "node.temperatures": "Temperatures",
-  "node.manual_mode": "Manual Mode"
+  "node.manual_mode": "Manual Mode",
+
+  "conflict.title": "Config Conflict",
+  "conflict.desc": "Agent config differs from server config.",
+  "conflict.no_config": "No config",
+  "conflict.server_config": "Server Config",
+  "conflict.agent_config": "Agent Config",
+  "conflict.apply_server": "Apply Server Config",
+  "conflict.keep_agent": "Keep Agent Config",
+  "conflict.manual_mode": "Manual Mode",
+  "conflict.manual_warning": "Agent is controlling fans locally.",
+  "conflict.switch_to_server": "Switch to Server Control"
 }

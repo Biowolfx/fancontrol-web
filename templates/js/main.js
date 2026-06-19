@@ -2242,13 +2242,21 @@ socket.on('node:telemetry', (data) => {
     }
 });
 
+// ============================================================================
+// CONFIG SYNC & CONFLICT MANAGEMENT
+// ============================================================================
+
+let conflictData = null;
+
 socket.on('node:conflict', (data) => {
     console.warn('[FanControl] Node conflict:', data);
+    conflictData = data;
     const idx = nodesData.findIndex(n => n.node_id === data.node_id);
     if (idx >= 0) {
         nodesData[idx].control_mode = 'manual';
     }
     renderNodeSidebar();
+    showConflictModal(data);
 });
 
 socket.on('node:mode_changed', (data) => {
@@ -2258,6 +2266,107 @@ socket.on('node:mode_changed', (data) => {
     }
     renderNodeSidebar();
     renderNodesOverview();
+    if (data.mode === 'manual') {
+        showManualModeWarning(data.node_id);
+    }
 });
+
+function showConflictModal(data) {
+    const modal = document.getElementById('conflict-modal');
+    if (!modal) return;
+
+    document.getElementById('conflict-node-name').textContent = data.name || data.node_id;
+
+    const serverFans = (data.server_config || {}).fans || {};
+    let serverHtml = '';
+    for (const [id, fan] of Object.entries(serverFans)) {
+        serverHtml += `<div class="text-sm"><span class="text-gray-400">${escapeHtml(id)}:</span> <span class="text-white">mode=${fan.mode}, temp=${fan.target_temp}°C</span></div>`;
+    }
+    document.getElementById('conflict-server-config').innerHTML = serverHtml || `<div class="text-gray-500 text-sm">${t('conflict.no_config', 'No config')}</div>`;
+
+    const agentFans = (data.agent_config || {}).fans || {};
+    let agentHtml = '';
+    for (const [id, fan] of Object.entries(agentFans)) {
+        agentHtml += `<div class="text-sm"><span class="text-gray-400">${escapeHtml(id)}:</span> <span class="text-white">mode=${fan.mode}, temp=${fan.target_temp}°C</span></div>`;
+    }
+    document.getElementById('conflict-agent-config').innerHTML = agentHtml || `<div class="text-gray-500 text-sm">${t('conflict.no_config', 'No config')}</div>`;
+
+    modal.classList.remove('hidden');
+}
+
+function hideConflictModal() {
+    document.getElementById('conflict-modal')?.classList.add('hidden');
+    conflictData = null;
+}
+
+async function applyServerConfig() {
+    if (!conflictData) return;
+    try {
+        await fetch(`/api/nodes/${conflictData.node_id}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: conflictData.server_config })
+        });
+        hideConflictModal();
+    } catch (e) {
+        console.error('Failed to apply server config:', e);
+    }
+}
+
+async function keepAgentConfig() {
+    if (!conflictData) return;
+    try {
+        await fetch(`/api/nodes/${conflictData.node_id}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: conflictData.agent_config })
+        });
+        hideConflictModal();
+    } catch (e) {
+        console.error('Failed to keep agent config:', e);
+    }
+}
+
+function showManualModeWarning(nodeId) {
+    const node = nodesData.find(n => n.node_id === nodeId);
+    if (!node) return;
+    const warning = document.getElementById('manual-mode-warning');
+    if (!warning) return;
+
+    document.getElementById('manual-mode-node-name').textContent = node.name || nodeId;
+    document.getElementById('manual-mode-switch-btn').onclick = () => switchToServerMode(nodeId);
+    warning.classList.remove('hidden');
+}
+
+function hideManualModeWarning() {
+    document.getElementById('manual-mode-warning')?.classList.add('hidden');
+}
+
+async function switchToServerMode(nodeId) {
+    try {
+        await fetch(`/api/nodes/${nodeId}/mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'server' })
+        });
+        hideManualModeWarning();
+    } catch (e) {
+        console.error('Failed to switch mode:', e);
+    }
+}
+
+async function pushConfigToNode(nodeId) {
+    try {
+        const resp = await fetch('/api/state');
+        const state = await resp.json();
+        await fetch(`/api/nodes/${nodeId}/config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: { fans: state.fans } })
+        });
+    } catch (e) {
+        console.error('Failed to push config:', e);
+    }
+}
 
 console.log('[FanControl] main.js loaded successfully');
