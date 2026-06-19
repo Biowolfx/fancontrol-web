@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.3.3"
+CONFIG_VERSION = "3.3.4"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
