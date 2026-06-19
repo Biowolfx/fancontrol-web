@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FanControl v3.4.0 - Neon Cyberpunk</title>
+    <title>FanControl v3.4.1 - Neon Cyberpunk</title>
     
     <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -192,6 +192,35 @@
                 </div>
             </div>
             
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-cyber-accent">
+                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-neon-cyan border-b-2 border-neon-cyan"
+                        data-view="dashboard" onclick="showView('dashboard')"
+                        data-i18n="nav.dashboard">
+                    Dashboard
+                </button>
+                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-gray-500 hover:text-gray-300 border-b-2 border-transparent"
+                        data-view="nodes" onclick="showView('nodes')"
+                        data-i18n="nav.nodes">
+                    Nodes
+                </button>
+            </div>
+            
+            <!-- Node List -->
+            <div class="border-b border-cyber-accent p-3">
+                <div id="node-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                <div class="flex gap-2 mt-2">
+                    <input id="new-node-name" type="text" 
+                           class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
+                           placeholder="Node name" data-i18n-placeholder="nodes.name_placeholder"
+                           onkeydown="if(event.key==='Enter')addNode()">
+                    <button onclick="addNode()" 
+                            class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
+                        +
+                    </button>
+                </div>
+            </div>
+            
             <!-- Fans List -->
             <div class="flex-1 overflow-y-auto p-3 space-y-2" id="fan-list">
                 <div class="text-center text-gray-500 py-8" data-i18n="setup.loading_fans">Loading fans...</div>
@@ -208,6 +237,9 @@
         <!-- RIGHT PANEL - Inspector -->
         <!-- ======================================================================== -->
         <div class="flex-1 flex flex-col overflow-hidden bg-cyber-bg">
+            
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="flex-1 flex flex-col overflow-hidden">
             
             <!-- Top Bar -->
             <div class="p-4 border-b border-cyber-accent flex items-center justify-between">
@@ -350,6 +382,24 @@
                         <div id="temp-chart" class="h-64"></div>
                     </div>
                 </div>
+            </div>
+            </div><!-- /dashboard-view -->
+            
+            <!-- Nodes View -->
+            <div id="nodes-view" class="hidden flex-1 overflow-y-auto p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-white" data-i18n="nodes.title">Nodes</h2>
+                    <button onclick="loadNodes()" 
+                            class="text-xs bg-cyber-accent text-gray-400 px-3 py-1.5 rounded-lg hover:text-neon-cyan transition-all">
+                        ↻
+                    </button>
+                </div>
+                <div id="nodes-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+            </div>
+            
+            <!-- Node Detail View -->
+            <div id="node-detail-view" class="hidden flex-1 overflow-y-auto p-6">
+                <div id="node-detail-content"></div>
             </div>
         </div>
     </div>

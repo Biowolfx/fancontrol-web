@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.4.0 - Neon Cyberpunk Edition
+ * FanControl Web v3.4.1 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -1987,6 +1987,277 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Schedule periodic auto-check
     scheduleAutoUpdate();
+    
+    // Load nodes for multi-node dashboard
+    loadNodes();
+});
+
+// ============================================================================
+// NODE MANAGEMENT (Multi-node Dashboard)
+// ============================================================================
+
+let currentView = 'dashboard';
+let selectedNodeId = null;
+let nodesData = [];
+
+async function loadNodes() {
+    try {
+        const resp = await fetch('/api/nodes');
+        nodesData = await resp.json();
+        renderNodeSidebar();
+        renderNodesOverview();
+    } catch (e) {
+        console.error('[FanControl] Failed to load nodes:', e);
+    }
+}
+
+function renderNodeSidebar() {
+    const container = document.getElementById('node-list');
+    if (!container) return;
+    
+    let html = '';
+    for (const node of nodesData) {
+        const statusDot = node.status === 'online' ? 'bg-green-400' : 'bg-gray-500';
+        const modeIcon = node.control_mode === 'manual' ? ' <span class="text-yellow-400" title="Manual mode">&#9888;</span>' : '';
+        const isActive = selectedNodeId === node.node_id;
+        
+        html += `
+            <div class="flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
+                 onclick="selectNode('${escapeHtml(node.node_id)}')">
+                <div class="w-2 h-2 rounded-full ${statusDot} flex-shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-white text-sm truncate">${escapeHtml(node.name)}${modeIcon}</div>
+                    <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (nodesData.length === 0) {
+        html = `<div class="text-gray-500 text-sm text-center py-4">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+function renderNodesOverview() {
+    const container = document.getElementById('nodes-grid');
+    if (!container) return;
+    
+    let html = '';
+    for (const node of nodesData) {
+        const telemetry = node.telemetry || {};
+        const fans = telemetry.fans || {};
+        const temps = telemetry.temp_sensors || {};
+        const tempValues = Object.values(temps).map(s => (s && s.value) || 0);
+        const maxTemp = tempValues.length > 0 ? Math.max(...tempValues) : 0;
+        const totalRPM = Object.values(fans).reduce((sum, f) => sum + ((f && f.rpm) || 0), 0);
+        
+        html += `
+            <div class="bg-gray-900/50 border border-gray-700 rounded-xl p-4 cursor-pointer hover:border-cyan-500/50 transition-all"
+                 onclick="selectNode('${escapeHtml(node.node_id)}')">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-white font-semibold">${escapeHtml(node.name)}</h3>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs ${node.status === 'online' ? 'text-green-400' : 'text-gray-500'}">${node.status}</span>
+                        ${node.control_mode === 'manual' ? '<span class="text-yellow-400 text-xs">&#9888; Manual</span>' : ''}
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="text-gray-400">${t('nodes.max_temp', 'Max Temp')}</div>
+                    <div class="text-white text-right">${maxTemp}&deg;C</div>
+                    <div class="text-gray-400">${t('nodes.total_rpm', 'Total RPM')}</div>
+                    <div class="text-white text-right">${totalRPM}</div>
+                    <div class="text-gray-400">${t('nodes.fans', 'Fans')}</div>
+                    <div class="text-white text-right">${Object.keys(fans).length}</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    if (nodesData.length === 0) {
+        html = `<div class="text-gray-500 text-center py-8 col-span-2">${t('nodes.no_nodes', 'No nodes connected. Add a node to get started.')}</div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+function selectNode(nodeId) {
+    selectedNodeId = nodeId;
+    currentView = 'node-detail';
+    showView('node-detail');
+    loadNodeDetail(nodeId);
+}
+
+async function loadNodeDetail(nodeId) {
+    try {
+        const resp = await fetch(`/api/nodes/${nodeId}`);
+        const node = await resp.json();
+        renderNodeDetail(node);
+    } catch (e) {
+        console.error('[FanControl] Failed to load node detail:', e);
+    }
+}
+
+function renderNodeDetail(node) {
+    const container = document.getElementById('node-detail-content');
+    if (!container) return;
+    
+    const telemetry = node.telemetry || {};
+    const fans = telemetry.fans || {};
+    const temps = telemetry.temp_sensors || {};
+    
+    let fansHtml = '';
+    for (const [id, fan] of Object.entries(fans)) {
+        const pwm = (fan && fan.pwm_value) || 0;
+        fansHtml += `
+            <div class="bg-gray-800/50 rounded-lg p-3">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">${escapeHtml(id)}</span>
+                    <span class="text-white">${(fan && fan.rpm) || 0} RPM</span>
+                </div>
+                <div class="mt-1 bg-gray-700 rounded-full h-2">
+                    <div class="bg-cyan-500 h-2 rounded-full" style="width: ${pwm / 255 * 100}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    
+    let tempsHtml = '';
+    for (const [id, temp] of Object.entries(temps)) {
+        tempsHtml += `
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-400">${escapeHtml(id)}</span>
+                <span class="text-white">${(temp && temp.value) || 0}&deg;C</span>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = `
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-white">${escapeHtml(node.name)}</h2>
+                <p class="text-gray-400 text-sm">${node.node_id} &middot; ${node.status} &middot; ${node.control_mode || 'auto'} mode</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="deleteNode('${escapeHtml(node.node_id)}')"
+                    class="px-3 py-1 bg-red-900/30 border border-red-500/30 rounded text-red-400 text-sm hover:bg-red-900/50 transition-all">
+                    ${t('nodes.delete', 'Delete')}
+                </button>
+                <button onclick="showView('nodes')"
+                    class="px-3 py-1 bg-gray-800 border border-gray-600 rounded text-gray-300 text-sm hover:bg-gray-700 transition-all">
+                    ${t('nodes.back', 'Back')}
+                </button>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <h3 class="text-white font-semibold mb-3">${t('nodes.fans', 'Fans')}</h3>
+                <div class="space-y-2">${fansHtml || '<div class="text-gray-500 text-sm">No fan data</div>'}</div>
+            </div>
+            <div>
+                <h3 class="text-white font-semibold mb-3">${t('node.temperatures', 'Temperatures')}</h3>
+                <div class="space-y-2">${tempsHtml || '<div class="text-gray-500 text-sm">No temperature data</div>'}</div>
+            </div>
+        </div>
+    `;
+}
+
+function showView(view) {
+    currentView = view;
+    document.getElementById('dashboard-view')?.classList.toggle('hidden', view !== 'dashboard');
+    document.getElementById('nodes-view')?.classList.toggle('hidden', view !== 'nodes');
+    document.getElementById('node-detail-view')?.classList.toggle('hidden', view !== 'node-detail');
+    
+    document.querySelectorAll('.nav-item').forEach(el => {
+        const isActive = el.dataset.view === view;
+        if (isActive) {
+            el.classList.remove('text-gray-500', 'border-transparent');
+            el.classList.add('text-neon-cyan', 'border-neon-cyan');
+        } else {
+            el.classList.add('text-gray-500', 'border-transparent');
+            el.classList.remove('text-neon-cyan', 'border-neon-cyan');
+        }
+    });
+    
+    if (view === 'nodes') loadNodes();
+}
+
+async function addNode() {
+    const input = document.getElementById('new-node-name');
+    const name = input?.value?.trim();
+    if (!name) return;
+    
+    try {
+        const resp = await fetch('/api/nodes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (resp.ok) {
+            input.value = '';
+            loadNodes();
+        }
+    } catch (e) {
+        console.error('[FanControl] Failed to add node:', e);
+    }
+}
+
+async function deleteNode(nodeId) {
+    if (!confirm(t('nodes.confirm_delete', 'Delete this node?'))) return;
+    try {
+        await fetch(`/api/nodes/${nodeId}`, { method: 'DELETE' });
+        if (selectedNodeId === nodeId) {
+            selectedNodeId = null;
+            showView('nodes');
+        }
+        loadNodes();
+    } catch (e) {
+        console.error('[FanControl] Failed to delete node:', e);
+    }
+}
+
+socket.on('node:update', (data) => {
+    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
+    if (idx >= 0) {
+        nodesData[idx].status = data.status;
+        nodesData[idx].name = data.name || nodesData[idx].name;
+        if (data.ip) nodesData[idx].ip = data.ip;
+        if (data.control_mode) nodesData[idx].control_mode = data.control_mode;
+    }
+    renderNodeSidebar();
+    renderNodesOverview();
+});
+
+socket.on('node:telemetry', (data) => {
+    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
+    if (idx >= 0) {
+        nodesData[idx].telemetry = data.telemetry;
+    }
+    renderNodeSidebar();
+    renderNodesOverview();
+    if (selectedNodeId === data.node_id && currentView === 'node-detail') {
+        loadNodeDetail(data.node_id);
+    }
+});
+
+socket.on('node:conflict', (data) => {
+    console.warn('[FanControl] Node conflict:', data);
+    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
+    if (idx >= 0) {
+        nodesData[idx].control_mode = 'manual';
+    }
+    renderNodeSidebar();
+});
+
+socket.on('node:mode_changed', (data) => {
+    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
+    if (idx >= 0) {
+        nodesData[idx].control_mode = data.mode;
+    }
+    renderNodeSidebar();
+    renderNodesOverview();
 });
 
 console.log('[FanControl] main.js loaded successfully');

@@ -180,5 +180,20 @@
   "days.sun": "Sun",
 
   "sensors.disks": "Disks",
-  "sensors.sensors_group": "Sensors"
+  "sensors.sensors_group": "Sensors",
+
+  "nav.dashboard": "Dashboard",
+  "nav.nodes": "Nodes",
+  "nodes.title": "Nodes",
+  "nodes.name_placeholder": "Node name",
+  "nodes.no_nodes": "No nodes connected",
+  "nodes.add": "Add Node",
+  "nodes.delete": "Delete",
+  "nodes.back": "Back",
+  "nodes.max_temp": "Max Temp",
+  "nodes.total_rpm": "Total RPM",
+  "nodes.fans": "Fans",
+  "nodes.confirm_delete": "Delete this node?",
+  "node.temperatures": "Temperatures",
+  "node.manual_mode": "Manual Mode"
 }

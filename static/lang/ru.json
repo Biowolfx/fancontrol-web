@@ -180,5 +180,20 @@
   "days.sun": "Вс",
 
   "sensors.disks": "Диски",
-  "sensors.sensors_group": "Датчики"
+  "sensors.sensors_group": "Датчики",
+
+  "nav.dashboard": "Панель",
+  "nav.nodes": "Узлы",
+  "nodes.title": "Узлы",
+  "nodes.name_placeholder": "Имя узла",
+  "nodes.no_nodes": "Нет подключённых узлов",
+  "nodes.add": "Добавить узел",
+  "nodes.delete": "Удалить",
+  "nodes.back": "Назад",
+  "nodes.max_temp": "Макс. темп.",
+  "nodes.total_rpm": "Общий RPM",
+  "nodes.fans": "Вентиляторы",
+  "nodes.confirm_delete": "Удалить этот узел?",
+  "node.temperatures": "Температуры",
+  "node.manual_mode": "Ручной режим"
 }
