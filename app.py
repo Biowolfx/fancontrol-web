@@ -143,6 +143,8 @@ def _auto_init():
         state['_gunicorn_initialized'] = True
         try:
             init_database()
+            from server.node_registry import init_nodes_table
+            init_nodes_table()
         except Exception as e:
             logger.error(f'Database init error: {e}')
         init_hardware()

@@ -18,3 +18,6 @@ def register_handlers(socketio):
     def handle_get_state():
         """Handle state request from client"""
         socketio.emit('update', get_state())
+
+    from server.agent_handlers import register_agent_handlers
+    register_agent_handlers(socketio)
