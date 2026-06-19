@@ -360,8 +360,7 @@ def api_update_check():
         else:
             remote_version = remote_hash
 
-        has_update = (current_version != remote_version and remote_version != '') or \
-                     (current_hash != remote_hash and current_hash != '' and not remote_version)
+        has_update = remote_version and current_version and remote_version != current_version
 
         return jsonify({
             'status': 'ok',

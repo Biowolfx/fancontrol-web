@@ -134,6 +134,13 @@
   "settings.update_applied": "Обновление применено!",
   "settings.restarting": "Контейнер перезапускается...",
   "settings.rebuilding": "Зависимости изменились, пересборка образа...",
+  "settings.update_modal_title": "Обновление системы",
+  "settings.step_pull": "Загрузка последних изменений...",
+  "settings.step_deps": "Проверка зависимостей...",
+  "settings.step_deps_ok": "Зависимости не изменились",
+  "settings.step_restart": "Перезапуск контейнера...",
+  "settings.update_success": "Обновление завершено!",
+  "settings.restart_notice": "Контейнер перезапускается. Страница обновится через 10 секунд...",
   "settings.update_host_hint": "Выполните на хосте для применения:",
 
   "common.edit": "Изм.",

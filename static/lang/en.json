@@ -134,6 +134,13 @@
   "settings.update_applied": "Update applied!",
   "settings.restarting": "Container is restarting...",
   "settings.rebuilding": "Dependencies changed, rebuilding image...",
+  "settings.update_modal_title": "System Update",
+  "settings.step_pull": "Pulling latest code...",
+  "settings.step_deps": "Checking dependencies...",
+  "settings.step_deps_ok": "Dependencies unchanged",
+  "settings.step_restart": "Restarting container...",
+  "settings.update_success": "Update complete!",
+  "settings.restart_notice": "Container is restarting. Page will reload in 10 seconds...",
   "settings.update_host_hint": "Run on host to apply update:",
 
   "common.edit": "Edit",

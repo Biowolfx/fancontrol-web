@@ -1766,6 +1766,11 @@ async function checkForUpdates() {
                 applyBtn.disabled = false;
                 applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
             }
+            if (applyBtn) {
+                applyBtn.classList.remove('hidden');
+                applyBtn.disabled = false;
+                applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
+            }
         } else {
             if (badge) badge.classList.add('hidden');
             if (result) {
@@ -1792,40 +1797,138 @@ async function checkForUpdates() {
 
 let _updateChecked = false;
 
-async function applyUpdate() {
-    const applyBtn = document.getElementById('update-apply-btn');
-    const result = document.getElementById('update-result');
+function openUpdateModal() {
+    const modal = document.getElementById('update-modal');
+    const steps = document.getElementById('update-modal-steps');
+    const progress = document.getElementById('update-modal-progress');
+    const result = document.getElementById('update-modal-result');
+    const applyBtn = document.getElementById('update-modal-apply');
+    const closeBtn = document.getElementById('update-modal-close');
     
-    if (!confirm(t('settings.update_confirm', 'Update will restart the container. Continue?'))) return;
+    steps.innerHTML = `
+        <div id="upd-step-pull" class="flex items-center gap-3 text-sm">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-pull-icon">1</span>
+            <span class="text-gray-300">${t('settings.step_pull', 'Pulling latest code...')}</span>
+        </div>
+        <div id="upd-step-deps" class="flex items-center gap-3 text-sm opacity-40">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-deps-icon">2</span>
+            <span class="text-gray-300">${t('settings.step_deps', 'Checking dependencies...')}</span>
+        </div>
+        <div id="upd-step-restart" class="flex items-center gap-3 text-sm opacity-40">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-restart-icon">3</span>
+            <span class="text-gray-300">${t('settings.step_restart', 'Restarting container...')}</span>
+        </div>
+    `;
     
-    applyBtn.disabled = true;
-    applyBtn.querySelector('span').textContent = t('settings.updating', 'Updating...');
+    progress.classList.add('hidden');
+    result.classList.add('hidden');
+    applyBtn.disabled = false;
+    applyBtn.classList.remove('hidden');
+    closeBtn.classList.remove('hidden');
+    
+    modal.classList.remove('hidden');
+}
+
+function closeUpdateModal() {
+    document.getElementById('update-modal').classList.add('hidden');
+}
+
+function setStepState(step, state) {
+    const el = document.getElementById(`upd-step-${step}`);
+    const icon = document.getElementById(`upd-step-${step}-icon`);
+    if (!el || !icon) return;
+    
+    el.classList.remove('opacity-40');
+    
+    if (state === 'active') {
+        icon.className = 'w-5 h-5 rounded-full border-2 border-neon-cyan flex-shrink-0 flex items-center justify-center text-[10px] text-neon-cyan animate-pulse';
+        icon.innerHTML = '⟳';
+    } else if (state === 'done') {
+        icon.className = 'w-5 h-5 rounded-full bg-neon-green flex-shrink-0 flex items-center justify-center text-[10px] text-black';
+        icon.innerHTML = '✓';
+    } else if (state === 'error') {
+        icon.className = 'w-5 h-5 rounded-full bg-neon-red flex-shrink-0 flex items-center justify-center text-[10px] text-white';
+        icon.innerHTML = '✕';
+    }
+}
+
+async function startUpdate() {
+    const applyBtn = document.getElementById('update-modal-apply');
+    const progress = document.getElementById('update-modal-progress');
+    const bar = document.getElementById('update-modal-bar');
+    const result = document.getElementById('update-modal-result');
+    const closeBtn = document.getElementById('update-modal-close');
+    
+    applyBtn.classList.add('hidden');
+    closeBtn.classList.add('hidden');
+    progress.classList.remove('hidden');
+    bar.style.width = '10%';
+    
+    // Step 1: Git pull
+    setStepState('pull', 'active');
+    bar.style.width = '20%';
     
     try {
         const resp = await fetch('/api/update/apply', { method: 'POST' });
         const data = await resp.json();
         
-        if (data.status === 'ok') {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
-            let msg = `<div class="font-semibold">${t('settings.update_applied', 'Update applied!')}</div>`;
-            if (data.deps_changed) {
-                msg += `<div class="text-neon-orange mt-1">${t('settings.rebuilding', 'Dependencies changed, rebuilding image...')}</div>`;
-            }
-            msg += `<div class="text-gray-400 mt-1">${t('settings.restarting', 'Container is restarting...')}</div>`;
-            result.innerHTML = msg;
-            applyBtn.classList.add('hidden');
-            setTimeout(() => { window.location.reload(); }, data.deps_changed ? 30000 : 8000);
-        } else {
-            result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+        if (data.status === 'error') {
+            setStepState('pull', 'error');
+            bar.style.width = '100%';
+            bar.className = 'bg-neon-red h-2 rounded-full transition-all duration-500';
+            result.classList.remove('hidden');
+            result.className = 'text-sm mb-4 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
             result.textContent = data.message || t('settings.update_failed', 'Update failed');
+            applyBtn.classList.remove('hidden');
             applyBtn.disabled = false;
-            applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Update & Restart');
+            closeBtn.classList.remove('hidden');
+            return;
         }
+        
+        // Step 1 done
+        setStepState('pull', 'done');
+        bar.style.width = '50%';
+        
+        // Step 2: Check deps
+        setStepState('deps', 'active');
+        bar.style.width = '60%';
+        
+        if (data.deps_changed) {
+            setStepState('deps', 'done');
+        } else {
+            setStepState('deps', 'done');
+            document.getElementById('upd-step-deps').querySelector('span:last-child').textContent = t('settings.step_deps_ok', 'Dependencies unchanged');
+        }
+        bar.style.width = '80%';
+        
+        // Step 3: Restart
+        setStepState('restart', 'active');
+        bar.style.width = '90%';
+        
+        // Show restart notification
+        result.classList.remove('hidden');
+        result.className = 'text-sm mb-4 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
+        result.innerHTML = `
+            <div class="font-semibold mb-1">${t('settings.update_success', 'Update complete!')}</div>
+            <div class="text-gray-400">${t('settings.restart_notice', 'Container is restarting. Page will reload in 10 seconds...')}</div>
+        `;
+        
+        bar.style.width = '100%';
+        setStepState('restart', 'done');
+        
+        // Reload after delay
+        setTimeout(() => { window.location.reload(); }, 10000);
+        
     } catch (e) {
-        result.className = 'text-xs mt-2 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
+        setStepState('pull', 'error');
+        bar.style.width = '100%';
+        bar.className = 'bg-neon-red h-2 rounded-full transition-all duration-500';
+        result.classList.remove('hidden');
+        result.className = 'text-sm mb-4 p-3 rounded-lg bg-red-900 bg-opacity-30 border border-red-700 text-neon-red';
         result.textContent = t('settings.update_error', 'Failed to apply update');
+        applyBtn.classList.remove('hidden');
         applyBtn.disabled = false;
-        applyBtn.querySelector('span').textContent = t('settings.apply_update', 'Update & Restart');
+        closeBtn.classList.remove('hidden');
     }
 }
 async function autoCheckUpdate() {
