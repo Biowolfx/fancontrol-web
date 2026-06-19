@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.3.7"
+CONFIG_VERSION = "3.3.8"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
@@ -389,7 +389,7 @@ def api_update_check():
         # Try to extract version from commit message (e.g. "v3.3.3" or "3.3.3")
         m_ver = re.search(r'[vV]?(\d+\.\d+\.\d+)', commit_msg)
         if m_ver:
-            remote_version = 'v' + m_ver.group(1)
+            remote_version = m_ver.group(1)
         
         # Determine if update is available
         # If remote version extracted from commit message → compare versions
