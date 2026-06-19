@@ -560,3 +560,11 @@ def api_set_node_mode(node_id):
         'mode': mode,
     }, room=node_id)
     return jsonify({'mode': mode})
+
+
+@routes.route('/api/nodes/discover')
+def api_discover_nodes():
+    """Scan LAN for agents via SSDP."""
+    from server.discovery import scan_for_agents
+    nodes = scan_for_agents(timeout=5)
+    return jsonify(nodes)
