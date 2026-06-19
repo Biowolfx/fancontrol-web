@@ -1,12 +1,301 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FanControl Web Installer</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FanControl Web - Setup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a1a; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .step-dot { transition: all 0.3s ease; }
+  .step-dot.active { background: #06b6d4; box-shadow: 0 0 12px #06b6d4; }
+  .step-dot.done { background: #10b981; }
+  .card-hover:hover { border-color: #06b6d4; box-shadow: 0 0 20px rgba(6,182,212,0.15); }
+  .card-selected { border-color: #06b6d4 !important; background: rgba(6,182,212,0.08) !important; box-shadow: 0 0 20px rgba(6,182,212,0.2); }
+  .glow-text { text-shadow: 0 0 20px rgba(6,182,212,0.5); }
+  .progress-bar { transition: width 0.5s ease; }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  input:focus { outline: none; border-color: #06b6d4; box-shadow: 0 0 8px rgba(6,182,212,0.3); }
+</style>
 </head>
-<body>
-    <h1>FanControl Web Installer</h1>
-    <p>Template placeholder - Task 2 will create the full UI</p>
+<body class="min-h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-lg">
+
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-bold text-cyan-400 glow-text">FanControl Web</h1>
+    <p id="subtitle" class="text-gray-400 mt-2">Setup Wizard</p>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="flex justify-center gap-3 mb-8">
+    <div class="step-dot w-3 h-3 rounded-full bg-gray-600 active" data-step="1"></div>
+    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="2"></div>
+    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="3"></div>
+    <div class="step-dot w-3 h-3 rounded-full bg-gray-600" data-step="4"></div>
+  </div>
+
+  <!-- Step 1: Language -->
+  <div id="step1" class="fade-in">
+    <h2 id="lang_title" class="text-xl font-semibold text-white text-center mb-6">Select Language</h2>
+    <div class="flex justify-center gap-4">
+      <button onclick="selectLang('en')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+        <div class="text-3xl mb-2">🇬🇧</div>
+        <div class="text-white font-medium">English</div>
+      </button>
+      <button onclick="selectLang('ru')" class="card-hover w-40 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+        <div class="text-3xl mb-2">🇷🇺</div>
+        <div class="text-white font-medium">Русский</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Component -->
+  <div id="step2" class="hidden fade-in">
+    <h2 id="comp_title" class="text-xl font-semibold text-white text-center mb-6"></h2>
+    <div class="flex justify-center gap-4">
+      <button onclick="selectMode('server')" id="btn_server" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+        <div class="text-3xl mb-2">🖥️</div>
+        <div id="lbl_server" class="text-white font-medium"></div>
+        <div id="lbl_server_desc" class="text-gray-400 text-sm mt-1"></div>
+      </button>
+      <button onclick="selectMode('agent')" id="btn_agent" class="card-hover w-44 p-6 rounded-xl border border-gray-700 bg-gray-800/50 text-center transition-all cursor-pointer">
+        <div class="text-3xl mb-2">🔗</div>
+        <div id="lbl_agent" class="text-white font-medium"></div>
+        <div id="lbl_agent_desc" class="text-gray-400 text-sm mt-1"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 3: Configuration -->
+  <div id="step3" class="hidden fade-in">
+    <h2 id="config_title" class="text-xl font-semibold text-white text-center mb-6"></h2>
+    <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-6 space-y-4">
+      <!-- Server fields -->
+      <div id="fields_server">
+        <div>
+          <label id="lbl_port" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_port" type="number" value="5059" min="1" max="65535"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+        </div>
+        <div class="mt-4">
+          <label id="lbl_data_dir" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_data_dir" type="text" value="./data"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+        </div>
+      </div>
+      <!-- Agent fields -->
+      <div id="fields_agent" class="hidden">
+        <div>
+          <label id="lbl_server_url" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_server_url" type="url" placeholder="http://server:5059"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+        </div>
+        <div class="mt-4">
+          <label id="lbl_api_token" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_api_token" type="password" placeholder=""
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+        </div>
+        <div class="mt-4">
+          <label id="lbl_node_name" class="block text-gray-300 text-sm mb-1"></label>
+          <input id="input_node_name" type="text" placeholder="node-1"
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+        </div>
+      </div>
+      <div id="config_error" class="hidden text-red-400 text-sm mt-2"></div>
+      <button onclick="startInstall()" id="install_btn"
+              class="w-full mt-4 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-lg transition-colors">
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 4: Progress -->
+  <div id="step4" class="hidden fade-in">
+    <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-6">
+      <div class="flex justify-between text-sm text-gray-400 mb-2">
+        <span id="progress_label"></span>
+        <span id="progress_pct">0%</span>
+      </div>
+      <div class="w-full bg-gray-700 rounded-full h-3 mb-4">
+        <div id="progress_bar" class="progress-bar bg-cyan-500 h-3 rounded-full" style="width: 0%"></div>
+      </div>
+      <p id="progress_msg" class="text-gray-300 text-sm text-center"></p>
+      <div id="complete_section" class="hidden text-center mt-6">
+        <div class="text-emerald-400 text-xl font-semibold mb-4" id="complete_text"></div>
+        <a id="dashboard_link" href="/" target="_blank"
+           class="inline-block bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-8 py-3 rounded-lg transition-colors">
+        </a>
+      </div>
+      <div id="error_section" class="hidden text-center mt-6">
+        <p id="error_text" class="text-red-400 text-sm"></p>
+        <button onclick="location.reload()" class="mt-4 bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg transition-colors text-sm">
+          Retry
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const translations = {
+  en: {
+    component_title: 'Select Component',
+    server: 'Server',
+    server_desc: 'Central dashboard + control',
+    agent: 'Agent',
+    agent_desc: 'Connect to server',
+    config_title: 'Configuration',
+    port: 'Port',
+    data_dir: 'Data Directory',
+    server_url: 'Server URL',
+    api_token: 'API Token',
+    node_name: 'Node Name',
+    install_btn: 'Install',
+    installing: 'Installing...',
+    complete: 'Installation Complete!',
+    open_dashboard: 'Open Dashboard',
+  },
+  ru: {
+    component_title: 'Выберите компонент',
+    server: 'Сервер',
+    server_desc: 'Центральная панель управления',
+    agent: 'Агент',
+    agent_desc: 'Подключение к серверу',
+    config_title: 'Конфигурация',
+    port: 'Порт',
+    data_dir: 'Директория данных',
+    server_url: 'URL сервера',
+    api_token: 'API токен',
+    node_name: 'Имя узла',
+    install_btn: 'Установить',
+    installing: 'Установка...',
+    complete: 'Установка завершена!',
+    open_dashboard: 'Открыть панель',
+  }
+};
+
+let lang = 'en';
+let mode = null;
+let pollInterval = null;
+
+function t(key) { return translations[lang][key] || key; }
+
+function updateTexts() {
+  document.getElementById('comp_title').textContent = t('component_title');
+  document.getElementById('lbl_server').textContent = t('server');
+  document.getElementById('lbl_server_desc').textContent = t('server_desc');
+  document.getElementById('lbl_agent').textContent = t('agent');
+  document.getElementById('lbl_agent_desc').textContent = t('agent_desc');
+  document.getElementById('config_title').textContent = t('config_title');
+  document.getElementById('lbl_port').textContent = t('port');
+  document.getElementById('lbl_data_dir').textContent = t('data_dir');
+  document.getElementById('lbl_server_url').textContent = t('server_url');
+  document.getElementById('lbl_api_token').textContent = t('api_token');
+  document.getElementById('lbl_node_name').textContent = t('node_name');
+  document.getElementById('install_btn').textContent = t('install_btn');
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('step' + i).classList.toggle('hidden', i !== n);
+    document.getElementById('step' + i).classList.toggle('fade-in', i === n);
+    const dot = document.querySelector(`.step-dot[data-step="${i}"]`);
+    dot.classList.remove('active', 'done');
+    if (i < n) dot.classList.add('done');
+    else if (i === n) dot.classList.add('active');
+  }
+}
+
+function selectLang(l) {
+  lang = l;
+  updateTexts();
+  setStep(2);
+}
+
+function selectMode(m) {
+  mode = m;
+  document.getElementById('btn_server').classList.toggle('card-selected', m === 'server');
+  document.getElementById('btn_agent').classList.toggle('card-selected', m === 'agent');
+  document.getElementById('fields_server').classList.toggle('hidden', m !== 'server');
+  document.getElementById('fields_agent').classList.toggle('hidden', m !== 'agent');
+  setStep(3);
+}
+
+function startInstall() {
+  const errEl = document.getElementById('config_error');
+  errEl.classList.add('hidden');
+
+  if (mode === 'agent') {
+    const url = document.getElementById('input_server_url').value.trim();
+    const token = document.getElementById('input_api_token').value.trim();
+    const name = document.getElementById('input_node_name').value.trim();
+    if (!url || !token || !name) {
+      errEl.textContent = lang === 'ru' ? 'Заполните все поля' : 'All fields are required';
+      errEl.classList.remove('hidden');
+      return;
+    }
+  }
+
+  const config = { mode, lang };
+  if (mode === 'server') {
+    config.port = parseInt(document.getElementById('input_port').value) || 5059;
+    config.data_dir = document.getElementById('input_data_dir').value.trim() || './data';
+  } else {
+    config.server_url = document.getElementById('input_server_url').value.trim();
+    config.api_token = document.getElementById('input_api_token').value.trim();
+    config.node_name = document.getElementById('input_node_name').value.trim();
+  }
+
+  fetch('/api/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) {
+      errEl.textContent = data.error;
+      errEl.classList.remove('hidden');
+      return;
+    }
+    setStep(4);
+    document.getElementById('install_btn').textContent = t('installing');
+    document.getElementById('install_btn').disabled = true;
+    pollInterval = setInterval(pollStatus, 1000);
+    pollStatus();
+  })
+  .catch(err => {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  });
+}
+
+function pollStatus() {
+  fetch('/api/status')
+    .then(r => r.json())
+    .then(s => {
+      document.getElementById('progress_bar').style.width = s.progress + '%';
+      document.getElementById('progress_pct').textContent = s.progress + '%';
+      document.getElementById('progress_label').textContent = s.stage;
+      document.getElementById('progress_msg').textContent = s.message;
+
+      if (s.complete) {
+        clearInterval(pollInterval);
+        if (s.error) {
+          document.getElementById('error_section').classList.remove('hidden');
+          document.getElementById('error_text').textContent = s.message;
+        } else {
+          document.getElementById('complete_section').classList.remove('hidden');
+          document.getElementById('complete_text').textContent = t('complete');
+          document.getElementById('dashboard_link').textContent = t('open_dashboard');
+        }
+      }
+    });
+}
+
+updateTexts();
+</script>
 </body>
 </html>
