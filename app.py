@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.3.4"
+CONFIG_VERSION = "3.3.5"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
@@ -421,32 +421,30 @@ def api_update_apply():
 
         deps_changed = old_req != new_req
 
-        # Rebuild image if dependencies changed
-        rebuild_output = ''
-        if deps_changed:
-            logger.info('Dependencies changed, rebuilding Docker image...')
-            # Get the git hash from freshly pulled code
-            hash_result = subprocess.run(
-                ['git', '-C', repo_dir, 'rev-parse', '--short', 'HEAD'],
-                capture_output=True, text=True, timeout=10
-            )
-            new_hash = hash_result.stdout.strip() or os.getenv('FANCONTROL_GIT_HASH', 'unknown')
+        # Get the git hash from freshly pulled code
+        hash_result = subprocess.run(
+            ['git', '-C', repo_dir, 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, timeout=10
+        )
+        new_hash = hash_result.stdout.strip() or os.getenv('FANCONTROL_GIT_HASH', 'unknown')
 
-            rebuild = subprocess.run(
-                ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
-                 'build', '--build-arg', f'GIT_HASH={new_hash}'],
-                capture_output=True, text=True, timeout=300,
-                cwd=repo_dir
-            )
-            rebuild_output = (rebuild.stdout + rebuild.stderr)[-500:]
-            logger.info(f'Docker build: {rebuild_output}')
-            if rebuild.returncode != 0:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Docker build failed:\n{rebuild_output}'
-                }), 500
+        # Always rebuild image with new code (code is baked into image via COPY)
+        logger.info('Rebuilding Docker image with updated code...')
+        rebuild = subprocess.run(
+            ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
+             'build', '--build-arg', f'GIT_HASH={new_hash}'],
+            capture_output=True, text=True, timeout=300,
+            cwd=repo_dir
+        )
+        rebuild_output = (rebuild.stdout + rebuild.stderr)[-500:]
+        logger.info(f'Docker build: {rebuild_output}')
+        if rebuild.returncode != 0:
+            return jsonify({
+                'status': 'error',
+                'message': f'Docker build failed:\n{rebuild_output}'
+            }), 500
 
-        # Restart container (not recreate - that would kill this process mid-flight)
+        # Restart container with new image
         container_name = os.getenv('HOSTNAME', 'fancontrol-web')
         restart = subprocess.run(
             ['docker', 'restart', container_name],
@@ -458,7 +456,7 @@ def api_update_apply():
             'status': 'ok',
             'already_up_to_date': already_up,
             'deps_changed': deps_changed,
-            'rebuild_output': rebuild_output if rebuild_output else '',
+            'rebuild_output': rebuild_output,
             'message': pull_output.strip()
         })
 
