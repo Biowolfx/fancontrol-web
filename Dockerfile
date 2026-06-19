@@ -47,4 +47,4 @@ RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 5059
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:5059", "app:app"]
+CMD ["python3", "app.py"]
