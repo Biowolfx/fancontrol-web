@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.3.9"
+CONFIG_VERSION = "3.3.10"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
@@ -1964,6 +1964,10 @@ def _auto_init():
             logger.error(f'Database init error: {e}')
         init_hardware()
         _ensure_control_loop()
+        # Invalidate cached state and push correct state to all connected clients
+        global _cached_state
+        _cached_state = None
+        socketio.emit('update', get_state())
 
 
 if __name__ == '__main__':

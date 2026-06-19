@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.3.9 - Neon Cyberpunk Edition
+ * FanControl Web v3.3.10 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -269,6 +269,11 @@ function updateUI(data) {
 function showSetupScreen() {
     document.getElementById('setup-screen').classList.remove('hidden');
     document.getElementById('main-screen').classList.add('hidden');
+    // Close settings panel if open
+    const overlay = document.getElementById('settings-overlay');
+    const panel = document.getElementById('settings-panel');
+    if (overlay) overlay.classList.add('hidden');
+    if (panel) panel.classList.add('hidden');
 }
 
 function showMainScreen() {
