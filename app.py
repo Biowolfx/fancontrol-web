@@ -150,15 +150,35 @@ def _auto_init():
         socketio.emit('update', get_state())
 
 
-if __name__ == '__main__':
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='FanControl Web')
+    parser.add_argument('--mode', choices=['server', 'agent'],
+                       default=os.environ.get('MODE', 'server'),
+                       help='Run mode: server (default) or agent')
+    args = parser.parse_args()
+
     logger.info('=' * 60)
     logger.info(f'STARTING FanControl Web {CONFIG_VERSION} - Neon Cyberpunk Edition')
+    logger.info(f'Mode: {args.mode}')
     logger.info('=' * 60)
-    
-    init_database()
-    init_hardware()
-    _init_complete.set()
-    _ensure_control_loop()
-    
+
+    if args.mode == 'agent':
+        from agent.client import start_client
+        init_database()
+        init_hardware()
+        _init_complete.set()
+        _ensure_control_loop()
+        start_client()
+    else:
+        init_database()
+        init_hardware()
+        _init_complete.set()
+        _ensure_control_loop()
+
     logger.info('Starting server on port 5059')
     socketio.run(app, host='0.0.0.0', port=5059)
+
+
+if __name__ == '__main__':
+    main()
