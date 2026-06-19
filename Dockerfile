@@ -25,5 +25,22 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+
+# Entrypoint: on updates, copy fresh code from /repo volume into /app
+COPY <<'ENTRYPOINT' /app/entrypoint.sh
+#!/bin/bash
+set -e
+if [ -d "/repo" ] && [ -f "/repo/app.py" ]; then
+    echo "[entrypoint] Syncing code from /repo to /app"
+    rm -f /app/*.py /app/*.txt
+    rm -rf /app/templates /app/static
+    cp -a /repo/*.py /repo/*.txt /repo/Dockerfile /repo/docker-compose.yml /app/ 2>/dev/null || true
+    cp -a /repo/templates /repo/static /app/ 2>/dev/null || true
+fi
+exec "$@"
+ENTRYPOINT
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 5059
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["gunicorn", "-k", "eventlet", "-w", "1", "--bind", "0.0.0.0:5059", "app:app"]

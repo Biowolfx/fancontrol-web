@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.3.10 - Neon Cyberpunk Edition
+ * FanControl Web v3.4.0 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -1815,12 +1815,8 @@ function openUpdateModal() {
             <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-pull-icon">1</span>
             <span class="text-gray-300">${t('settings.step_pull', 'Pulling latest code...')}</span>
         </div>
-        <div id="upd-step-deps" class="flex items-center gap-3 text-sm opacity-40">
-            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-deps-icon">2</span>
-            <span class="text-gray-300">${t('settings.step_deps', 'Checking dependencies...')}</span>
-        </div>
         <div id="upd-step-restart" class="flex items-center gap-3 text-sm opacity-40">
-            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-restart-icon">3</span>
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-restart-icon">2</span>
             <span class="text-gray-300">${t('settings.step_restart', 'Restarting container...')}</span>
         </div>
     `;
@@ -1894,21 +1890,9 @@ async function startUpdate() {
         setStepState('pull', 'done');
         bar.style.width = '50%';
         
-        // Step 2: Check deps
-        setStepState('deps', 'active');
-        bar.style.width = '60%';
-        
-        if (data.deps_changed) {
-            setStepState('deps', 'done');
-        } else {
-            setStepState('deps', 'done');
-            document.getElementById('upd-step-deps').querySelector('span:last-child').textContent = t('settings.step_deps_ok', 'Dependencies unchanged');
-        }
-        bar.style.width = '80%';
-        
-        // Step 3: Restart
+        // Step 2: Restart (entrypoint syncs code from /repo)
         setStepState('restart', 'active');
-        bar.style.width = '90%';
+        bar.style.width = '80%';
         
         // Show restart notification
         result.classList.remove('hidden');
