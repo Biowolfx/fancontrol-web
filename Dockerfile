@@ -26,6 +26,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+COPY installer/ /app/installer/
+
+ENV MODE=setup
+
 # Entrypoint: on updates, copy fresh code from /repo volume into /app
 COPY <<'ENTRYPOINT' /app/entrypoint.sh
 #!/bin/bash
