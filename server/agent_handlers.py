@@ -1,5 +1,6 @@
 """Socket.IO event handlers for agent (node) connections."""
 
+import json
 import logging
 import threading
 import time
@@ -11,6 +12,7 @@ from server.node_registry import (
     update_node_config,
     update_node_control_mode,
     get_node,
+    save_agent_snapshot,
 )
 
 logger = logging.getLogger('fancontrol')
@@ -45,7 +47,7 @@ def register_agent_handlers(socketio):
         node_name = data.get('node_name')
         api_token = data.get('api_token')
         control_mode = data.get('control_mode', 'server')
-        config = data.get('config', {})
+        agent_config = data.get('config', {})
 
         if not api_token:
             logger.warning('agent:connect rejected — no api_token')
@@ -57,7 +59,7 @@ def register_agent_handlers(socketio):
             return {'status': 'error', 'message': 'Invalid token'}
 
         node_id = node['node_id']
-        update_node_status(node_id, 'online', config)
+        update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
 
         with state_lock:
@@ -66,9 +68,28 @@ def register_agent_handlers(socketio):
                 'name': node['name'],
                 'status': 'online',
                 'control_mode': control_mode,
-                'config': config,
+                'config': agent_config,
             }
         invalidate_state_cache()
+
+        # Push server config to agent if in server mode
+        server_config = node.get('config', {})
+        if server_config and control_mode == 'server':
+            socketio.emit('server:config_push', {
+                'config': server_config,
+            })
+            logger.info(f'Pushed config to {node["name"]}')
+
+            # Check for conflict on reconnect
+            if agent_config and server_config != agent_config:
+                save_agent_snapshot(node_id, agent_config)
+                socketio.emit('node:conflict', {
+                    'node_id': node_id,
+                    'name': node['name'],
+                    'server_config': server_config,
+                    'agent_config': agent_config,
+                })
+                logger.info(f'Config conflict on reconnect for {node["name"]}')
 
         socketio.emit('update', {'nodes': dict(state['nodes'])})
         logger.info(f'Agent connected: {node_id} ({node["name"]})')
@@ -96,20 +117,47 @@ def register_agent_handlers(socketio):
     @socketio.on('agent:config_changed')
     def handle_agent_config_changed(data):
         node_id = data.get('node_id')
-        config = data.get('config', {})
+        agent_config = data.get('config', {})
 
         if not node_id or node_id not in state.get('nodes', {}):
             logger.warning(f'agent:config_changed from unknown node: {node_id}')
             return
 
-        update_node_config(node_id, config)
+        # Get server's authoritative config for this node
+        node = get_node(node_id)
+        server_config = node.get('config', {}) if node else {}
 
-        with state_lock:
-            if node_id in state['nodes']:
-                state['nodes'][node_id]['config'] = config
-        invalidate_state_cache()
+        # Check for conflict: agent config differs from server config
+        if server_config and agent_config and server_config != agent_config:
+            # Save agent's config as snapshot for revert
+            save_agent_snapshot(node_id, agent_config)
 
-        socketio.emit('node_config_changed', {'node_id': node_id, 'config': config})
+            # Update node config with agent's changes
+            update_node_config(node_id, agent_config)
+
+            with state_lock:
+                if node_id in state['nodes']:
+                    state['nodes'][node_id]['config'] = agent_config
+            invalidate_state_cache()
+
+            # Notify browsers of conflict
+            socketio.emit('node:conflict', {
+                'node_id': node_id,
+                'name': state['nodes'].get(node_id, {}).get('name', node_id),
+                'server_config': server_config,
+                'agent_config': agent_config,
+            })
+            logger.info(f'Config conflict detected for {node_id}')
+        else:
+            # No conflict — just update
+            update_node_config(node_id, agent_config)
+
+            with state_lock:
+                if node_id in state['nodes']:
+                    state['nodes'][node_id]['config'] = agent_config
+            invalidate_state_cache()
+
+        socketio.emit('node_config_changed', {'node_id': node_id, 'config': agent_config})
         logger.info(f'Agent config updated: {node_id}')
 
     @socketio.on('agent:control_mode_changed')
