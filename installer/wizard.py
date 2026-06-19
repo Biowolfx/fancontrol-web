@@ -39,7 +39,7 @@ def save_config():
         if not config.get('node_name'):
             return jsonify({'error': 'Node name required'}), 400
 
-    config['initialized'] = True
+    config['initialized'] = False
 
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, 'w') as f:
@@ -61,7 +61,7 @@ def install():
         if not config.get('node_name'):
             return jsonify({'error': 'Node name required'}), 400
 
-    config['initialized'] = True
+    config['initialized'] = False
 
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_PATH, 'w') as f:
