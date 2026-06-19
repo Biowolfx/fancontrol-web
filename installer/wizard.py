@@ -2,8 +2,9 @@
 
 import json
 import os
-import subprocess
+import socket
 import threading
+import time
 import urllib.parse
 from pathlib import Path
 from flask import Flask, jsonify, request, render_template
@@ -28,7 +29,6 @@ def index():
 
 @app.route('/api/config', methods=['POST'])
 def save_config():
-    """Save configuration and restart container."""
     config = request.get_json()
 
     if config.get('mode') == 'agent':
@@ -50,7 +50,6 @@ def save_config():
 
 @app.route('/api/install', methods=['POST'])
 def install():
-    """Save config and restart container — matches frontend expectations."""
     global _install_status
     config = request.get_json()
 
@@ -69,71 +68,36 @@ def install():
         json.dump(config, f, indent=2)
 
     _install_status = {
-        'progress': 10,
-        'stage': 'Config saved',
-        'message': 'Configuration saved to ' + str(CONFIG_PATH),
-        'complete': False,
+        'progress': 100,
+        'stage': 'Complete',
+        'message': 'Configuration saved. Container will restart shortly.',
+        'complete': True,
         'error': False,
     }
 
-    threading.Thread(target=_do_restart, daemon=True).start()
+    threading.Thread(target=_do_exit, daemon=True).start()
 
     return jsonify({'status': 'installing'})
 
 
-def _do_restart():
-    global _install_status
-    _install_status['progress'] = 30
-    _install_status['stage'] = 'Restarting'
-    _install_status['message'] = 'Saving configuration and restarting...'
-
-    try:
-        hostname = os.environ.get('CONTAINER_NAME', 'fancontrol-web')
-        result = subprocess.run(
-            ['docker', 'restart', hostname],
-            capture_output=True, text=True, timeout=30
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or f'exit code {result.returncode}')
-    except Exception as e:
-        _install_status['progress'] = 50
-        _install_status['stage'] = 'Restarting'
-        _install_status['message'] = f'docker restart failed ({e}), exiting process...'
-        import time
-        time.sleep(2)
-        os._exit(0)
-
-    _install_status['progress'] = 100
-    _install_status['stage'] = 'Complete'
-    _install_status['message'] = 'Container is restarting. Page will refresh shortly.'
-    _install_status['complete'] = True
+def _do_exit():
+    time.sleep(2)
+    os._exit(0)
 
 
 @app.route('/api/status', methods=['GET'])
 def status():
-    """Return install progress — matches frontend polling."""
     return jsonify(_install_status)
 
 
 @app.route('/api/restart', methods=['POST'])
 def restart_container():
-    """Restart the Docker container."""
-    try:
-        hostname = os.environ.get('CONTAINER_NAME', 'fancontrol-web')
-        result = subprocess.run(
-            ['docker', 'restart', hostname],
-            capture_output=True, text=True, timeout=30
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or f'exit code {result.returncode}')
-        return jsonify({'status': 'restarting'})
-    except Exception as e:
-        return jsonify({'error': str(e), 'manual_restart': True}), 500
+    threading.Thread(target=_do_exit, daemon=True).start()
+    return jsonify({'status': 'restarting'})
 
 
 @app.route('/api/validate-token', methods=['POST'])
 def validate_token():
-    """Validate server URL and API token (for agent setup)."""
     data = request.get_json()
     server_url = data.get('server_url', '')
 
@@ -149,7 +113,6 @@ def validate_token():
 
 
 def run_wizard():
-    """Run the setup wizard on port 5059."""
     print('=' * 60)
     print('FanControl Web — Setup Wizard')
     print('Open http://localhost:5059 in your browser')
