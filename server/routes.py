@@ -483,3 +483,80 @@ def validate_control_request(data: Dict):
                     raise BadRequest("Schedule sensor_mode must be 'max', 'min', or 'avg'")
                 if 'sensors' in rule and not isinstance(rule['sensors'], list):
                     raise BadRequest("Schedule sensors must be a list")
+
+
+# ============================================================================
+# NODE MANAGEMENT API
+# ============================================================================
+
+@routes.route('/api/nodes')
+def api_list_nodes():
+    """List all registered nodes."""
+    from server.node_registry import list_nodes
+    return jsonify(list_nodes())
+
+
+@routes.route('/api/nodes', methods=['POST'])
+def api_add_node():
+    """Add a new node."""
+    from server.node_registry import add_node
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    node = add_node(name)
+    return jsonify(node), 201
+
+
+@routes.route('/api/nodes/<node_id>')
+def api_get_node(node_id):
+    """Get node details."""
+    from server.node_registry import get_node
+    node = get_node(node_id)
+    if not node:
+        return jsonify({'error': 'Node not found'}), 404
+    return jsonify(node)
+
+
+@routes.route('/api/nodes/<node_id>', methods=['DELETE'])
+def api_delete_node(node_id):
+    """Delete a node."""
+    from server.node_registry import delete_node
+    if delete_node(node_id):
+        return jsonify({'status': 'deleted'})
+    return jsonify({'error': 'Node not found'}), 404
+
+
+@routes.route('/api/nodes/<node_id>/config', methods=['POST'])
+def api_push_config(node_id):
+    """Push config to agent."""
+    from server.node_registry import get_node, update_node_config
+    node = get_node(node_id)
+    if not node:
+        return jsonify({'error': 'Node not found'}), 404
+    data = request.get_json()
+    update_node_config(node_id, data.get('config', {}))
+    from app import socketio
+    socketio.emit('server:config_push', {
+        'config': data.get('config', {}),
+    }, room=node_id)
+    return jsonify({'status': 'pushed'})
+
+
+@routes.route('/api/nodes/<node_id>/mode', methods=['POST'])
+def api_set_node_mode(node_id):
+    """Set agent control mode."""
+    from server.node_registry import get_node, update_node_control_mode
+    node = get_node(node_id)
+    if not node:
+        return jsonify({'error': 'Node not found'}), 404
+    data = request.get_json()
+    mode = data.get('mode', 'server')
+    if mode not in ('server', 'manual'):
+        return jsonify({'error': 'Invalid mode'}), 400
+    update_node_control_mode(node_id, mode)
+    from app import socketio
+    socketio.emit('server:set_control_mode', {
+        'mode': mode,
+    }, room=node_id)
+    return jsonify({'mode': mode})
