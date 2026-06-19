@@ -52,19 +52,18 @@ def _on_disconnect():
 
 
 def _on_config_push(data):
-    """Server pushes new config — apply if in server mode."""
+    """Server pushes new config — apply and save locally."""
     with state_lock:
         if state['control_mode'] != 'server':
             logger.info('Config push ignored — in manual mode')
             return
 
-        # Save agent's current config for revert
         state['agent_config_snapshot'] = _get_local_config()
-
-        # Apply server config
         _apply_config(data.get('config', {}))
         invalidate_state_cache()
         logger.info('Applied server config')
+
+    _save_local_config()
 
 
 def _on_set_control_mode(data):
@@ -74,6 +73,7 @@ def _on_set_control_mode(data):
         state['control_mode'] = mode
         invalidate_state_cache()
     logger.info(f'Control mode set to: {mode}')
+    _save_local_config()
 
 
 def _on_command(data):
@@ -129,6 +129,30 @@ def _get_telemetry():
             'failsafe': state.get('failsafe', False),
             'standby_mode': state.get('standby_mode', False),
         }
+
+
+def _save_local_config():
+    """Save current config to local config.json."""
+    import json
+    from pathlib import Path
+
+    config_path = Path('/app/data/config.json')
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with state_lock:
+            config = {
+                'fans': {k: {kk: vv for kk, vv in v.items()
+                             if kk not in ('rpm', 'pwm_value')}
+                         for k, v in state['fans'].items()},
+                'temp_sensors': state['temp_sensors'],
+                'hdd_sensors': state['hdd_sensors'],
+                'control_mode': state.get('control_mode', 'server'),
+                'initialized': state.get('initialized', False),
+            }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        logger.error(f'Failed to save local config: {e}')
 
 
 def _apply_config(config):

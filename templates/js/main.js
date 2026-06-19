@@ -167,9 +167,27 @@ function setDiscoverButtonState(loading) {
 console.log('[FanControl] Establishing Socket.IO connection...');
 const socket = io();
 
-socket.on('connect', () => {
-    console.log('[FanControl] Socket connected');
+let serverAvailable = true;
+
+socket.on('disconnect', () => {
+    serverAvailable = false;
+    showServerUnavailable();
 });
+
+socket.on('connect', () => {
+    serverAvailable = true;
+    hideServerUnavailable();
+});
+
+function showServerUnavailable() {
+    const banner = document.getElementById('server-unavailable-banner');
+    if (banner) banner.classList.remove('hidden');
+}
+
+function hideServerUnavailable() {
+    const banner = document.getElementById('server-unavailable-banner');
+    if (banner) banner.classList.add('hidden');
+}
 
 let lastUIUpdate = 0;
 socket.on('update', (data) => {
