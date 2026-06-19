@@ -77,6 +77,9 @@ socketio = SocketIO(
 app.register_blueprint(routes)
 register_handlers(socketio)
 
+from agent.routes import agent_routes
+app.register_blueprint(agent_routes)
+
 # ============================================================================
 # ENTRY POINT
 # ============================================================================
