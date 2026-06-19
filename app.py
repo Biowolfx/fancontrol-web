@@ -155,18 +155,32 @@ def _auto_init():
         socketio.emit('update', get_state())
 
 
+def is_setup_needed():
+    """Check if setup wizard should be shown."""
+    return not CONFIG_PATH.exists()
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='FanControl Web')
-    parser.add_argument('--mode', choices=['server', 'agent'],
+    parser.add_argument('--mode', choices=['setup', 'server', 'agent'],
                        default=os.environ.get('MODE', 'server'),
-                       help='Run mode: server (default) or agent')
+                       help='Run mode: setup, server (default), or agent')
     args = parser.parse_args()
+
+    # Auto-detect setup mode on first boot
+    if args.mode != 'setup' and is_setup_needed():
+        args.mode = 'setup'
 
     logger.info('=' * 60)
     logger.info(f'STARTING FanControl Web {CONFIG_VERSION} - Neon Cyberpunk Edition')
     logger.info(f'Mode: {args.mode}')
     logger.info('=' * 60)
+
+    if args.mode == 'setup':
+        from installer.wizard import run_wizard
+        run_wizard()
+        return
 
     if args.mode == 'agent':
         from agent.client import start_client
