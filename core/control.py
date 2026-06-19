@@ -2,12 +2,10 @@
 
 import copy
 import logging
-import os
 import sqlite3
 import time
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 from core.state import state, state_lock, get_state
@@ -17,11 +15,9 @@ from core.hardware import (
     read_disk_temp, calculate_disk_health,
     set_pwm, refresh,
 )
+from core.config import DATA_DIR, DB_FILE
 
 logger = logging.getLogger('fancontrol')
-
-DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/app/data'))
-DB_FILE = DATA_DIR / 'fancontrol.db'
 
 SENSOR_FAILURE_TEMP = 99
 
