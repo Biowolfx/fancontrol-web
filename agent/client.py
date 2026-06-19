@@ -146,6 +146,9 @@ def start_client():
     """Start the WebSocket client connection to server."""
     global _sio, _telemetry_thread
 
+    from agent.announcer import start_announcer
+    start_announcer(NODE_ID, NODE_NAME)
+
     if not SERVER_URL:
         logger.info('No SERVER_URL set — running standalone')
         return
