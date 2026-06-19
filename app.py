@@ -196,7 +196,7 @@ def main():
         _ensure_control_loop()
 
     logger.info('Starting server on port 5059')
-    socketio.run(app, host='0.0.0.0', port=5059)
+    socketio.run(app, host='0.0.0.0', port=5059, allow_unsafe_werkzeug=True)
 
 
 if __name__ == '__main__':
