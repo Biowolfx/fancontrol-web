@@ -84,24 +84,30 @@ def install():
 
 def _do_restart():
     global _install_status
+    _install_status['progress'] = 30
+    _install_status['stage'] = 'Restarting'
+    _install_status['message'] = 'Saving configuration and restarting...'
+
     try:
-        _install_status['progress'] = 30
-        _install_status['stage'] = 'Restarting'
-        _install_status['message'] = 'Restarting container...'
-
         hostname = socket.gethostname()
-        subprocess.Popen(['docker', 'restart', hostname])
-
-        _install_status['progress'] = 100
-        _install_status['stage'] = 'Complete'
-        _install_status['message'] = 'Container is restarting. Page will refresh shortly.'
-        _install_status['complete'] = True
+        result = subprocess.run(
+            ['docker', 'restart', hostname],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or f'exit code {result.returncode}')
     except Exception as e:
-        _install_status['progress'] = 0
-        _install_status['stage'] = 'Error'
-        _install_status['message'] = f'Restart failed: {e}. Please restart manually.'
-        _install_status['complete'] = True
-        _install_status['error'] = True
+        _install_status['progress'] = 50
+        _install_status['stage'] = 'Restarting'
+        _install_status['message'] = f'docker restart failed ({e}), exiting process...'
+        import time
+        time.sleep(2)
+        os._exit(0)
+
+    _install_status['progress'] = 100
+    _install_status['stage'] = 'Complete'
+    _install_status['message'] = 'Container is restarting. Page will refresh shortly.'
+    _install_status['complete'] = True
 
 
 @app.route('/api/status', methods=['GET'])
@@ -115,7 +121,12 @@ def restart_container():
     """Restart the Docker container."""
     try:
         hostname = socket.gethostname()
-        subprocess.Popen(['docker', 'restart', hostname])
+        result = subprocess.run(
+            ['docker', 'restart', hostname],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or f'exit code {result.returncode}')
         return jsonify({'status': 'restarting'})
     except Exception as e:
         return jsonify({'error': str(e), 'manual_restart': True}), 500
