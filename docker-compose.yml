@@ -19,3 +19,4 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - FANCONTROL_CORS_ORIGINS=*
+      - CONTAINER_NAME=fancontrol-web

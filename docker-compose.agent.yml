@@ -14,8 +14,8 @@ services:
       - ./data-agent:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - MODE=setup
       - SERVER_URL=ws://192.168.1.100:5059
       - API_TOKEN=your-token-here
       - NODE_ID=server1
       - NODE_NAME=Server 1
+      - CONTAINER_NAME=fancontrol-agent

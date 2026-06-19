@@ -3,7 +3,6 @@
 import json
 import os
 import subprocess
-import socket
 import threading
 import urllib.parse
 from pathlib import Path
@@ -89,7 +88,7 @@ def _do_restart():
     _install_status['message'] = 'Saving configuration and restarting...'
 
     try:
-        hostname = socket.gethostname()
+        hostname = os.environ.get('CONTAINER_NAME', 'fancontrol-web')
         result = subprocess.run(
             ['docker', 'restart', hostname],
             capture_output=True, text=True, timeout=30
@@ -120,7 +119,7 @@ def status():
 def restart_container():
     """Restart the Docker container."""
     try:
-        hostname = socket.gethostname()
+        hostname = os.environ.get('CONTAINER_NAME', 'fancontrol-web')
         result = subprocess.run(
             ['docker', 'restart', hostname],
             capture_output=True, text=True, timeout=30
