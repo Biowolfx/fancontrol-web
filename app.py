@@ -357,10 +357,14 @@ def api_update_check():
         m_ver = re.search(r'[vV]?(\d+\.\d+\.\d+)', commit_msg)
         if m_ver:
             remote_version = 'v' + m_ver.group(1)
+        
+        # Determine if update is available
+        # If remote version extracted from commit message → compare versions
+        # Otherwise → compare hashes
+        if remote_version and current_version:
+            has_update = remote_version != current_version
         else:
-            remote_version = remote_hash
-
-        has_update = remote_version and current_version and remote_version != current_version
+            has_update = current_hash != remote_hash and current_hash != ''
 
         return jsonify({
             'status': 'ok',
