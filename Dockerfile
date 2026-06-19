@@ -28,7 +28,7 @@ COPY . .
 
 COPY installer/ /app/installer/
 
-ENV MODE=setup
+# MODE is auto-detected: if /data/config.json doesn't exist → setup mode
 
 # Entrypoint: on updates, copy fresh code from /repo volume into /app
 COPY <<'ENTRYPOINT' /app/entrypoint.sh
@@ -37,9 +37,12 @@ set -e
 if [ -d "/repo" ] && [ -f "/repo/app.py" ]; then
     echo "[entrypoint] Syncing code from /repo to /app"
     rm -f /app/*.py /app/*.txt
-    rm -rf /app/templates /app/static
+    rm -rf /app/templates /app/static /app/core /app/server /app/agent /app/installer /app/tests
     cp -a /repo/*.py /repo/*.txt /repo/Dockerfile /repo/docker-compose.yml /app/ 2>/dev/null || true
     cp -a /repo/templates /repo/static /app/ 2>/dev/null || true
+    for dir in core server agent installer tests; do
+        [ -d "/repo/$dir" ] && cp -a "/repo/$dir" /app/ 2>/dev/null || true
+    done
 fi
 exec "$@"
 ENTRYPOINT
