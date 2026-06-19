@@ -81,7 +81,7 @@ socketio = SocketIO(
 # STATE MANAGEMENT
 # ============================================================================
 
-CONFIG_VERSION = "3.3.8"
+CONFIG_VERSION = "3.3.9"
 MAX_HISTORY_HOURS = 168
 SENSOR_FAILURE_TEMP = 99
 
@@ -465,7 +465,7 @@ def api_update_apply():
         logger.info('Rebuilding Docker image with updated code...')
         rebuild = subprocess.run(
             ['docker', 'compose', '-f', os.path.join(repo_dir, 'docker-compose.yml'),
-             'build', '--build-arg', f'GIT_HASH={new_hash}'],
+             'build', '--no-cache', '--build-arg', f'GIT_HASH={new_hash}'],
             capture_output=True, text=True, timeout=300,
             cwd=repo_dir
         )

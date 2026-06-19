@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.3.8 - Neon Cyberpunk Edition
+ * FanControl Web v3.3.9 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
