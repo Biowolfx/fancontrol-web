@@ -1,5 +1,5 @@
 /**
- * FanControl Web v3.3.0 - Neon Cyberpunk Edition
+ * FanControl Web v3.3.7 - Neon Cyberpunk Edition
  * Main JavaScript Application
  */
 
@@ -16,6 +16,15 @@ let wizardStep = 'intro';
 let currentState = null;
 let lastChartUpdate = 0;
 const CHART_UPDATE_INTERVAL = 60000;
+const RELOAD_DELAY = 10000;
+const SCHEDULE_CELL_SIZE = 18;
+
+const BTN_ACTIVE = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
+const BTN_INACTIVE = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
+const BTN_MANUAL_ACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
+const BTN_MANUAL_INACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
+const BTN_AUTO_ACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
+const BTN_AUTO_INACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
 
 // ============================================================================
 // PERSISTENT SETTINGS
@@ -28,17 +37,29 @@ const settingsDefaults = {
     autoUpdateCheck: 21600000
 };
 
+let _cachedSettings = null;
+let _settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 1000;
+
 function getSettings() {
+    const now = Date.now();
+    if (_cachedSettings && (now - _settingsCacheTime) < SETTINGS_CACHE_TTL) {
+        return _cachedSettings;
+    }
     try {
         const raw = localStorage.getItem('fancontrol_settings');
-        return raw ? { ...settingsDefaults, ...JSON.parse(raw) } : { ...settingsDefaults };
-    } catch { return { ...settingsDefaults }; }
+        _cachedSettings = raw ? { ...settingsDefaults, ...JSON.parse(raw) } : { ...settingsDefaults };
+    } catch { _cachedSettings = { ...settingsDefaults }; }
+    _settingsCacheTime = now;
+    return _cachedSettings;
 }
 
 function saveSettings(partial) {
     const s = getSettings();
     Object.assign(s, partial);
     localStorage.setItem('fancontrol_settings', JSON.stringify(s));
+    _cachedSettings = s;
+    _settingsCacheTime = Date.now();
     return s;
 }
 
@@ -128,6 +149,17 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function show(el) { if (el) el.classList.remove('hidden'); }
+function hide(el) { if (el) el.classList.add('hidden'); }
+function toggle(el, visible) { if (el) el.classList.toggle('hidden', !visible); }
+
+function setDiscoverButtonState(loading) {
+    const btn = document.getElementById('discover-btn');
+    const loader = document.getElementById('discover-loader');
+    if (btn) btn.disabled = loading;
+    if (loader) toggle(loader, loading);
+}
+
 // ============================================================================
 // SOCKET.IO CONNECTION
 // ============================================================================
@@ -201,8 +233,7 @@ function updateUI(data) {
                 disks: data.hdd_sensors
             });
             wizardStep = 'results';
-            document.getElementById('discover-btn').disabled = false;
-            document.getElementById('discover-loader').classList.add('hidden');
+            setDiscoverButtonState(false);
         }
         return;
     }
@@ -299,20 +330,6 @@ function buildFanList(fans) {
     }
     
     container.innerHTML = html || `<div class="text-center text-gray-500 py-8">${t('setup.no_fans', 'No fans detected')}</div>`;
-}
-
-function updateFanListStatus(fans) {
-    for (const [fanId, fan] of Object.entries(fans)) {
-        const rpmEl = document.getElementById(`fan-rpm-${fanId}`);
-        if (rpmEl) {
-            rpmEl.textContent = `${fan.rpm || 0} RPM`;
-        }
-        
-        const card = document.getElementById(`fan-card-${fanId}`);
-        if (card && fanId === currentFanId) {
-            card.classList.add('border-neon-purple', 'bg-cyber-accent');
-        }
-    }
 }
 
 function selectFan(fanId) {
@@ -413,11 +430,11 @@ function updateInspector(fan) {
     const btnAuto = document.getElementById('btn-mode-auto');
     
     if (mode === 'manual') {
-        btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
-        btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+        btnManual.className = BTN_MANUAL_ACTIVE;
+        btnAuto.className = BTN_AUTO_INACTIVE;
     } else {
-        btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
-        btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
+        btnManual.className = BTN_MANUAL_INACTIVE;
+        btnAuto.className = BTN_AUTO_ACTIVE;
     }
     
     // Show/hide auto settings
@@ -456,11 +473,11 @@ function setFanMode(mode) {
     const btnAuto = document.getElementById('btn-mode-auto');
     if (btnManual && btnAuto) {
         if (mode === 'manual') {
-            btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
-            btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
+            btnManual.className = BTN_MANUAL_ACTIVE;
+            btnAuto.className = BTN_AUTO_INACTIVE;
         } else {
-            btnManual.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
-            btnAuto.className = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
+            btnManual.className = BTN_MANUAL_INACTIVE;
+            btnAuto.className = BTN_AUTO_ACTIVE;
         }
     }
     
@@ -806,15 +823,13 @@ function getTempColorClass(temp) {
 function runDiscovery() {
     console.log('[FanControl] Starting hardware discovery...');
     
-    document.getElementById('discover-btn').disabled = true;
-    document.getElementById('discover-loader').classList.remove('hidden');
+    setDiscoverButtonState(true);
     wizardStep = 'scanning';
     
     fetch('/api/discover', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
-            document.getElementById('discover-btn').disabled = false;
-            document.getElementById('discover-loader').classList.add('hidden');
+            setDiscoverButtonState(false);
             
             if (data.status === 'ok') {
                 renderDiscoveredHardware(data);
@@ -830,8 +845,7 @@ function runDiscovery() {
         .catch(err => {
             console.error('Discovery error:', err);
             alert('Connection error during scan');
-            document.getElementById('discover-btn').disabled = false;
-            document.getElementById('discover-loader').classList.add('hidden');
+            setDiscoverButtonState(false);
             wizardStep = 'intro';
         });
 }
@@ -995,7 +1009,7 @@ function renderScheduleGrid() {
     // Header row: empty corner + 24 hours
     html += '<tr><th class="w-12 h-5"></th>';
     for (let h = 0; h < 24; h++) {
-        html += `<th class="h-5 px-0 text-[10px] text-gray-500 font-normal" style="width:18px">${h}</th>`;
+        html += `<th class="h-5 px-0 text-[10px] text-gray-500 font-normal" style="width:${SCHEDULE_CELL_SIZE}px">${h}</th>`;
     }
     html += '</tr>';
     
@@ -1024,7 +1038,7 @@ function renderScheduleGrid() {
                          onmousedown="onScheduleMouseDown(event,'${day}',${h})"
                          onmouseenter="onScheduleMouseEnter(event,'${day}',${h})"
                          title="${tDay(d)} ${timeStr}${item ? ' [' + t('mode.' + item.mode, item.mode) + ']' : ''}"
-                         style="width:18px;height:18px;${bgStyle}"></td>`;
+                         style="width:${SCHEDULE_CELL_SIZE}px;height:${SCHEDULE_CELL_SIZE}px;${bgStyle}"></td>`;
         }
         html += '</tr>';
     }
@@ -1372,12 +1386,10 @@ function openScheduleEditor(cells) {
 
 function setScheduleMode(mode) {
     const modes = ['auto', 'manual', 'off'];
-    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
     
     modes.forEach(m => {
         const btn = document.getElementById(`sched-btn-${m}`);
-        if (btn) btn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${m === mode ? activeClass : inactiveClass}`;
+        if (btn) btn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${m === mode ? BTN_ACTIVE : BTN_INACTIVE}`;
     });
     
     document.getElementById('sched-auto-settings').classList.toggle('hidden', mode !== 'auto');
@@ -1386,12 +1398,10 @@ function setScheduleMode(mode) {
 
 function setScheduleSensorMode(sensorMode) {
     const modes = ['max', 'min', 'avg'];
-    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:bg-cyan-900 hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
     
     modes.forEach(m => {
         const btn = document.getElementById(`sched-btn-sensor-${m}`);
-        if (btn) btn.className = `flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border ${m === sensorMode ? activeClass : inactiveClass}`;
+        if (btn) btn.className = `flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border ${m === sensorMode ? BTN_ACTIVE : BTN_INACTIVE}`;
     });
 }
 
@@ -1648,40 +1658,35 @@ function updateLangButtons() {
     const setupEn = document.getElementById('setup-lang-en');
     const setupRu = document.getElementById('setup-lang-ru');
     
-    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
-    
-    if (enBtn) enBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'en' ? activeClass : inactiveClass}`;
-    if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'ru' ? activeClass : inactiveClass}`;
-    if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'en' ? activeClass : inactiveClass}`;
-    if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'ru' ? activeClass : inactiveClass}`;
+    if (enBtn) enBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
     
     updateSettingsUI();
 }
 
 function updateSettingsUI() {
     const s = getSettings();
-    const activeClass = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-    const inactiveClass = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
     
     // Temperature unit buttons
     const celsiusBtn = document.getElementById('unit-btn-celsius');
     const fahrBtn = document.getElementById('unit-btn-fahrenheit');
-    if (celsiusBtn) celsiusBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'celsius' ? activeClass : inactiveClass}`;
-    if (fahrBtn) fahrBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'fahrenheit' ? activeClass : inactiveClass}`;
+    if (celsiusBtn) celsiusBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'celsius' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (fahrBtn) fahrBtn.className = `flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${s.tempUnit === 'fahrenheit' ? BTN_ACTIVE : BTN_INACTIVE}`;
     
     // Refresh interval buttons
     [0, 1000, 5000].forEach(v => {
         const btn = document.getElementById(`refresh-btn-${v}`);
-        if (btn) btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${s.refreshInterval === v ? activeClass : inactiveClass}`;
+        if (btn) btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${s.refreshInterval === v ? BTN_ACTIVE : BTN_INACTIVE}`;
     });
     
     // Compact mode toggle
     const compactBtn = document.getElementById('compact-toggle');
     if (compactBtn) {
         compactBtn.className = s.compactMode
-            ? 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30'
-            : 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
+            ? `w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${BTN_ACTIVE}`
+            : `w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${BTN_INACTIVE}`;
         compactBtn.querySelector('span').textContent = s.compactMode ? t('settings.on', 'On') : t('settings.off', 'Off');
     }
     
@@ -1691,7 +1696,7 @@ function updateSettingsUI() {
     // Auto-update interval buttons
     [0, 21600000, 43200000, 86400000].forEach(v => {
         const btn = document.getElementById(`autoupd-btn-${v}`);
-        if (btn) btn.className = `flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border ${s.autoUpdateCheck === v ? activeClass : inactiveClass}`;
+        if (btn) btn.className = `flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border ${s.autoUpdateCheck === v ? BTN_ACTIVE : BTN_INACTIVE}`;
     });
 }
 
@@ -1760,11 +1765,6 @@ async function checkForUpdates() {
                     <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.current_version', 'Current')}:</span><span class="font-mono">${escapeHtml(data.current_version || '?')}</span></div>
                     <div class="flex justify-between mb-1"><span class="text-gray-400">${t('settings.new_version', 'New')}:</span><span class="font-mono text-white font-bold">${escapeHtml(data.remote_version || '?')}</span></div>
                     ${data.commit_message ? `<div class="mt-2 pt-2 border-t border-green-800 text-gray-300">${escapeHtml(data.commit_message)}</div>` : ''}`;
-            }
-            if (applyBtn) {
-                applyBtn.classList.remove('hidden');
-                applyBtn.disabled = false;
-                applyBtn.className = 'w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border mt-2 bg-green-900 bg-opacity-30 text-neon-green border-green-700 hover:bg-opacity-50';
             }
             if (applyBtn) {
                 applyBtn.classList.remove('hidden');
@@ -1917,7 +1917,7 @@ async function startUpdate() {
         setStepState('restart', 'done');
         
         // Reload after delay
-        setTimeout(() => { window.location.reload(); }, 10000);
+        setTimeout(() => { window.location.reload(); }, RELOAD_DELAY);
         
     } catch (e) {
         setStepState('pull', 'error');

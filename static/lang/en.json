@@ -16,6 +16,11 @@
   "setup.fans_header": "Fans",
   "setup.sensors_header": "Temperature Sensors",
   "setup.disks_header": "Storage Disks",
+  "setup.loading_fans": "Loading fans...",
+  "setup.no_fans": "No fans detected",
+  "setup.no_disks": "No disks detected",
+  "setup.no_hardware": "No hardware detected",
+  "setup.calibrate_btn_short": "Recalibrate",
 
   "header.synced": "Synced",
   "header.storage": "Storage",
@@ -25,6 +30,10 @@
   "inspector.hint": "Click on a fan to inspect",
   "inspector.fallback_id": "ID: unknown",
   "inspector.fan_speed": "Fan Speed",
+  "inspector.status": "Status",
+  "inspector.mode": "Mode",
+  "inspector.hint_detail": "to view controls and analytics",
+  "inspector.fan_name": "Fan Name",
 
   "mode.manual": "Manual",
   "mode.auto": "Auto",
@@ -63,6 +72,8 @@
   "schedule.periods": "periods",
   "schedule.period": "period",
   "schedule.hours_short": "h",
+  "schedule.missing": "Missing",
+  "schedule.empty_hours": "Empty hours = fan off.",
 
   "editor.title": "Edit Schedule",
   "editor.period": "Period",
@@ -87,6 +98,7 @@
   "calibration.title": "Calibrating Fans",
   "calibration.status": "Starting...",
   "calibration.step": "Step",
+  "calibration.step_label": "Step 0/11",
   "calibration.ready": "Ready!",
   "calibration.errors": "Completed with errors",
   "calibration.confirm": "Recalibrate all fans? This takes 1-2 minutes.",
@@ -107,7 +119,6 @@
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.language_hint": "Select your preferred language",
-
   "settings.temp_unit": "Temperature Unit",
   "settings.temp_unit_hint": "Choose Celsius or Fahrenheit",
   "settings.refresh": "Update Interval",
@@ -131,7 +142,6 @@
   "settings.update_available": "Update available",
   "settings.current_version": "Current",
   "settings.new_version": "New",
-  "settings.update_applied": "Update applied!",
   "settings.restarting": "Container is restarting...",
   "settings.rebuilding": "Dependencies changed, rebuilding image...",
   "settings.update_modal_title": "System Update",
@@ -161,22 +171,6 @@
   "tooltip.schedule_grid": "Click or drag to select cells, then configure fan behavior for each time period",
   "tooltip.inverted": "This fan has inverted PWM control - higher PWM values produce lower RPM",
 
-  "setup.loading_fans": "Loading fans...",
-  "setup.results_title": "Hardware Detected",
-  "setup.calibrate_hint": "To complete setup, fans must be calibrated. This takes about 1-2 minutes.",
-  "inspector.status": "Status",
-  "inspector.mode": "Mode",
-  "inspector.hint_detail": "to view controls and analytics",
-  "inspector.fan_name": "Fan Name",
-  "calibration.status": "Starting...",
-  "calibration.step_label": "Step 0/11",
-
-  "setup.no_fans": "No fans detected",
-  "setup.no_disks": "No disks detected",
-  "setup.no_hardware": "No hardware detected",
-  "schedule.missing": "Missing",
-  "schedule.empty_hours": "Empty hours = fan off.",
-
   "days.mon": "Mon",
   "days.tue": "Tue",
   "days.wed": "Wed",
@@ -184,10 +178,6 @@
   "days.fri": "Fri",
   "days.sat": "Sat",
   "days.sun": "Sun",
-
-  "setup.calibrate_btn_short": "Recalibrate",
-
-  "inspector.fan_speed": "Fan Speed",
 
   "sensors.disks": "Disks",
   "sensors.sensors_group": "Sensors"

@@ -16,6 +16,11 @@
   "setup.fans_header": "Вентиляторы",
   "setup.sensors_header": "Датчики температуры",
   "setup.disks_header": "Диски хранения",
+  "setup.loading_fans": "Загрузка вентиляторов...",
+  "setup.no_fans": "Вентиляторы не обнаружены",
+  "setup.no_disks": "Диски не обнаружены",
+  "setup.no_hardware": "Оборудование не обнаружено",
+  "setup.calibrate_btn_short": "Перекалибровать",
 
   "header.synced": "Синхронизировано",
   "header.storage": "Хранилище",
@@ -25,6 +30,10 @@
   "inspector.hint": "Нажмите на вентилятор для просмотра",
   "inspector.fallback_id": "ID: неизвестен",
   "inspector.fan_speed": "Скорость вентилятора",
+  "inspector.status": "Статус",
+  "inspector.mode": "Режим",
+  "inspector.hint_detail": "для просмотра управления и аналитики",
+  "inspector.fan_name": "Имя вентилятора",
 
   "mode.manual": "Ручной",
   "mode.auto": "Авто",
@@ -63,6 +72,8 @@
   "schedule.periods": "периодов",
   "schedule.period": "период",
   "schedule.hours_short": "ч",
+  "schedule.missing": "Пропущено",
+  "schedule.empty_hours": "Пустые часы = вентилятор выключен.",
 
   "editor.title": "Редактирование расписания",
   "editor.period": "Период",
@@ -87,6 +98,7 @@
   "calibration.title": "Калибровка вентиляторов",
   "calibration.status": "Запуск...",
   "calibration.step": "Шаг",
+  "calibration.step_label": "Шаг 0/11",
   "calibration.ready": "Готово!",
   "calibration.errors": "Завершено с ошибками",
   "calibration.confirm": "Перекалибровать все вентиляторы? Это займёт 1-2 минуты.",
@@ -107,7 +119,6 @@
   "settings.title": "Настройки",
   "settings.language": "Язык",
   "settings.language_hint": "Выберите предпочитаемый язык",
-
   "settings.temp_unit": "Единицы температуры",
   "settings.temp_unit_hint": "Цельсий или Фаренгейт",
   "settings.refresh": "Интервал обновления",
@@ -131,7 +142,6 @@
   "settings.update_available": "Доступно обновление",
   "settings.current_version": "Текущая",
   "settings.new_version": "Новая",
-  "settings.update_applied": "Обновление применено!",
   "settings.restarting": "Контейнер перезапускается...",
   "settings.rebuilding": "Зависимости изменились, пересборка образа...",
   "settings.update_modal_title": "Обновление системы",
@@ -161,22 +171,6 @@
   "tooltip.schedule_grid": "Нажмите или перетащите для выбора ячеек, затем настройте поведение вентилятора для каждого периода",
   "tooltip.inverted": "Этот вентилятор имеет инвертированное управление PWM — более высокие значения PWM дают меньшие обороты",
 
-  "setup.loading_fans": "Загрузка вентиляторов...",
-  "setup.results_title": "Оборудование обнаружено",
-  "setup.calibrate_hint": "Для завершения настройки необходимо откалибровать вентиляторы. Это занимает около 1-2 минут.",
-  "inspector.status": "Статус",
-  "inspector.mode": "Режим",
-  "inspector.hint_detail": "для просмотра управления и аналитики",
-  "inspector.fan_name": "Имя вентилятора",
-  "calibration.status": "Запуск...",
-  "calibration.step_label": "Шаг 0/11",
-
-  "setup.no_fans": "Вентиляторы не обнаружены",
-  "setup.no_disks": "Диски не обнаружены",
-  "setup.no_hardware": "Оборудование не обнаружено",
-  "schedule.missing": "Пропущено",
-  "schedule.empty_hours": "Пустые часы = вентилятор выключен.",
-
   "days.mon": "Пн",
   "days.tue": "Вт",
   "days.wed": "Ср",
@@ -184,10 +178,6 @@
   "days.fri": "Пт",
   "days.sat": "Сб",
   "days.sun": "Вс",
-
-  "setup.calibrate_btn_short": "Перекалибровать",
-
-  "inspector.fan_speed": "Скорость вентилятора",
 
   "sensors.disks": "Диски",
   "sensors.sensors_group": "Датчики"

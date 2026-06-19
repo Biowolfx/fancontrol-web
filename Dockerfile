@@ -19,7 +19,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN mkdir -p /app/data /app/templates/js /app/static/lang
+RUN mkdir -p /app/data
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
