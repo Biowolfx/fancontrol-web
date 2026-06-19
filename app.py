@@ -14,11 +14,10 @@ import subprocess
 import sys
 import threading
 import time
-from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 from flask_socketio import SocketIO
@@ -32,8 +31,15 @@ from core.hardware import (
     CALIBRATION_STEPS, CALIBRATION_SETTLE_TIME,
     executor,
     discover_fans_and_sensors, discover_disks,
-    calculate_disk_health, read_disk_temp,
     set_pwm, refresh,
+)
+from core.control import (
+    SENSOR_FAILURE_TEMP, MIN_PWM_PCT, MAX_PWM_PCT,
+    UNINITIALIZED_POLL_INTERVAL,
+    get_db_connection,
+    refresh_disks,
+    loop, fan_temp, pwm_from_curve, process_auto_mode,
+    _evaluate_fan_mode, log_telemetry, cleanup_logs,
 )
 
 # ============================================================================
@@ -89,27 +95,10 @@ socketio = SocketIO(
 # ============================================================================
 
 MAX_HISTORY_HOURS = 168
-SENSOR_FAILURE_TEMP = 99
-
-_last_cleanup = time.monotonic()
-_failed_calibration_logged = False
 
 PWM_CURVE_POINTS = 11
-MIN_PWM_PCT = 20
-MAX_PWM_PCT = 100
-
-CONTROL_LOOP_INTERVAL = 5
-UNINITIALIZED_POLL_INTERVAL = 10
-TELEMETRY_LOG_INTERVAL = 300
-LOG_CLEANUP_INTERVAL = 86400
-DISK_POLL_COOLDOWN = 30
 
 
-def get_db_connection() -> sqlite3.Connection:
-    """Get a SQLite connection with WAL mode for better concurrency."""
-    conn = sqlite3.connect(DB_FILE, timeout=5)
-    conn.execute('PRAGMA journal_mode=WAL')
-    return conn
 
 # Rate limiting for control endpoints
 _control_rate_limit: Dict[str, float] = {}
@@ -754,442 +743,6 @@ def test_fans(fan_key: Optional[str] = None):
         })
 
 # ============================================================================
-# MAIN CONTROL LOOP
-# ============================================================================
-
-
-def refresh_disks():
-    """
-    Update disk temperatures with health metrics - FULLY ATOMIC VERSION.
-    Skips if disks_polling flag is set (concurrent discovery).
-    All calculations inside single state_lock to prevent race conditions.
-    """
-    global _last_cleanup
-    now = time.monotonic()
-    
-    with state_lock:
-        if state.get('disks_polling'):
-            return
-        
-        last_poll = state['last_hdd_poll']
-        if last_poll > 0 and now - last_poll < DISK_POLL_COOLDOWN:
-            return
-        
-        sensors_copy = {
-            disk_id: info.copy()
-            for disk_id, info in state['hdd_sensors'].items()
-        }
-    
-    futures_map = {
-        disk_id: executor.submit(read_disk_temp, info.get('dev_name', disk_id))
-        for disk_id, info in sensors_copy.items()
-    }
-    
-    updated_values = {}
-    for disk_id, future in futures_map.items():
-        try:
-            result = future.result(timeout=5)
-            temp, standby = result if result else (None, False)
-            
-            if temp is not None:
-                health = calculate_disk_health(temp)
-                updated_values[disk_id] = {
-                    'temp': temp,
-                    'standby': standby,
-                    'pct_fill': health['pct_fill'],
-                    'color_zone': health['color_zone'],
-                    'health_status': health['status']
-                }
-        except FutureTimeout:
-            logger.debug(f'Timeout polling disk {disk_id}')
-        except Exception as e:
-            logger.error(f'Poll error for {disk_id}: {e}')
-    
-    # SINGLE ATOMIC BLOCK
-    with state_lock:
-        for disk_id, data in updated_values.items():
-            if disk_id in state['hdd_sensors']:
-                state['hdd_sensors'][disk_id].update(data)
-        
-        state['last_hdd_poll'] = time.monotonic()
-        
-        active_temps = [
-            v['temp'] for v in state['hdd_sensors'].values()
-            if v.get('temp', 0) > 0 and not v.get('standby')
-        ]
-        
-        all_standby = (
-            len(state['hdd_sensors']) > 0 and
-            all(v.get('standby', False) for v in state['hdd_sensors'].values())
-        )
-        
-        if active_temps:
-            state['max_hdd_temp'] = max(active_temps)
-            state['failsafe'] = False
-            state['standby_mode'] = False
-        elif all_standby:
-            state['max_hdd_temp'] = 0
-            state['failsafe'] = False
-            state['standby_mode'] = True
-        else:
-            state['max_hdd_temp'] = 0
-            state['failsafe'] = True
-            state['standby_mode'] = False
-
-
-def fan_temp(fan: Dict, override_sensors: Optional[List] = None, 
-             override_sensor_mode: Optional[str] = None) -> float:
-    """Calculate effective temperature for a fan based on assigned sensors"""
-    sensors = override_sensors if override_sensors is not None else fan.get('sensors', [])
-    mode = override_sensor_mode if override_sensor_mode is not None else fan.get('sensor_mode', 'max')
-    
-    if not sensors:
-        return SENSOR_FAILURE_TEMP
-    
-    temps = []
-    
-    with state_lock:
-        hdd_copy = {k: v.copy() for k, v in state['hdd_sensors'].items()}
-        temp_copy = {k: v.copy() for k, v in state['temp_sensors'].items()}
-    
-    for sensor_id in sensors:
-        if sensor_id.startswith('hdd:'):
-            disk_id = sensor_id.split(':', 1)[1]
-            disk = hdd_copy.get(disk_id, {})
-            temp = disk.get('temp', 0)
-        elif sensor_id.startswith('temp:'):
-            temp_id = sensor_id.split(':', 1)[1]
-            sensor = temp_copy.get(temp_id, {})
-            temp = sensor.get('value', 0)
-        else:
-            if sensor_id in hdd_copy:
-                temp = hdd_copy[sensor_id].get('temp', 0)
-            elif sensor_id in temp_copy:
-                temp = temp_copy[sensor_id].get('value', 0)
-            else:
-                temp = 0
-        
-        if temp > 0:
-            temps.append(temp)
-    
-    if not temps:
-        return SENSOR_FAILURE_TEMP
-    
-    if mode == 'max':
-        return max(temps)
-    elif mode == 'min':
-        return min(temps)
-    else:
-        return sum(temps) / len(temps)
-
-
-def pwm_from_curve(fan: Dict, target_pct: float) -> int:
-    """
-    Convert target percentage to PWM value using calibration curve.
-    Keeps target_pct as float for smooth interpolation, rounds only at return.
-    """
-    curve = fan.get('curve', [])
-    cal = fan.get('calibration', {})
-    
-    if not cal or len(curve) < 2:
-        return int(target_pct * 255 // 100)
-    
-    target_pct = max(0.0, min(100.0, float(target_pct)))
-    min_pct = float(cal.get('min_pct', 0))
-    
-    if 0.0 < target_pct < min_pct:
-        target_pct = min_pct
-    
-    for i in range(len(curve) - 1):
-        a, b = curve[i], curve[i + 1]
-        if min(a['pct'], b['pct']) <= target_pct <= max(a['pct'], b['pct']):
-            if a['pct'] == b['pct']:
-                return int(a['pwm'])
-            ratio = (target_pct - a['pct']) / (b['pct'] - a['pct'])
-            pwm = a['pwm'] + (b['pwm'] - a['pwm']) * ratio
-            return max(0, min(255, int(round(pwm))))
-    
-    return int(curve[-1]['pwm'])
-
-
-def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
-                      target_temp: float, schedule_item: Optional[Dict] = None,
-                      failsafe: bool = False, standby_mode: bool = False) -> Tuple[int, str]:
-    """
-    PURE FUNCTION: Calculates target PWM percentage and status.
-    Does NOT write to hardware or modify state.
-    
-    Args:
-        fan_id: Fan identifier (for logging only)
-        fan: Fan configuration dictionary
-        current_temp: Current effective temperature
-        target_temp: Target temperature
-        schedule_item: Current schedule rule if applied (optional)
-        failsafe: Whether the system is in failsafe mode
-        standby_mode: Whether disks are in standby
-    
-    Returns:
-        (target_pct: int, status: str)
-    """
-    if failsafe:
-        return MAX_PWM_PCT, 'failsafe'
-
-    if standby_mode:
-        status = 'standby'
-        
-        if schedule_item:
-            sm = schedule_item.get('mode', 'auto')
-            if sm == 'manual':
-                target_pct = schedule_item.get('speed_pct', 50)
-            elif sm == 'off':
-                target_pct = 0
-            else:
-                sched_target = schedule_item.get('target_temp', target_temp)
-                target_pct = max(MIN_PWM_PCT, min(40, 
-                    sched_target - current_temp + 30))
-        else:
-            target_pct = 25
-        
-        return int(target_pct), status
-
-    # 3. Temperature sensor failure - MAXIMUM COOLING for hardware safety!
-    if current_temp >= SENSOR_FAILURE_TEMP:
-        return MAX_PWM_PCT, 'critical'
-
-    # 4. Normal operation (Proportional curve)
-    delta = current_temp - target_temp
-    
-    if delta <= -2:
-        target_pct = MIN_PWM_PCT
-    elif delta >= 6:
-        target_pct = MAX_PWM_PCT
-    else:
-        target_pct = MIN_PWM_PCT + (delta + 2) * (MAX_PWM_PCT - MIN_PWM_PCT) // 8
-
-    status = 'warning' if delta > 4 else 'nominal'
-    return int(target_pct), status
-
-
-def _evaluate_fan_mode(fan_id: str, fan: Dict, sys_failsafe: bool, sys_standby: bool) -> Tuple[int, str]:
-    """
-    Evaluate target_pct and status for a fan based on its mode and schedule.
-    Returns (target_pct, status).
-    """
-    mode = fan.get('mode', 'manual')
-    
-    if mode == 'manual':
-        raw_pct = fan.get('manual_pct', 50)
-        status = fan.get('status', 'nominal')
-        if status not in ['nominal', 'warning', 'critical', 'standby', 'failsafe', 'inverted', 'no_sensor']:
-            status = 'nominal'
-        return raw_pct, status
-    
-    if mode != 'auto':
-        return 50, 'nominal'
-    
-    schedule = fan.get('schedule', [])
-    schedule_applied = False
-    
-    if schedule:
-        now_dt = datetime.now()
-        current_day = now_dt.strftime('%a').lower()
-        current_time = now_dt.strftime('%H:%M')
-        
-        for item in schedule:
-            if item['day'] == 'all':
-                days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-            elif item['day'] == 'weekday':
-                days = ['mon', 'tue', 'wed', 'thu', 'fri']
-            elif item['day'] == 'weekend':
-                days = ['sat', 'sun']
-            else:
-                days = [item['day']]
-            
-            if current_day in days and item['time_start'] <= current_time <= item['time_end']:
-                schedule_applied = True
-                sm = item.get('mode', 'auto')
-                
-                if sm == 'off':
-                    return 0, 'off'
-                elif sm == 'manual':
-                    return item.get('speed_pct', 50), 'manual'
-                else:
-                    item_sensors = item.get('sensors') or fan.get('sensors', [])
-                    item_sensor_mode = item.get('sensor_mode') or fan.get('sensor_mode', 'max')
-                    current_temp = fan_temp(fan, item_sensors, item_sensor_mode)
-                    target_temp = item.get('target_temp', fan.get('target_temp', 31))
-                    target_pct, status = process_auto_mode(
-                        fan_id, fan, current_temp, target_temp, item,
-                        failsafe=sys_failsafe, standby_mode=sys_standby
-                    )
-                    if status == 'critical' and not item_sensors:
-                        status = 'no_sensor'
-                    return target_pct, status
-                break
-    
-    if not schedule_applied:
-        current_temp = fan_temp(fan)
-        target_temp = fan.get('target_temp', 31)
-        target_pct, status = process_auto_mode(
-            fan_id, fan, current_temp, target_temp,
-            failsafe=sys_failsafe, standby_mode=sys_standby
-        )
-        if status == 'critical' and not fan.get('sensors'):
-            status = 'no_sensor'
-        return target_pct, status
-    
-    return 50, 'nominal'
-
-
-def loop():
-    """
-    Main control loop.
-    Architecture: 
-    - Pure functions calculate target_pct and status
-    - Loop applies PWM and updates state centrally
-    """
-    global _failed_calibration_logged, _last_cleanup
-    last_log = time.monotonic()
-    
-    while True:
-        try:
-            if state.get('testing'):
-                refresh()
-                refresh_disks()
-                socketio.emit('update', get_state())
-                time.sleep(2)
-                continue
-            
-            if state.get('_pause_loop'):
-                time.sleep(1)
-                continue
-            
-            if not state.get('initialized'):
-                if state.get('hardware_scanned'):
-                    refresh()
-                    refresh_disks()
-                    socketio.emit('update', get_state())
-                
-                if not state.get('tested', True):
-                    if not _failed_calibration_logged:
-                        logger.warning("Calibration failed. Fix hardware and restart.")
-                        _failed_calibration_logged = True
-                    time.sleep(UNINITIALIZED_POLL_INTERVAL)
-                    continue
-                
-                time.sleep(2)
-                continue
-            
-            refresh()
-            refresh_disks()
-            
-            with state_lock:
-                fans_snapshot = copy.deepcopy(state['fans'])
-                sys_failsafe = state.get('failsafe', False)
-                sys_standby = state.get('standby_mode', False)
-            
-            updated_fans_metrics = {}
-            
-            for fan_id, fan in fans_snapshot.items():
-                if not fan.get('writable'):
-                    continue
-                
-                target_pct, status = _evaluate_fan_mode(fan_id, fan, sys_failsafe, sys_standby)
-                mode = fan.get('mode', 'manual')
-                
-                if mode not in ('manual', 'auto'):
-                    continue
-                
-                calculated_pwm = pwm_from_curve(fan, float(target_pct))
-                set_pwm(fan_id, calculated_pwm)
-                
-                updated_fans_metrics[fan_id] = {
-                    'current_pct': target_pct,
-                    'target_pwm': target_pct,
-                    'mode': mode,
-                    'status': status,
-                    'inverted': fan.get('inverted', False)
-                }
-            
-            with state_lock:
-                for fan_id, metrics in updated_fans_metrics.items():
-                    if fan_id in state['fans']:
-                        state['fans'][fan_id].update(metrics)
-            
-            socketio.emit('update', get_state())
-            
-            current_time = time.monotonic()
-            if current_time - last_log > TELEMETRY_LOG_INTERVAL:
-                try:
-                    log_telemetry()
-                except Exception as e:
-                    logger.error(f'Logging error: {e}')
-                last_log = current_time
-            
-            if current_time - _last_cleanup > LOG_CLEANUP_INTERVAL:
-                cleanup_logs()
-                _last_cleanup = current_time
-            
-            time.sleep(CONTROL_LOOP_INTERVAL)
-            
-        except Exception as e:
-            logger.error(f'Loop error: {e}', exc_info=True)
-            time.sleep(CONTROL_LOOP_INTERVAL)
-
-
-def log_telemetry():
-    """Log telemetry data to SQLite"""
-    try:
-        with state_lock:
-            fan_count = len(state['fans'])
-            disk_count = len(state['hdd_sensors'])
-            
-            if fan_count > 0:
-                avg_pwm = sum(
-                    f.get('raw_pwm', f.get('pwm_value', 0))
-                    for f in state['fans'].values()
-                ) // fan_count
-                avg_rpm = sum(
-                    f.get('rpm', 0)
-                    for f in state['fans'].values()
-                ) // fan_count
-            else:
-                avg_pwm = 0
-                avg_rpm = 0
-            
-            max_temp = state.get('max_hdd_temp', 0)
-        
-        with get_db_connection() as conn:
-            conn.execute(
-                'INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (
-                    datetime.now().isoformat(),
-                    'auto',
-                    avg_pwm,
-                    avg_rpm,
-                    max_temp,
-                    fan_count,
-                    disk_count
-                )
-            )
-            conn.commit()
-            
-    except sqlite3.OperationalError as e:
-        logger.error(f'SQLite write error: {e}')
-
-
-def cleanup_logs(retention_days: int = 30):
-    """Remove old log entries"""
-    try:
-        cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat()
-        with get_db_connection() as conn:
-            conn.execute('DELETE FROM logs WHERE ts < ?', (cutoff,))
-            conn.commit()
-        logger.info(f'Cleaned logs older than {retention_days} days')
-    except sqlite3.OperationalError as e:
-        logger.error(f'Failed to cleanup logs: {e}')
-
-# ============================================================================
 # CONFIGURATION MANAGEMENT
 # ============================================================================
 
@@ -1444,7 +997,7 @@ def _ensure_control_loop():
     global _control_loop_started
     if not _control_loop_started:
         _control_loop_started = True
-        threading.Thread(target=loop, daemon=True).start()
+        threading.Thread(target=loop, args=(socketio,), daemon=True).start()
 
 
 @app.before_request
