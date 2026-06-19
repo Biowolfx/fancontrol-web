@@ -63,6 +63,32 @@ def _normalize_curve(raw: List[Dict], is_inverted: bool) -> List[Dict]:
     return sorted(raw, key=lambda x: x['pwm'])
 
 
+def _detect_dead_zones(raw: List[Dict], max_rpm: int) -> tuple:
+    """
+    Detect min_pwm (fan start) and max_pwm (saturation) from calibration data.
+    Returns (min_pwm, max_pwm).
+    """
+    if not raw or max_rpm == 0:
+        return 0, 255
+
+    min_threshold = max_rpm * 0.05
+
+    min_pwm = 0
+    for pt in raw:
+        if pt['rpm'] > min_threshold:
+            min_pwm = pt['pwm']
+            break
+
+    max_pwm = 255
+    for i in range(len(raw) - 1, 0, -1):
+        if raw[i]['rpm'] > raw[i - 1]['rpm'] * 1.01:
+            max_pwm = raw[i]['pwm']
+            break
+
+    logger.info(f'Dead zones: min_pwm={min_pwm}, max_pwm={max_pwm}')
+    return min_pwm, max_pwm
+
+
 def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None):
     """
     Calibrate fans by testing PWM/RPM curve.
@@ -212,6 +238,9 @@ def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None)
             )
             cal_min_pct = real_min['pct']
 
+            detected_min_pwm, detected_max_pwm = _detect_dead_zones(raw, max_rpm)
+
+            existing_cal = state.get('fans', {}).get(k, {}).get('calibration', {})
             fan.update({
                 'min_rpm': real_min['rpm'],
                 'max_rpm': max_rpm,
@@ -219,7 +248,10 @@ def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None)
                     'min_rpm': real_min['rpm'],
                     'max_rpm': max_rpm,
                     'min_pct': cal_min_pct,
-                    'inverted': fan['inverted']
+                    'inverted': fan['inverted'],
+                    'min_pwm': existing_cal.get('min_pwm', detected_min_pwm),
+                    'max_pwm': existing_cal.get('max_pwm', detected_max_pwm),
+                    'lambda': existing_cal.get('lambda', 1.0),
                 }
             })
 

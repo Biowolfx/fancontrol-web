@@ -206,5 +206,12 @@
   "conflict.keep_agent": "Keep Agent Config",
   "conflict.manual_mode": "Manual Mode",
   "conflict.manual_warning": "Agent is controlling fans locally.",
-  "conflict.switch_to_server": "Switch to Server Control"
+  "conflict.switch_to_server": "Switch to Server Control",
+
+  "calibration.pwm_range": "PWM Range",
+  "calibration.pwm_range_hint": "Dead zone boundaries. Min = lowest PWM where fan spins. Max = PWM where fan reaches full speed. 0-100% slider maps only to this range.",
+  "calibration.min_pwm": "Min",
+  "calibration.max_pwm": "Max",
+  "calibration.curve_shape": "Curve Shape",
+  "calibration.lambda_hint": "Controls fan response curve. 1.0 = linear. Lower = fan ramps up faster at low %. Higher = fan stays quiet longer, ramps up near 100%."
 }

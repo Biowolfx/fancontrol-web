@@ -314,6 +314,54 @@
                         </div>
                     </div>
                     
+                    <!-- PWM Range -->
+                    <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-sm font-semibold text-gray-300 flex items-center gap-1">
+                                PWM Range
+                                <span class="relative group">
+                                    <span class="text-gray-500 cursor-help">&#x24D8;</span>
+                                    <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 border border-gray-600 rounded-lg text-xs text-gray-300 hidden group-hover:block z-50" data-i18n="calibration.pwm_range_hint">Dead zone boundaries. Min = lowest PWM where fan spins. Max = PWM where fan reaches full speed. 0-100% slider maps only to this range.</span>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-gray-500 w-8" data-i18n="calibration.min_pwm">Min</span>
+                            <input id="cal-min-pwm" type="range" min="0" max="255" value="0"
+                                   class="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                   oninput="updateCalibrationParam('min_pwm', this.value)">
+                            <span id="cal-min-pwm-val" class="text-xs text-gray-400 w-8 text-right">0</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-xs text-gray-500 w-8" data-i18n="calibration.max_pwm">Max</span>
+                            <input id="cal-max-pwm" type="range" min="0" max="255" value="255"
+                                   class="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                   oninput="updateCalibrationParam('max_pwm', this.value)">
+                            <span id="cal-max-pwm-val" class="text-xs text-gray-400 w-8 text-right">255</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Lambda -->
+                    <div class="bg-cyber-card rounded-xl p-5 border border-cyber-accent">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-sm font-semibold text-gray-300 flex items-center gap-1">
+                                Curve Shape
+                                <span class="relative group">
+                                    <span class="text-gray-500 cursor-help">&#x24D8;</span>
+                                    <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 border border-gray-600 rounded-lg text-xs text-gray-300 hidden group-hover:block z-50" data-i18n="calibration.lambda_hint">Controls fan response curve. 1.0 = linear. Lower = fan ramps up faster at low %. Higher = fan stays quiet longer, ramps up near 100%.</span>
+                                </span>
+                            </label>
+                            <span id="cal-lambda-val" class="text-sm font-mono text-neon-cyan">1.0</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">0.3</span>
+                            <input id="cal-lambda" type="range" min="3" max="30" value="10"
+                                   class="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                   oninput="updateCalibrationParam('lambda', this.value / 10)">
+                            <span class="text-xs text-gray-500">3.0</span>
+                        </div>
+                    </div>
+                    
                     <!-- Control Buttons -->
                     <div class="grid grid-cols-2 gap-3">
                         <button id="btn-mode-manual" onclick="setFanMode('manual')"

@@ -395,6 +395,27 @@ def _handle_set_pwm(data: dict) -> dict:
     return jsonify({"status": "success"})
 
 
+@routes.route('/api/fan/<fan_id>/calibration', methods=['POST'])
+def api_fan_calibration(fan_id):
+    """Save calibration params (min_pwm, max_pwm, lambda) for a fan."""
+    data = request.get_json(silent=True) or {}
+
+    with state_lock:
+        if fan_id not in state.get('fans', {}):
+            return jsonify({'error': 'Fan not found'}), 404
+
+        fan = state['fans'][fan_id]
+        if 'calibration' not in fan:
+            fan['calibration'] = {}
+
+        for key in ('min_pwm', 'max_pwm', 'lambda'):
+            if key in data:
+                fan['calibration'][key] = data[key]
+
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
 def _handle_set_config(data: dict) -> dict:
     """Handle fan configuration change atomically"""
     fan_key = data['fan']

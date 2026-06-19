@@ -479,6 +479,24 @@ function updateInspector(fan) {
     fanConfigs[currentFanId].target_temp = fan.target_temp || 31;
     fanConfigs[currentFanId].mode = mode;
     fanConfigs[currentFanId].sensor_mode = fan.sensor_mode || 'max';
+
+    // Calibration params
+    const cal = fan.calibration || {};
+    const minPwmEl = document.getElementById('cal-min-pwm');
+    const maxPwmEl = document.getElementById('cal-max-pwm');
+    const lambdaEl = document.getElementById('cal-lambda');
+    if (minPwmEl) {
+        minPwmEl.value = cal.min_pwm || 0;
+        document.getElementById('cal-min-pwm-val').textContent = cal.min_pwm || 0;
+    }
+    if (maxPwmEl) {
+        maxPwmEl.value = cal.max_pwm || 255;
+        document.getElementById('cal-max-pwm-val').textContent = cal.max_pwm || 255;
+    }
+    if (lambdaEl) {
+        lambdaEl.value = (cal.lambda || 1.0) * 10;
+        document.getElementById('cal-lambda-val').textContent = (cal.lambda || 1.0).toFixed(1);
+    }
 }
 
 // ============================================================================
@@ -977,6 +995,35 @@ function updateCalibrationModal(progress) {
 
 function hideCalibrationModal() {
     document.getElementById('calibration-modal').classList.add('hidden');
+}
+
+function updateCalibrationParam(param, value) {
+    if (!currentFanId || !currentState || !currentState.fans) return;
+    const fan = currentState.fans[currentFanId];
+    if (!fan) return;
+
+    if (!fan.calibration) fan.calibration = {};
+
+    if (param === 'lambda') {
+        fan.calibration.lambda = parseFloat(value);
+        document.getElementById('cal-lambda-val').textContent = parseFloat(value).toFixed(1);
+    } else if (param === 'min_pwm') {
+        fan.calibration.min_pwm = parseInt(value);
+        document.getElementById('cal-min-pwm-val').textContent = value;
+    } else if (param === 'max_pwm') {
+        fan.calibration.max_pwm = parseInt(value);
+        document.getElementById('cal-max-pwm-val').textContent = value;
+    }
+
+    saveFanCalibration(currentFanId, fan.calibration);
+}
+
+function saveFanCalibration(fanId, calibration) {
+    fetch('/api/fan/' + fanId + '/calibration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(calibration)
+    }).catch(err => console.error('Save calibration error:', err));
 }
 
 function startCalibration() {

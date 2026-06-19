@@ -165,7 +165,7 @@ def fan_temp(fan: Dict, override_sensors: Optional[List] = None,
 def pwm_from_curve(fan: Dict, target_pct: float) -> int:
     """
     Convert target percentage to PWM value using calibration curve.
-    Keeps target_pct as float for smooth interpolation, rounds only at return.
+    Applies dead zone offset and lambda curve shape.
     """
     curve = fan.get('curve', [])
     cal = fan.get('calibration', {})
@@ -179,16 +179,32 @@ def pwm_from_curve(fan: Dict, target_pct: float) -> int:
     if 0.0 < target_pct < min_pct:
         target_pct = min_pct
     
+    raw_pwm = None
     for i in range(len(curve) - 1):
         a, b = curve[i], curve[i + 1]
         if min(a['pct'], b['pct']) <= target_pct <= max(a['pct'], b['pct']):
             if a['pct'] == b['pct']:
-                return int(a['pwm'])
+                raw_pwm = a['pwm']
+                break
             ratio = (target_pct - a['pct']) / (b['pct'] - a['pct'])
-            pwm = a['pwm'] + (b['pwm'] - a['pwm']) * ratio
-            return max(0, min(255, int(round(pwm))))
+            raw_pwm = a['pwm'] + (b['pwm'] - a['pwm']) * ratio
+            break
     
-    return int(curve[-1]['pwm'])
+    if raw_pwm is None:
+        raw_pwm = curve[-1]['pwm']
+
+    min_pwm = cal.get('min_pwm', 0)
+    max_pwm = cal.get('max_pwm', 255)
+    lam = cal.get('lambda', 1.0)
+
+    if lam != 1.0 and max_pwm > min_pwm:
+        span = max_pwm - min_pwm
+        normalized = (raw_pwm - min_pwm) / span
+        normalized = max(0.0, min(1.0, normalized))
+        normalized = normalized ** lam
+        raw_pwm = normalized * span + min_pwm
+
+    return max(min_pwm, min(max_pwm, int(round(raw_pwm))))
 
 
 def process_auto_mode(fan_id: str, fan: Dict, current_temp: float,
