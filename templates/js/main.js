@@ -305,12 +305,15 @@ function showSetupScreen() {
 }
 
 function showMainScreen() {
+    const mainScreen = document.getElementById('main-screen');
+    const wasOnSetup = mainScreen?.classList.contains('hidden');
+
     document.getElementById('setup-screen').classList.add('hidden');
-    document.getElementById('main-screen').classList.remove('hidden');
+    mainScreen?.classList.remove('hidden');
     if (!currentState || !currentState.testing) {
         hideCalibrationModal();
     }
-    showView('dashboard');
+    if (wasOnSetup) showView('dashboard');
     buildServerTree();
     loadPickerCards();
     startPickerLiveUpdate();
@@ -700,10 +703,12 @@ function renderPickerCard(card) {
 
 let _draggedCard = null;
 let _cardDragOccurred = false;
+let _lastDragInsert = null;
 
 function onCardDragStart(e) {
     _draggedCard = this;
     _cardDragOccurred = false;
+    _lastDragInsert = null;
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
@@ -715,9 +720,11 @@ function onCardDragOver(e) {
     _cardDragOccurred = true;
     const canvas = document.getElementById('dashboard-canvas');
     const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
-    if (afterElement) {
+    if (afterElement && afterElement !== _lastDragInsert) {
+        _lastDragInsert = afterElement;
         canvas.insertBefore(_draggedCard, afterElement);
-    } else {
+    } else if (!afterElement && _lastDragInsert !== null) {
+        _lastDragInsert = null;
         canvas.appendChild(_draggedCard);
     }
 }
@@ -740,12 +747,12 @@ function getDragAfterElement(container, x, y) {
         const box = child.getBoundingClientRect();
         const offsetX = x - box.left - box.width / 2;
         const offsetY = y - box.top - box.height / 2;
-        const offset = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-        if (offset < 0 || offset < closest.offset) {
-            return { offset, element: child };
+        if (Math.abs(offsetY) > box.height / 2) return closest;
+        if (offsetX < 0 && offsetX > closest.offset) {
+            return { offset: offsetX, element: child };
         }
         return closest;
-    }, { offset: Number.POSITIVE_INFINITY }).element;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 function saveCardOrder() {
