@@ -1074,7 +1074,7 @@ function renderDashboardGroup(group) {
 
     el.innerHTML = `
         <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400 font-medium">${escapeHtml(group.name)}</span>
+            <span class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors" onclick="startGroupRename('${group.id}')">${escapeHtml(group.name)}</span>
             <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
         </div>
         <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>
@@ -1192,6 +1192,52 @@ function stopGroupResize() {
     _resizingGroupId = null;
     document.removeEventListener('mousemove', onGroupResize);
     document.removeEventListener('mouseup', stopGroupResize);
+}
+
+function startGroupRename(groupId) {
+    const el = document.querySelector(`[data-group-id="${groupId}"]`);
+    if (!el) return;
+    const nameSpan = el.querySelector('.flex.items-center.justify-between span');
+    if (!nameSpan) return;
+
+    const groups = getPickerGroups();
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = group.name;
+    input.className = 'bg-cyber-bg border border-neon-purple rounded px-1 py-0 text-xs text-white w-32';
+    input.onblur = () => finishGroupRename(groupId, input.value);
+    input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = group.name; input.blur(); } };
+
+    nameSpan.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+function finishGroupRename(groupId, newName) {
+    newName = newName.trim();
+    if (!newName) return;
+
+    const groups = getPickerGroups();
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    group.name = newName;
+    setPickerGroups(groups);
+
+    const el = document.querySelector(`[data-group-id="${groupId}"]`);
+    if (el) {
+        const input = el.querySelector('input[type="text"]');
+        if (input) {
+            const span = document.createElement('span');
+            span.className = 'text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors';
+            span.setAttribute('onclick', `startGroupRename('${groupId}')`);
+            span.textContent = newName;
+            input.replaceWith(span);
+        }
+    }
 }
 
 function getStatusBadgeClass(status) {
