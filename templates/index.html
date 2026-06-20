@@ -43,16 +43,8 @@
         }
     </script>
     
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Gridstack (dashboard layout) -->
-    <link href="https://cdn.jsdelivr.net/npm/gridstack@8.2.0/dist/gridstack.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/gridstack@8.2.0/dist/gridstack-h5.js"></script>
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
-    <!-- ApexCharts -->
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap');
@@ -265,7 +257,7 @@
                     <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
                     <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
                 </div>
-                <div id="dashboard-canvas" class="p-4"></div>
+                <div id="dashboard-canvas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4"></div>
                 <button id="dashboard-add-btn" onclick="showCardPicker()"
                         class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40">
                     +
@@ -848,6 +840,5 @@
     </div>
 
     <script src="/js/main.js"></script>
-    <script src="/js/dashboard.js"></script>
 </body>
 </html>

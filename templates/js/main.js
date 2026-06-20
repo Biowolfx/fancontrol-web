@@ -291,7 +291,7 @@ function updateUI(data) {
     // Refresh server tree
     buildServerTree();
 
-    // Dashboard updates handled by dashboard.js
+    // Dashboard live updates handled by startPickerLiveUpdate
 }
 
 function showSetupScreen() {
@@ -540,7 +540,7 @@ function selectNodeFan(nodeId, fanId) {
 }
 
 // ============================================================================
-// CUSTOM DASHBOARD (stubs — dashboard.js handles layout via Gridstack)
+// DASHBOARD CARDS
 // ============================================================================
 
 function showCardPicker() {
@@ -619,10 +619,6 @@ function addSelectedCards() {
     const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
     if (!checkboxes.length) return;
 
-    const canvas = document.getElementById('dashboard-canvas');
-    const dashApi = window.__fancontrol_dashboard;
-    const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
-
     const saved = getPickerCards();
 
     checkboxes.forEach(cb => {
@@ -631,7 +627,7 @@ function addSelectedCards() {
         if (saved.some(c => c.id === cardId)) return;
 
         const label = cb.dataset.label || cb.value;
-        renderPickerCard(canvas, useGrid, dashApi, { id: cardId, type, source, sourceId: cb.value, label });
+        renderPickerCard({ id: cardId, type, source, sourceId: cb.value, label });
         saved.push({ id: cardId, type, source, sourceId: cb.value, label });
     });
 
@@ -641,44 +637,47 @@ function addSelectedCards() {
     startPickerLiveUpdate();
 }
 
-function renderPickerCard(canvas, useGrid, dashApi, card) {
+function renderPickerCard(card) {
     const { id, type, source, sourceId, label } = card;
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+
+    let icon = '📊';
+    let colorClass = 'text-neon-cyan';
     let valueHtml = '';
 
     if (type === 'fan') {
-        valueHtml = `<div class="text-lg font-bold font-mono text-neon-cyan" data-fan-id="${sourceId}" data-source="${source}">-- RPM</div>`;
+        icon = '🌀';
+        colorClass = 'text-neon-cyan';
+        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</div>
+            <div class="text-xs text-gray-500 mt-1">RPM</div>`;
     } else if (type === 'temperature') {
-        valueHtml = `<div class="text-lg font-bold font-mono text-neon-green" data-temp-id="${sourceId}" data-source="${source}">--°C</div>`;
+        icon = '🌡';
+        colorClass = 'text-neon-green';
+        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-temp-id="${sourceId}" data-source="${source}">--</div>
+            <div class="text-xs text-gray-500 mt-1">°C</div>`;
     } else if (type === 'disk') {
-        valueHtml = `<div class="text-lg font-bold font-mono text-neon-purple" data-disk-id="${sourceId}" data-source="${source}">--°C</div>`;
+        icon = '💾';
+        colorClass = 'text-neon-purple';
+        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</div>
+            <div class="text-xs text-gray-500 mt-1">°C</div>`;
     } else {
-        valueHtml = `<div class="text-lg font-bold font-mono text-neon-cyan">--</div>`;
+        valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
 
-    if (useGrid) {
-        const wrapHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${id}">
-            <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3" data-card-id="${id}">
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
-                    <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
-                </div>
-                ${valueHtml}
+    const el = document.createElement('div');
+    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg';
+    el.setAttribute('data-card-id', id);
+    el.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-lg">${icon}</span>
+                <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
             </div>
-        </div>`;
-        try { dashApi.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
-    } else {
-        const el = document.createElement('div');
-        el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-3';
-        el.setAttribute('data-card-id', id);
-        el.style.cssText = 'width:220px;min-height:100px;display:inline-block;vertical-align:top;margin:8px;';
-        el.innerHTML = `
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
-                <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
-            </div>
-            ${valueHtml}`;
-        canvas.appendChild(el);
-    }
+            <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-sm transition-colors">×</button>
+        </div>
+        ${valueHtml}`;
+    canvas.appendChild(el);
 }
 
 function removePickerCard(cardId) {
@@ -702,11 +701,9 @@ function loadPickerCards() {
     if (!cards.length) return;
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
-    const dashApi = window.__fancontrol_dashboard;
-    const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
     cards.forEach(c => {
         if (document.querySelector(`[data-card-id="${c.id}"]`)) return;
-        renderPickerCard(canvas, useGrid, dashApi, c);
+        renderPickerCard(c);
     });
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
@@ -727,7 +724,7 @@ function startPickerLiveUpdate() {
                 const node = nodesData.find(n => n.node_id === src);
                 fan = node?.telemetry?.fans?.[id];
             }
-            if (fan) el.textContent = `${fan.rpm || 0} RPM`;
+            if (fan) el.textContent = fan.rpm || 0;
         });
         document.querySelectorAll('[data-temp-id]').forEach(el => {
             const src = el.dataset.source;
@@ -739,12 +736,12 @@ function startPickerLiveUpdate() {
                 const node = nodesData.find(n => n.node_id === src);
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
-            if (val != null) el.textContent = `${val}°C`;
+            if (val != null) el.textContent = val;
         });
         document.querySelectorAll('[data-disk-id]').forEach(el => {
             const id = el.dataset.diskId;
             if (currentState?.hdd_sensors?.[id]) {
-                el.textContent = `${currentState.hdd_sensors[id].temp || '--'}°C`;
+                el.textContent = currentState.hdd_sensors[id].temp || '--';
             }
         });
     }, 2000);
