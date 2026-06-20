@@ -964,6 +964,12 @@ function loadPickerCards() {
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
 
+    if (!canvas._groupHandlersAttached) {
+        canvas.addEventListener('dragover', onGroupDragOver);
+        canvas.addEventListener('drop', onGroupDropOutside);
+        canvas._groupHandlersAttached = true;
+    }
+
     const groups = getPickerGroups();
     if (groups.length) {
         groups.forEach(g => {
@@ -1068,22 +1074,27 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative col-span-full';
     el.setAttribute('data-group-id', group.id);
-    if (group.width) el.style.width = group.width;
+    el.setAttribute('draggable', 'true');
     if (group.minHeight) el.style.minHeight = group.minHeight;
 
     el.innerHTML = `
         <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors" onclick="startGroupRename('${group.id}')">${escapeHtml(group.name)}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-gray-600 text-xs select-none cursor-grab">⠿</span>
+                <span class="text-xs text-gray-400 font-medium cursor-pointer hover:text-white transition-colors" onclick="startGroupRename('${group.id}')">${escapeHtml(group.name)}</span>
+            </div>
             <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
         </div>
         <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>
-        <div class="group-resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-30 hover:opacity-80 transition-opacity"></div>`;
+        <div class="group-resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-30 hover:opacity-80 transition-opacity"></div>`;
 
-    el.addEventListener('dragover', onGroupDragOver);
+    el.addEventListener('dragstart', onGroupDragStart);
+    el.addEventListener('dragover', onGroupCardDragOver);
     el.addEventListener('drop', onGroupDrop);
     el.addEventListener('dragleave', onGroupDragLeave);
+    el.addEventListener('dragend', onGroupDragEnd);
 
     const handle = el.querySelector('.group-resize-handle');
     handle.addEventListener('mousedown', (e) => startGroupResize(e, group.id));
@@ -1116,14 +1127,15 @@ function removePickerGroup(groupId) {
     }
 }
 
-function onGroupDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    this.classList.add('border-neon-purple', 'bg-purple-900/10');
-}
-
 function onGroupDragLeave(e) {
     this.classList.remove('border-neon-purple', 'bg-purple-900/10');
+}
+
+function onGroupDropOutside(e) {
+    if (_draggedGroup) {
+        _draggedGroup.classList.remove('opacity-40');
+        _draggedGroup = null;
+    }
 }
 
 function onGroupDrop(e) {
@@ -1132,29 +1144,29 @@ function onGroupDrop(e) {
     this.classList.remove('border-neon-purple', 'bg-purple-900/10');
 
     const cardId = e.dataTransfer.getData('text/plain');
-    if (!cardId) return;
+    const groupId = e.dataTransfer.getData('text/group');
+    if (!cardId && !groupId) return;
 
-    const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
-    const groupCards = this.querySelector('.group-cards');
-    if (!cardEl || !groupCards) return;
+    if (cardId) {
+        const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+        const groupCards = this.querySelector('.group-cards');
+        if (!cardEl || !groupCards) return;
 
-    const groupId = this.dataset.groupId;
-    const saved = getPickerCards();
-    const cardData = saved.find(c => c.id === cardId);
-    if (cardData) {
-        cardData.groupId = groupId;
-        setPickerCards(saved);
+        const saved = getPickerCards();
+        const cardData = saved.find(c => c.id === cardId);
+        if (cardData) {
+            cardData.groupId = this.dataset.groupId;
+            setPickerCards(saved);
+        }
+
+        groupCards.appendChild(cardEl);
+        cardEl.classList.remove('cursor-grab');
+        cardEl.classList.add('cursor-default');
     }
-
-    groupCards.appendChild(cardEl);
-    cardEl.classList.remove('cursor-grab');
-    cardEl.classList.add('cursor-default');
 }
 
 let _resizingGroupId = null;
-let _resizeStartX = 0;
 let _resizeStartY = 0;
-let _resizeStartW = 0;
 let _resizeStartH = 0;
 
 function startGroupResize(e, groupId) {
@@ -1163,9 +1175,7 @@ function startGroupResize(e, groupId) {
     _resizingGroupId = groupId;
     const el = document.querySelector(`[data-group-id="${groupId}"]`);
     if (!el) return;
-    _resizeStartX = e.clientX;
     _resizeStartY = e.clientY;
-    _resizeStartW = el.offsetWidth;
     _resizeStartH = el.offsetHeight;
     document.addEventListener('mousemove', onGroupResize);
     document.addEventListener('mouseup', stopGroupResize);
@@ -1175,9 +1185,7 @@ function onGroupResize(e) {
     if (!_resizingGroupId) return;
     const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
     if (!el) return;
-    const w = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
     const h = Math.max(100, _resizeStartH + (e.clientY - _resizeStartY));
-    el.style.width = w + 'px';
     el.style.minHeight = h + 'px';
 }
 
@@ -1187,13 +1195,59 @@ function stopGroupResize() {
     const group = groups.find(g => g.id === _resizingGroupId);
     const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
     if (group && el) {
-        group.width = el.style.width;
         group.minHeight = el.style.minHeight;
         setPickerGroups(groups);
     }
     _resizingGroupId = null;
     document.removeEventListener('mousemove', onGroupResize);
     document.removeEventListener('mouseup', stopGroupResize);
+}
+
+let _draggedGroup = null;
+
+function onGroupDragStart(e) {
+    if (e.target.closest('.group-resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
+    _draggedGroup = this;
+    this.classList.add('opacity-40');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/group', this.dataset.groupId);
+}
+
+function onGroupCardDragOver(e) {
+    if (e.dataTransfer.types.includes('text/group')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    this.classList.add('border-neon-purple', 'bg-purple-900/10');
+}
+
+function onGroupDragOver(e) {
+    if (!_draggedGroup) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const canvas = document.getElementById('dashboard-canvas');
+    const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
+    if (afterElement && afterElement !== _draggedGroup) {
+        canvas.insertBefore(_draggedGroup, afterElement);
+    } else if (!afterElement) {
+        canvas.appendChild(_draggedGroup);
+    }
+}
+
+function onGroupDragEnd() {
+    if (_draggedGroup) {
+        _draggedGroup.classList.remove('opacity-40');
+        _draggedGroup = null;
+        saveGroupOrder();
+    }
+}
+
+function saveGroupOrder() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    const ordered = [...canvas.querySelectorAll('[data-group-id]')].map(el => el.dataset.groupId);
+    const saved = getPickerGroups();
+    const orderedGroups = ordered.map(id => saved.find(g => g.id === id)).filter(Boolean);
+    setPickerGroups(orderedGroups);
 }
 
 function startGroupRename(groupId) {
