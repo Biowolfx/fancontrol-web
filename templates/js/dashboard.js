@@ -173,10 +173,8 @@
 
       grid.on('change', () => saveLayout());
     } else {
-      // fallback: inject static cards
-      const container = document.getElementById('dashboard-cards');
-      container.innerHTML = createOverviewCard() + createFansCard() + createDisksCard() + createLogsCard();
-      initCharts();
+      // fallback: GridStack not available, no-op (main.js handles card rendering)
+      console.debug('GridStack not available, dashboard.js cards disabled');
     }
   }
 
@@ -625,5 +623,9 @@
     return null;
   }
 
-  window.__fancontrol_dashboard = { updateOverview, saveLayout, resetLayout, addWidget };
+  function isGridReady() {
+    return !!grid;
+  }
+
+  window.__fancontrol_dashboard = { updateOverview, saveLayout, resetLayout, addWidget, isGridReady };
 })();

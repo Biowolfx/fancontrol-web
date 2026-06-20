@@ -620,7 +620,8 @@ function addSelectedCards() {
     if (!checkboxes.length) return;
 
     const canvas = document.getElementById('dashboard-canvas');
-    const useGrid = !!(window.__fancontrol_dashboard?.addWidget);
+    const dashApi = window.__fancontrol_dashboard;
+    const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
 
     checkboxes.forEach(cb => {
         const cardId = `picker-${source}-${cb.value}`;
@@ -651,7 +652,7 @@ function addSelectedCards() {
                     ${valueHtml}
                 </div>
             </div>`;
-            try { window.__fancontrol_dashboard.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
+            try { dashApi.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
         } else {
             const card = document.createElement('div');
             card.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-3';
