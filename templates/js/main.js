@@ -314,6 +314,8 @@ function showMainScreen() {
     showView('dashboard');
     // Build server tree
     buildServerTree();
+    // Start live updates for dashboard cards
+    startPickerLiveUpdate();
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -617,73 +619,95 @@ function addSelectedCards() {
     const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
     if (!checkboxes.length) return;
 
+    const canvas = document.getElementById('dashboard-canvas');
+    const useGrid = !!(window.__fancontrol_dashboard?.addWidget);
+
     checkboxes.forEach(cb => {
         const cardId = `picker-${source}-${cb.value}`;
-        const existing = document.querySelector(`[data-gs-id="${cardId}"]`);
-        if (existing) return;
+        if (document.querySelector(`[data-card-id="${cardId}"]`)) return;
 
         const label = cb.dataset.label || cb.value;
-        let cardHtml = '';
+        let valueHtml = '';
+        let valueId = '';
 
         if (type === 'fan') {
-            cardHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
-                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
-                    <div class="text-sm font-semibold text-white truncate mb-2">${escapeHtml(label)}</div>
-                    <div id="picker-rpm-${cardId}" class="text-lg font-bold font-mono text-neon-cyan">-- RPM</div>
-                </div>
-            </div>`;
+            valueId = `picker-rpm-${cardId}`;
+            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-cyan" data-fan-id="${cb.value}" data-source="${source}">-- RPM</div>`;
         } else if (type === 'temperature') {
-            cardHtml = `<div class="grid-stack-item" gs-w="2" gs-h="2" data-gs-id="${cardId}">
-                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
-                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
-                    <div id="picker-temp-${cardId}" class="text-lg font-bold font-mono text-neon-green">--°C</div>
-                </div>
-            </div>`;
+            valueId = `picker-temp-${cardId}`;
+            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-green" data-temp-id="${cb.value}" data-source="${source}">--°C</div>`;
         } else if (type === 'disk') {
-            cardHtml = `<div class="grid-stack-item" gs-w="2" gs-h="2" data-gs-id="${cardId}">
-                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
-                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
-                    <div id="picker-disk-${cardId}" class="text-lg font-bold font-mono text-neon-purple">--°C</div>
-                </div>
-            </div>`;
+            valueId = `picker-disk-${cardId}`;
+            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-purple" data-disk-id="${cb.value}" data-source="${source}">--°C</div>`;
         } else {
-            cardHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
-                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
-                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
-                    <div class="text-lg font-bold font-mono text-neon-cyan">--</div>
-                </div>
-            </div>`;
+            valueId = `picker-sys-${cardId}`;
+            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-cyan">--</div>`;
         }
 
-        try {
-            if (window.__fancontrol_dashboard?.addWidget) {
-                window.__fancontrol_dashboard.addWidget(cardHtml);
-            }
-        } catch (e) { console.debug('addCard failed', e); }
-
-        if (source === 'local' && type === 'fan') {
-            setupPickerFanUpdate(cardId, cb.value);
+        if (useGrid) {
+            const wrapHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
+                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3" data-card-id="${cardId}">
+                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
+                    ${valueHtml}
+                </div>
+            </div>`;
+            try { window.__fancontrol_dashboard.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
+        } else {
+            const card = document.createElement('div');
+            card.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-3';
+            card.setAttribute('data-card-id', cardId);
+            card.style.cssText = 'width:220px;min-height:100px;display:inline-block;vertical-align:top;margin:8px;';
+            card.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
+                    <button onclick="this.closest('[data-card-id]').remove()" class="text-gray-600 hover:text-red-400 text-xs">×</button>
+                </div>
+                ${valueHtml}`;
+            canvas.appendChild(card);
         }
     });
 
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     hideCardPicker();
+    startPickerLiveUpdate();
 }
 
-function setupPickerFanUpdate(cardId, fanId) {
-    const checkExist = setInterval(() => {
-        const el = document.getElementById(`picker-rpm-${cardId}`);
-        if (el) {
-            clearInterval(checkExist);
-            const updateFan = () => {
-                if (currentState?.fans?.[fanId]) {
-                    el.textContent = `${currentState.fans[fanId].rpm || 0} RPM`;
-                }
-            };
-            updateFan();
-            setInterval(updateFan, 2000);
-        }
-    }, 500);
+let _pickerLiveTimer = null;
+
+function startPickerLiveUpdate() {
+    if (_pickerLiveTimer) return;
+    _pickerLiveTimer = setInterval(() => {
+        document.querySelectorAll('[data-fan-id]').forEach(el => {
+            const src = el.dataset.source;
+            const id = el.dataset.fanId;
+            let fan = null;
+            if (src === 'local' && currentState?.fans?.[id]) {
+                fan = currentState.fans[id];
+            } else {
+                const node = nodesData.find(n => n.node_id === src);
+                fan = node?.telemetry?.fans?.[id];
+            }
+            if (fan) el.textContent = `${fan.rpm || 0} RPM`;
+        });
+        document.querySelectorAll('[data-temp-id]').forEach(el => {
+            const src = el.dataset.source;
+            const id = el.dataset.tempId;
+            let val = null;
+            if (src === 'local' && currentState?.temp_sensors?.[id]) {
+                val = currentState.temp_sensors[id].value;
+            } else {
+                const node = nodesData.find(n => n.node_id === src);
+                val = node?.telemetry?.temp_sensors?.[id]?.value;
+            }
+            if (val != null) el.textContent = `${val}°C`;
+        });
+        document.querySelectorAll('[data-disk-id]').forEach(el => {
+            const id = el.dataset.diskId;
+            if (currentState?.hdd_sensors?.[id]) {
+                el.textContent = `${currentState.hdd_sensors[id].temp || '--'}°C`;
+            }
+        });
+    }, 2000);
 }
 
 function showGroupCreator() {
