@@ -731,6 +731,16 @@ function onCardDragOver(e) {
 
 function onCardDrop(e) {
     e.preventDefault();
+    if (_draggedCard) {
+        const cardId = _draggedCard.dataset.cardId;
+        const cardData = getPickerCards().find(c => c.id === cardId);
+        if (cardData?.groupId) {
+            delete cardData.groupId;
+            setPickerCards(getPickerCards());
+            _draggedCard.classList.add('cursor-grab');
+            _draggedCard.classList.remove('cursor-default');
+        }
+    }
     saveCardOrder();
 }
 
@@ -941,14 +951,38 @@ function setPickerCards(cards) {
     localStorage.setItem('fc_picker_cards', JSON.stringify(cards));
 }
 
+function getPickerGroups() {
+    try { return JSON.parse(localStorage.getItem('fc_picker_groups') || '[]'); } catch(e) { return []; }
+}
+
+function setPickerGroups(groups) {
+    localStorage.setItem('fc_picker_groups', JSON.stringify(groups));
+}
+
 function loadPickerCards() {
-    const cards = getPickerCards();
-    if (!cards.length) return;
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
+
+    const groups = getPickerGroups();
+    if (groups.length) {
+        groups.forEach(g => renderDashboardGroup(g));
+    }
+
+    const cards = getPickerCards();
+    if (!cards.length && !groups.length) return;
+
     cards.forEach(c => {
         if (document.querySelector(`[data-card-id="${c.id}"]`)) return;
         renderPickerCard(c);
+        if (c.groupId) {
+            const groupEl = document.querySelector(`[data-group-id="${c.groupId}"] .group-cards`);
+            const cardEl = document.querySelector(`[data-card-id="${c.id}"]`);
+            if (groupEl && cardEl) {
+                groupEl.appendChild(cardEl);
+                cardEl.classList.remove('cursor-grab');
+                cardEl.classList.add('cursor-default');
+            }
+        }
     });
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
@@ -1007,7 +1041,101 @@ function hideGroupCreator() {
 }
 
 function createGroup() {
+    const name = document.getElementById('group-name-input')?.value?.trim();
+    if (!name) return;
+
+    const group = {
+        id: 'group-' + Date.now(),
+        name: name,
+    };
+
+    const groups = getPickerGroups();
+    groups.push(group);
+    setPickerGroups(groups);
+
+    renderDashboardGroup(group);
     hideGroupCreator();
+    document.getElementById('dashboard-empty')?.classList.add('hidden');
+}
+
+function renderDashboardGroup(group) {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+
+    const el = document.createElement('div');
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-all hover:border-neon-purple/50 min-h-[120px]';
+    el.setAttribute('data-group-id', group.id);
+    el.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-400 font-medium">${escapeHtml(group.name)}</span>
+            <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
+        </div>
+        <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>`;
+
+    el.addEventListener('dragover', onGroupDragOver);
+    el.addEventListener('drop', onGroupDrop);
+    el.addEventListener('dragleave', onGroupDragLeave);
+
+    canvas.appendChild(el);
+}
+
+function removePickerGroup(groupId) {
+    const el = document.querySelector(`[data-group-id="${groupId}"]`);
+    if (!el) return;
+
+    const cards = el.querySelectorAll('[data-card-id]');
+    const canvas = document.getElementById('dashboard-canvas');
+    cards.forEach(card => {
+        card.classList.remove('cursor-grab');
+        canvas.appendChild(card);
+    });
+
+    el.remove();
+
+    const saved = getPickerGroups().filter(g => g.id !== groupId);
+    setPickerGroups(saved);
+
+    const allCards = getPickerCards();
+    allCards.forEach(c => { if (c.groupId === groupId) delete c.groupId; });
+    setPickerCards(allCards);
+
+    if (!saved.length && !document.querySelector('[data-card-id]')) {
+        document.getElementById('dashboard-empty')?.classList.remove('hidden');
+    }
+}
+
+function onGroupDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    this.classList.add('border-neon-purple', 'bg-purple-900/10');
+}
+
+function onGroupDragLeave(e) {
+    this.classList.remove('border-neon-purple', 'bg-purple-900/10');
+}
+
+function onGroupDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    this.classList.remove('border-neon-purple', 'bg-purple-900/10');
+
+    const cardId = e.dataTransfer.getData('text/plain');
+    if (!cardId) return;
+
+    const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+    const groupCards = this.querySelector('.group-cards');
+    if (!cardEl || !groupCards) return;
+
+    const groupId = this.dataset.groupId;
+    const cardData = getPickerCards().find(c => c.id === cardId);
+    if (cardData) {
+        cardData.groupId = groupId;
+        setPickerCards(getPickerCards());
+    }
+
+    groupCards.appendChild(cardEl);
+    cardEl.classList.remove('cursor-grab');
+    cardEl.classList.add('cursor-default');
 }
 
 function getStatusBadgeClass(status) {
