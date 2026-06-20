@@ -836,16 +836,21 @@
                            class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-white text-sm"
                            onkeydown="if(event.key==='Enter')saveCardEdit()">
                 </div>
-                <div>
-                    <label class="text-xs text-gray-400 block mb-1">Link (optional)</label>
-                    <input id="card-edit-link" type="url" placeholder="https://..."
-                           class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-white text-sm"
-                           onkeydown="if(event.key==='Enter')saveCardEdit()">
-                </div>
             </div>
             <div class="flex gap-2 mt-6">
                 <button onclick="hideCardEdit()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Cancel</button>
                 <button onclick="saveCardEdit()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Configure Modal -->
+    <div id="card-config-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+        <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-sm w-full mx-4">
+            <h3 class="text-lg font-bold text-white mb-4">Card Display</h3>
+            <div id="card-config-options" class="space-y-2"></div>
+            <div class="flex gap-2 mt-6">
+                <button onclick="hideCardConfig()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Close</button>
             </div>
         </div>
     </div>

@@ -638,7 +638,7 @@ function addSelectedCards() {
 }
 
 function renderPickerCard(card) {
-    const { id, type, source, sourceId, label, link } = card;
+    const { id, type, source, sourceId, label } = card;
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
 
@@ -665,13 +665,16 @@ function renderPickerCard(card) {
         valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
 
-    const linkHtml = link ? `<a href="${escapeHtml(link)}" target="_blank" class="text-xs text-gray-500 hover:text-neon-cyan truncate block mt-2" title="${escapeHtml(link)}">${escapeHtml(link)}</a>` : '';
+    const configBtn = type === 'fan'
+        ? `<button onclick="event.stopPropagation(); showCardConfig('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Configure">⚙</button>`
+        : '';
+    const editBtn = `<button onclick="event.stopPropagation(); showCardEdit('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Edit name">✎</button>`;
+    const removeBtn = `<button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>`;
 
     const el = document.createElement('div');
-    el.className = `bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${link ? 'cursor-pointer' : ''}`;
+    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
     el.setAttribute('data-card-id', id);
     el.setAttribute('draggable', 'true');
-    el.setAttribute('title', link || '');
     el.innerHTML = `
         <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
@@ -679,19 +682,20 @@ function renderPickerCard(card) {
                 <span class="text-lg">${icon}</span>
                 <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
             </div>
-            <button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-sm transition-colors">×</button>
+            <div class="flex items-center gap-1">
+                ${configBtn}${editBtn}${removeBtn}
+            </div>
         </div>
-        ${valueHtml}${linkHtml}`;
+        ${valueHtml}
+        <div class="card-details"></div>`;
 
     el.addEventListener('dragstart', onCardDragStart);
     el.addEventListener('dragover', onCardDragOver);
     el.addEventListener('drop', onCardDrop);
     el.addEventListener('dragend', onCardDragEnd);
-    el.addEventListener('click', () => {
-        if (!_cardDragOccurred) showCardEdit(id);
-    });
 
     canvas.appendChild(el);
+    updateCardDetails(id);
 }
 
 let _draggedCard = null;
@@ -771,10 +775,8 @@ function showCardEdit(cardId) {
 
     const modal = document.getElementById('card-edit-modal');
     const labelInput = document.getElementById('card-edit-label');
-    const linkInput = document.getElementById('card-edit-link');
 
     labelInput.value = card.label || '';
-    linkInput.value = card.link || '';
 
     modal.classList.remove('hidden');
     labelInput.focus();
@@ -790,7 +792,6 @@ function saveCardEdit() {
     if (!_editingCardId) return;
 
     const label = document.getElementById('card-edit-label').value.trim();
-    const link = document.getElementById('card-edit-link').value.trim();
     if (!label) return;
 
     const saved = getPickerCards();
@@ -798,40 +799,131 @@ function saveCardEdit() {
     if (!card) return;
 
     card.label = label;
-    if (link) card.link = link; else delete card.link;
-
     setPickerCards(saved);
 
     const cardEl = document.querySelector(`[data-card-id="${_editingCardId}"]`);
     if (cardEl) {
         const labelEl = cardEl.querySelector('.text-sm.text-gray-300');
         if (labelEl) labelEl.textContent = label;
-
-        cardEl.classList.toggle('cursor-pointer', !!link);
-        cardEl.setAttribute('title', link || '');
-
-        const existingLink = cardEl.querySelector('a.text-xs');
-        const valueEl = cardEl.querySelector('.text-2xl');
-        const linkHtml = link ? `<a href="${escapeHtml(link)}" target="_blank" class="text-xs text-gray-500 hover:text-neon-cyan truncate block mt-2" title="${escapeHtml(link)}">${escapeHtml(link)}</a>` : '';
-
-        if (existingLink && !link) {
-            existingLink.remove();
-        } else if (valueEl) {
-            if (existingLink) {
-                if (link) {
-                    existingLink.href = link;
-                    existingLink.textContent = link;
-                    existingLink.title = link;
-                } else {
-                    existingLink.remove();
-                }
-            } else if (link) {
-                valueEl.insertAdjacentHTML('afterend', linkHtml);
-            }
-        }
     }
 
     hideCardEdit();
+}
+
+let _configuringCardId = null;
+
+function showCardConfig(cardId) {
+    _configuringCardId = cardId;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card || card.type !== 'fan') return;
+
+    const modal = document.getElementById('card-config-modal');
+    const container = document.getElementById('card-config-options');
+
+    const fanData = getFanData(card.source, card.sourceId);
+    if (!fanData) return;
+
+    const options = [
+        { key: 'rpm', label: 'RPM', checked: card.showRpm !== false },
+        { key: 'mode', label: 'Mode', checked: card.showMode === true },
+        { key: 'sensors', label: 'Sensors', checked: card.showSensors === true },
+        { key: 'target', label: 'Target Temp', checked: card.showTarget === true },
+    ];
+
+    container.innerHTML = options.map(opt => `
+        <label class="flex items-center gap-3 p-2 rounded hover:bg-cyber-accent cursor-pointer">
+            <input type="checkbox" data-option="${opt.key}" ${opt.checked ? 'checked' : ''}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan">
+            <span class="text-sm text-gray-300">${opt.label}</span>
+        </label>
+    `).join('');
+
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => toggleCardOption(cardId, cb.dataset.option, cb.checked));
+    });
+
+    modal.classList.remove('hidden');
+}
+
+function hideCardConfig() {
+    const modal = document.getElementById('card-config-modal');
+    if (modal) modal.classList.add('hidden');
+    _configuringCardId = null;
+}
+
+function toggleCardOption(cardId, option, enabled) {
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    if (option === 'rpm') card.showRpm = enabled;
+    else if (option === 'mode') card.showMode = enabled;
+    else if (option === 'sensors') card.showSensors = enabled;
+    else if (option === 'target') card.showTarget = enabled;
+
+    setPickerCards(saved);
+    updateCardDetails(cardId);
+}
+
+function getFanData(source, sourceId) {
+    if (source === 'local') return currentState?.fans?.[sourceId] || null;
+    const node = nodesData.find(n => n.node_id === source);
+    return node?.telemetry?.fans?.[sourceId] || null;
+}
+
+function getSensorLabel(sensorId) {
+    if (sensorId.startsWith('hdd:')) {
+        const id = sensorId.slice(4);
+        return currentState?.hdd_sensors?.[id]?.label || id;
+    } else if (sensorId.startsWith('temp:')) {
+        const id = sensorId.slice(5);
+        return currentState?.temp_sensors?.[id]?.label || id;
+    }
+    return sensorId;
+}
+
+function updateCardDetails(cardId) {
+    const cardEl = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!cardEl) return;
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    const detailsEl = cardEl.querySelector('.card-details');
+    if (!detailsEl) return;
+
+    if (card.type !== 'fan') {
+        detailsEl.innerHTML = '';
+        return;
+    }
+
+    const fanData = getFanData(card.source, card.sourceId);
+    if (!fanData) {
+        detailsEl.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+
+    if (card.showMode) {
+        const mode = fanData.mode || 'manual';
+        const modeClass = mode === 'auto' ? 'text-neon-green' : 'text-neon-cyan';
+        const modeLabel = mode === 'auto' ? 'AUTO' : 'MANUAL';
+        html += `<div class="text-xs ${modeClass} mt-1">${modeLabel}</div>`;
+    }
+
+    if (card.showTarget && fanData.mode === 'auto') {
+        html += `<div class="text-xs text-gray-500 mt-1">Target: ${fanData.target_temp || '--'}°C</div>`;
+    }
+
+    if (card.showSensors && fanData.sensors && fanData.sensors.length > 0) {
+        const sensorLabels = fanData.sensors.map(s => getSensorLabel(s)).join(', ');
+        html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">Sensors: ${escapeHtml(sensorLabels)}</div>`;
+    }
+
+    detailsEl.innerHTML = html;
 }
 
 function getPickerCards() {
@@ -870,7 +962,11 @@ function startPickerLiveUpdate() {
                 const node = nodesData.find(n => n.node_id === src);
                 fan = node?.telemetry?.fans?.[id];
             }
-            if (fan) el.textContent = fan.rpm || 0;
+            if (fan) {
+                el.textContent = fan.rpm || 0;
+                const cardEl = el.closest('[data-card-id]');
+                if (cardEl) updateCardDetails(cardEl.dataset.cardId);
+            }
         });
         document.querySelectorAll('[data-temp-id]').forEach(el => {
             const src = el.dataset.source;
