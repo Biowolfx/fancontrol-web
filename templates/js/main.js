@@ -603,13 +603,15 @@ function updatePickerElements() {
     }
 
     container.innerHTML = elements.length > 0
-        ? elements.map(el => `
-            <label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
-                <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded">
-                <span class="text-xs text-gray-300">${escapeHtml(el.label)}</span>
-                <span class="ml-auto text-xs text-gray-500">${el.extra}</span>
-            </label>
-        `).join('')
+        ? elements.map(el => {
+            const cardId = `picker-${source}-${el.id}`;
+            const exists = document.querySelector(`[data-card-id="${cardId}"]`);
+            return `<label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded" ${exists ? 'checked disabled' : ''}>
+                <span class="text-xs ${exists ? 'text-gray-500 line-through' : 'text-gray-300'}">${escapeHtml(el.label)}</span>
+                <span class="ml-auto text-xs text-gray-500">${exists ? 'added' : el.extra}</span>
+            </label>`;
+        }).join('')
         : '<div class="text-xs text-gray-500 text-center py-4">No elements found</div>';
 }
 
