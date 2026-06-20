@@ -545,7 +545,10 @@ function selectNodeFan(nodeId, fanId) {
 
 function showCardPicker() {
     const modal = document.getElementById('card-picker-modal');
-    if (modal) modal.classList.remove('hidden');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    populatePickerSources();
+    updatePickerElements();
 }
 
 function hideCardPicker() {
@@ -553,11 +556,135 @@ function hideCardPicker() {
     if (modal) modal.classList.add('hidden');
 }
 
-function addSelectedCards() {
-    if (window.__fancontrol_dashboard && window.__fancontrol_dashboard.addCardsFromPicker) {
-        window.__fancontrol_dashboard.addCardsFromPicker();
+function populatePickerSources() {
+    const select = document.getElementById('picker-source');
+    if (!select) return;
+    select.innerHTML = '<option value="local">My Server (local)</option>';
+    for (const node of nodesData) {
+        select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name || node.node_id)}</option>`;
     }
+}
+
+function updatePickerElements() {
+    const type = document.getElementById('picker-type')?.value;
+    const source = document.getElementById('picker-source')?.value;
+    const container = document.getElementById('picker-elements');
+    if (!container) return;
+
+    let elements = [];
+
+    if (source === 'local') {
+        if (type === 'fan' && currentState?.fans) {
+            elements = Object.entries(currentState.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
+        } else if (type === 'temperature' && currentState?.temp_sensors) {
+            elements = Object.entries(currentState.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
+        } else if (type === 'disk' && currentState?.hdd_sensors) {
+            elements = Object.entries(currentState.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
+        } else if (type === 'system') {
+            elements = [
+                { id: 'max_temp', label: 'Max Temperature', extra: `${currentState?.max_hdd_temp || '--'}°C` },
+                { id: 'fans_summary', label: 'Fans Summary', extra: '' },
+            ];
+        }
+    } else {
+        const node = nodesData.find(n => n.node_id === source);
+        if (node?.telemetry) {
+            const tel = node.telemetry;
+            if (type === 'fan' && tel.fans) {
+                elements = Object.entries(tel.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
+            } else if (type === 'temperature' && tel.temp_sensors) {
+                elements = Object.entries(tel.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
+            } else if (type === 'disk' && tel.hdd_sensors) {
+                elements = Object.entries(tel.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
+            }
+        }
+    }
+
+    container.innerHTML = elements.length > 0
+        ? elements.map(el => `
+            <label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded">
+                <span class="text-xs text-gray-300">${escapeHtml(el.label)}</span>
+                <span class="ml-auto text-xs text-gray-500">${el.extra}</span>
+            </label>
+        `).join('')
+        : '<div class="text-xs text-gray-500 text-center py-4">No elements found</div>';
+}
+
+function addSelectedCards() {
+    const type = document.getElementById('picker-type')?.value;
+    const source = document.getElementById('picker-source')?.value;
+    const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
+    if (!checkboxes.length) return;
+
+    checkboxes.forEach(cb => {
+        const cardId = `picker-${source}-${cb.value}`;
+        const existing = document.querySelector(`[data-gs-id="${cardId}"]`);
+        if (existing) return;
+
+        const label = cb.dataset.label || cb.value;
+        let cardHtml = '';
+
+        if (type === 'fan') {
+            cardHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
+                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
+                    <div class="text-sm font-semibold text-white truncate mb-2">${escapeHtml(label)}</div>
+                    <div id="picker-rpm-${cardId}" class="text-lg font-bold font-mono text-neon-cyan">-- RPM</div>
+                </div>
+            </div>`;
+        } else if (type === 'temperature') {
+            cardHtml = `<div class="grid-stack-item" gs-w="2" gs-h="2" data-gs-id="${cardId}">
+                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
+                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
+                    <div id="picker-temp-${cardId}" class="text-lg font-bold font-mono text-neon-green">--°C</div>
+                </div>
+            </div>`;
+        } else if (type === 'disk') {
+            cardHtml = `<div class="grid-stack-item" gs-w="2" gs-h="2" data-gs-id="${cardId}">
+                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
+                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
+                    <div id="picker-disk-${cardId}" class="text-lg font-bold font-mono text-neon-purple">--°C</div>
+                </div>
+            </div>`;
+        } else {
+            cardHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
+                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3">
+                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
+                    <div class="text-lg font-bold font-mono text-neon-cyan">--</div>
+                </div>
+            </div>`;
+        }
+
+        try {
+            const gridEl = document.querySelector('#dashboard-canvas');
+            if (gridEl && gridEl.gridstack) {
+                gridEl.gridstack.addWidget(cardHtml);
+            }
+        } catch (e) { console.debug('addCard failed', e); }
+
+        if (source === 'local' && type === 'fan') {
+            setupPickerFanUpdate(cardId, cb.value);
+        }
+    });
+
+    document.getElementById('dashboard-empty')?.classList.add('hidden');
     hideCardPicker();
+}
+
+function setupPickerFanUpdate(cardId, fanId) {
+    const checkExist = setInterval(() => {
+        const el = document.getElementById(`picker-rpm-${cardId}`);
+        if (el) {
+            clearInterval(checkExist);
+            const updateFan = () => {
+                if (currentState?.fans?.[fanId]) {
+                    el.textContent = `${currentState.fans[fanId].rpm || 0} RPM`;
+                }
+            };
+            updateFan();
+            setInterval(updateFan, 2000);
+        }
+    }, 500);
 }
 
 function showGroupCreator() {
