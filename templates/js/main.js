@@ -402,8 +402,6 @@ function selectFan(fanId) {
 // NODE TREE
 // ============================================================================
 
-let nodesData = [];
-
 function buildNodeTree() {
     const container = document.getElementById('node-tree');
     if (!container) return;
