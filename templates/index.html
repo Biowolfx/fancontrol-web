@@ -204,30 +204,58 @@
                         data-i18n="nav.nodes">
                     Nodes
                 </button>
+                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-gray-500 hover:text-gray-300 border-b-2 border-transparent"
+                        data-view="settings" onclick="toggleSettings()"
+                        data-i18n="nav.settings">
+                    Settings
+                </button>
             </div>
             
-            <!-- Node List -->
-            <div class="border-b border-cyber-accent p-3">
-                <div id="node-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
-                <div class="flex gap-2 mt-2">
-                    <input id="new-node-name" type="text" 
-                           class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
-                           placeholder="Node name" data-i18n-placeholder="nodes.name_placeholder"
-                           onkeydown="if(event.key==='Enter')addNode()">
-                    <button onclick="addNode()" 
-                            class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
-                        +
-                    </button>
+            <!-- Dashboard Canvas (shown on Dashboard tab) -->
+            <div id="dashboard-canvas-container" class="flex-1 overflow-auto p-3">
+                <div id="dashboard-canvas" class="relative min-h-full bg-cyber-bg rounded-lg border border-dashed border-gray-700">
+                    <div id="dashboard-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                        <div class="text-4xl mb-4">📊</div>
+                        <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
+                        <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
+                    </div>
+                    <div id="dashboard-groups"></div>
+                    <div id="dashboard-cards"></div>
+                </div>
+                <button id="dashboard-add-btn" onclick="showCardPicker()"
+                        class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40 hidden">
+                    +
+                </button>
+                <button id="dashboard-group-btn" onclick="showGroupCreator()"
+                        class="fixed bottom-6 right-20 w-12 h-12 bg-neon-purple rounded-full text-white text-lg shadow-lg hover:bg-purple-400 transition-all z-40 hidden">
+                    ⊞
+                </button>
+            </div>
+            
+            <!-- Node Tree (shown on Nodes tab) -->
+            <div id="node-tree-container" class="flex-1 overflow-y-auto p-3 space-y-2 hidden">
+                <div id="node-tree"></div>
+                <div class="border-t border-cyber-accent pt-2 mt-2">
+                    <div class="flex gap-2">
+                        <input id="new-node-name" type="text" 
+                               class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
+                               placeholder="Node name" data-i18n-placeholder="nodes.name_placeholder"
+                               onkeydown="if(event.key==='Enter')addNode()">
+                        <button onclick="addNode()" 
+                                class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
+                            +
+                        </button>
+                    </div>
                 </div>
             </div>
             
-            <!-- Fans List -->
-            <div class="flex-1 overflow-y-auto p-3 space-y-2" id="fan-list">
+            <!-- Fans List (legacy, kept for backward compat) -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2 hidden" id="fan-list">
                 <div class="text-center text-gray-500 py-8" data-i18n="setup.loading_fans">Loading fans...</div>
             </div>
             
             <!-- Disks Summary -->
-            <div class="border-t border-cyber-accent p-3">
+            <div class="border-t border-cyber-accent p-3 hidden" id="disks-summary">
                 <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2" data-i18n="header.storage">Storage</h3>
                 <div id="disks-mini-list" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
             </div>

@@ -213,5 +213,16 @@
   "calibration.min_pwm": "Min",
   "calibration.max_pwm": "Max",
   "calibration.curve_shape": "Curve Shape",
-  "calibration.lambda_hint": "Controls fan response curve. 1.0 = linear. Lower = fan ramps up faster at low %. Higher = fan stays quiet longer, ramps up near 100%."
+  "calibration.lambda_hint": "Controls fan response curve. 1.0 = linear. Lower = fan ramps up faster at low %. Higher = fan stays quiet longer, ramps up near 100%.",
+
+  "nav.dashboard": "Dashboard",
+  "nav.nodes": "Nodes",
+  "nav.settings": "Settings",
+  "dashboard.empty": "Dashboard is empty",
+  "dashboard.empty_hint": "Click + to add monitoring cards",
+  "dashboard.add_card": "Add Card",
+  "dashboard.add_group": "Add Group",
+  "nodes.local_server": "My Server",
+  "nodes.fans": "fans",
+  "nodes.disks": "disks"
 }
