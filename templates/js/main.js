@@ -965,7 +965,11 @@ function loadPickerCards() {
 
     const groups = getPickerGroups();
     if (groups.length) {
-        groups.forEach(g => renderDashboardGroup(g));
+        groups.forEach(g => {
+            if (!document.querySelector(`[data-group-id="${g.id}"]`)) {
+                renderDashboardGroup(g);
+            }
+        });
     }
 
     const cards = getPickerCards();
@@ -1063,18 +1067,25 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-all hover:border-neon-purple/50 min-h-[120px]';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
     el.setAttribute('data-group-id', group.id);
+    if (group.width) el.style.width = group.width;
+    if (group.minHeight) el.style.minHeight = group.minHeight;
+
     el.innerHTML = `
         <div class="flex items-center justify-between mb-2">
             <span class="text-xs text-gray-400 font-medium">${escapeHtml(group.name)}</span>
             <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
         </div>
-        <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>`;
+        <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>
+        <div class="group-resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize opacity-30 hover:opacity-80 transition-opacity"></div>`;
 
     el.addEventListener('dragover', onGroupDragOver);
     el.addEventListener('drop', onGroupDrop);
     el.addEventListener('dragleave', onGroupDragLeave);
+
+    const handle = el.querySelector('.group-resize-handle');
+    handle.addEventListener('mousedown', (e) => startGroupResize(e, group.id));
 
     canvas.appendChild(el);
 }
@@ -1136,6 +1147,51 @@ function onGroupDrop(e) {
     groupCards.appendChild(cardEl);
     cardEl.classList.remove('cursor-grab');
     cardEl.classList.add('cursor-default');
+}
+
+let _resizingGroupId = null;
+let _resizeStartX = 0;
+let _resizeStartY = 0;
+let _resizeStartW = 0;
+let _resizeStartH = 0;
+
+function startGroupResize(e, groupId) {
+    e.preventDefault();
+    e.stopPropagation();
+    _resizingGroupId = groupId;
+    const el = document.querySelector(`[data-group-id="${groupId}"]`);
+    if (!el) return;
+    _resizeStartX = e.clientX;
+    _resizeStartY = e.clientY;
+    _resizeStartW = el.offsetWidth;
+    _resizeStartH = el.offsetHeight;
+    document.addEventListener('mousemove', onGroupResize);
+    document.addEventListener('mouseup', stopGroupResize);
+}
+
+function onGroupResize(e) {
+    if (!_resizingGroupId) return;
+    const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
+    if (!el) return;
+    const w = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
+    const h = Math.max(100, _resizeStartH + (e.clientY - _resizeStartY));
+    el.style.width = w + 'px';
+    el.style.minHeight = h + 'px';
+}
+
+function stopGroupResize() {
+    if (!_resizingGroupId) return;
+    const groups = getPickerGroups();
+    const group = groups.find(g => g.id === _resizingGroupId);
+    const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
+    if (group && el) {
+        group.width = el.style.width;
+        group.minHeight = el.style.minHeight;
+        setPickerGroups(groups);
+    }
+    _resizingGroupId = null;
+    document.removeEventListener('mousemove', onGroupResize);
+    document.removeEventListener('mouseup', stopGroupResize);
 }
 
 function getStatusBadgeClass(status) {
