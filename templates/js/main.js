@@ -314,11 +314,8 @@ function showMainScreen() {
     if (!currentState || !currentState.testing) {
         hideCalibrationModal();
     }
-    // Show dashboard canvas by default
-    if (currentView === 'dashboard') {
-        const dashboardCanvas = document.getElementById('dashboard-canvas-container');
-        if (dashboardCanvas) dashboardCanvas.classList.remove('hidden');
-    }
+    // Show dashboard view by default
+    showView(currentView || 'dashboard');
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -2498,10 +2495,11 @@ function showView(view) {
     if (dashboardCanvas) dashboardCanvas.classList.toggle('hidden', view !== 'dashboard');
     if (nodeTree) nodeTree.classList.toggle('hidden', view !== 'nodes');
 
-    // Toggle right panel views
-    document.getElementById('dashboard-view')?.classList.toggle('hidden', view !== 'dashboard');
-    document.getElementById('nodes-view')?.classList.toggle('hidden', view !== 'nodes');
-    document.getElementById('node-detail-view')?.classList.toggle('hidden', view !== 'node-detail');
+    // Right panel: dashboard-view (inspector) stays visible for dashboard + nodes
+    // nodes-view and node-detail-view are separate full-page views
+    document.getElementById('dashboard-view')?.classList.remove('hidden');
+    document.getElementById('nodes-view')?.classList.add('hidden');
+    document.getElementById('node-detail-view')?.classList.add('hidden');
 
     // Toggle floating buttons
     const addBtn = document.getElementById('dashboard-add-btn');
