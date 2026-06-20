@@ -573,21 +573,94 @@ function renderDashboard() {
 }
 
 function renderDashboardCard(card) {
+    const liveData = getCardLiveData(card);
     const sourceName = card.source === 'local' ? 'Local' : (nodesData.find(n => n.node_id === card.source)?.name || card.source);
 
+    let bodyContent = '';
+    if (card.type === 'fan') {
+        bodyContent = `
+            <div class="text-xl font-bold font-mono text-neon-cyan">${liveData.rpm || 0} <span class="text-xs text-gray-500">RPM</span></div>
+            <div class="text-sm text-gray-400">${liveData.pct || 0}% · ${liveData.mode || 'manual'}</div>
+        `;
+    } else if (card.type === 'temperature') {
+        const temp = liveData.value || 0;
+        const color = temp > 70 ? 'text-neon-red' : temp > 50 ? 'text-neon-orange' : 'text-neon-green';
+        bodyContent = `<div class="text-xl font-bold font-mono ${color}">${temp}°C</div>`;
+    } else if (card.type === 'disk') {
+        bodyContent = `<div class="text-xl font-bold font-mono text-neon-purple">${liveData.temp || 0}°C</div>`;
+    } else {
+        bodyContent = `<div class="text-xl font-bold font-mono text-neon-cyan">${liveData.value || '--'}</div>`;
+    }
+
     return `
-        <div class="dashboard-card absolute bg-cyber-card border border-cyber-accent rounded-lg overflow-hidden"
+        <div class="dashboard-card absolute bg-cyber-card border border-cyber-accent rounded-lg overflow-hidden cursor-move"
              style="left:${card.x}px; top:${card.y}px; width:${card.w}px; height:${card.h}px;"
-             data-card-id="${card.id}">
+             data-card-id="${card.id}"
+             onmousedown="startDragCard(event, '${card.id}')">
             <div class="flex items-center justify-between px-2 py-1 bg-cyber-accent border-b border-cyber-accent">
                 <span class="text-xs text-gray-400 truncate">${escapeHtml(card.label)} — ${sourceName}</span>
-                <button onclick="removeCard('${card.id}')" class="text-gray-600 hover:text-red-400 text-xs ml-1">×</button>
+                <button onclick="event.stopPropagation(); removeCard('${card.id}')" class="text-gray-600 hover:text-red-400 text-xs ml-1">×</button>
             </div>
-            <div class="p-2">
-                <div class="text-sm text-gray-300">${escapeHtml(card.label)}</div>
+            <div class="p-3">
+                ${bodyContent}
             </div>
         </div>
     `;
+}
+
+// ============================================================================
+// DASHBOARD DRAG AND DROP
+// ============================================================================
+
+let draggedCardId = null;
+let dragOffset = { x: 0, y: 0 };
+
+function startDragCard(event, cardId) {
+    // Don't drag if clicking remove button
+    if (event.target.tagName === 'BUTTON') return;
+
+    draggedCardId = cardId;
+    const card = dashboardState.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    dragOffset.x = event.clientX - rect.left - card.x;
+    dragOffset.y = event.clientY - rect.top - card.y;
+
+    document.addEventListener('mousemove', onDragCard);
+    document.addEventListener('mouseup', onDropCard);
+    event.preventDefault();
+}
+
+function onDragCard(event) {
+    if (!draggedCardId) return;
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    const card = dashboardState.cards.find(c => c.id === draggedCardId);
+    if (!card) return;
+
+    card.x = Math.max(0, event.clientX - rect.left - dragOffset.x);
+    card.y = Math.max(0, event.clientY - rect.top - dragOffset.y);
+
+    const el = document.querySelector(`[data-card-id="${draggedCardId}"]`);
+    if (el) {
+        el.style.left = card.x + 'px';
+        el.style.top = card.y + 'px';
+    }
+}
+
+function onDropCard() {
+    if (draggedCardId) {
+        saveDashboard();
+    }
+    draggedCardId = null;
+    document.removeEventListener('mousemove', onDragCard);
+    document.removeEventListener('mouseup', onDropCard);
 }
 
 function removeCard(cardId) {
@@ -696,6 +769,21 @@ function addSelectedCards() {
     const source = document.getElementById('picker-source')?.value;
     const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
 
+    let offsetX = 20;
+    let offsetY = 20;
+
+    // Find existing cards to offset new ones
+    if (dashboardState.cards.length > 0) {
+        const lastCard = dashboardState.cards[dashboardState.cards.length - 1];
+        offsetX = lastCard.x + lastCard.w + 20;
+        offsetY = lastCard.y;
+        // Wrap to next row if too wide
+        if (offsetX > 600) {
+            offsetX = 20;
+            offsetY = lastCard.y + lastCard.h + 20;
+        }
+    }
+
     checkboxes.forEach(cb => {
         const card = {
             id: 'card-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
@@ -703,13 +791,18 @@ function addSelectedCards() {
             source: source,
             element_id: cb.value,
             label: cb.dataset.label,
-            x: 20 + Math.random() * 100,
-            y: 20 + Math.random() * 100,
+            x: offsetX,
+            y: offsetY,
             w: 200,
             h: 120,
             group_id: null
         };
         dashboardState.cards.push(card);
+        offsetX += 220;
+        if (offsetX > 600) {
+            offsetX = 20;
+            offsetY += 140;
+        }
     });
 
     saveDashboard();
@@ -2606,20 +2699,17 @@ function showView(view) {
     currentView = view;
 
     // Toggle left panel containers
-    const dashboardCanvas = document.getElementById('dashboard-canvas-container');
     const nodeTree = document.getElementById('node-tree-container');
-    if (dashboardCanvas) dashboardCanvas.classList.toggle('hidden', view !== 'dashboard');
     if (nodeTree) nodeTree.classList.toggle('hidden', view !== 'nodes');
 
-    // Right panel: dashboard-view (inspector) stays visible for dashboard + nodes
-    // nodes-view and node-detail-view are separate full-page views
-    document.getElementById('dashboard-view')?.classList.remove('hidden');
-    document.getElementById('nodes-view')?.classList.add('hidden');
-    document.getElementById('node-detail-view')?.classList.add('hidden');
-
-    // Toggle floating buttons
+    // Toggle right panel: canvas vs inspector
+    const canvas = document.getElementById('dashboard-canvas-container');
+    const inspector = document.getElementById('dashboard-view');
     const addBtn = document.getElementById('dashboard-add-btn');
     const groupBtn = document.getElementById('dashboard-group-btn');
+
+    if (canvas) canvas.classList.toggle('hidden', view !== 'dashboard');
+    if (inspector) inspector.classList.toggle('hidden', view === 'dashboard');
     if (addBtn) addBtn.classList.toggle('hidden', view !== 'dashboard');
     if (groupBtn) groupBtn.classList.toggle('hidden', view !== 'dashboard');
 

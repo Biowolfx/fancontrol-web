@@ -211,27 +211,6 @@
                 </button>
             </div>
             
-            <!-- Dashboard Canvas (shown on Dashboard tab) -->
-            <div id="dashboard-canvas-container" class="flex-1 overflow-auto p-3">
-                <div id="dashboard-canvas" class="relative min-h-full bg-cyber-bg rounded-lg border border-dashed border-gray-700">
-                    <div id="dashboard-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-                        <div class="text-4xl mb-4">📊</div>
-                        <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
-                        <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
-                    </div>
-                    <div id="dashboard-groups"></div>
-                    <div id="dashboard-cards"></div>
-                </div>
-                <button id="dashboard-add-btn" onclick="showCardPicker()"
-                        class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40 hidden">
-                    +
-                </button>
-                <button id="dashboard-group-btn" onclick="showGroupCreator()"
-                        class="fixed bottom-6 right-20 w-12 h-12 bg-neon-purple rounded-full text-white text-lg shadow-lg hover:bg-purple-400 transition-all z-40 hidden">
-                    ⊞
-                </button>
-            </div>
-            
             <!-- Node Tree (shown on Nodes tab) -->
             <div id="node-tree-container" class="flex-1 overflow-y-auto p-3 space-y-2 hidden">
                 <div id="node-tree"></div>
@@ -262,11 +241,32 @@
         </div>
         
         <!-- ======================================================================== -->
-        <!-- RIGHT PANEL - Inspector -->
+        <!-- RIGHT PANEL -->
         <!-- ======================================================================== -->
         <div class="flex-1 flex flex-col overflow-hidden bg-cyber-bg">
             
-            <!-- Dashboard View -->
+            <!-- Dashboard Canvas (full screen on Dashboard tab) -->
+            <div id="dashboard-canvas-container" class="hidden flex-1 overflow-auto">
+                <div id="dashboard-canvas" class="relative min-h-full p-4">
+                    <div id="dashboard-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                        <div class="text-4xl mb-4">📊</div>
+                        <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
+                        <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
+                    </div>
+                    <div id="dashboard-groups"></div>
+                    <div id="dashboard-cards"></div>
+                </div>
+                <button id="dashboard-add-btn" onclick="showCardPicker()"
+                        class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40">
+                    +
+                </button>
+                <button id="dashboard-group-btn" onclick="showGroupCreator()"
+                        class="fixed bottom-6 right-20 w-12 h-12 bg-neon-purple rounded-full text-white text-lg shadow-lg hover:bg-purple-400 transition-all z-40">
+                    ⊞
+                </button>
+            </div>
+            
+            <!-- Inspector (shown on Nodes tab or when fan selected) -->
             <div id="dashboard-view" class="flex-1 flex flex-col overflow-hidden">
             
             <!-- Top Bar -->
