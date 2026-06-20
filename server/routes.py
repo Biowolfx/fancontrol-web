@@ -417,6 +417,25 @@ def api_fan_calibration(fan_id):
     return jsonify({'status': 'saved'})
 
 
+@routes.route('/api/dashboard', methods=['GET'])
+def api_get_dashboard():
+    """Get dashboard layout."""
+    return jsonify(state.get('dashboard', {'groups': [], 'cards': []}))
+
+
+@routes.route('/api/dashboard', methods=['POST'])
+def api_save_dashboard():
+    """Save dashboard layout (cards, groups, positions)."""
+    data = request.get_json(silent=True) or {}
+    with state_lock:
+        state['dashboard'] = {
+            'groups': data.get('groups', []),
+            'cards': data.get('cards', [])
+        }
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
 def _handle_set_config(data: dict) -> dict:
     """Handle fan configuration change atomically"""
     fan_key = data['fan']

@@ -65,7 +65,8 @@ def _do_save_config():
             'initialized': state.get('initialized', False),
             'tested': state.get('tested', False),
             'language': state.get('language', 'en'),
-            'fans': {}
+            'fans': {},
+            'dashboard': state.get('dashboard', {'groups': [], 'cards': []})
         }
 
         with state_lock:
@@ -127,6 +128,7 @@ def load_config():
                 state['initialized'] = bool(cfg.get('initialized', False))
                 state['tested'] = bool(cfg.get('tested', False))
                 state['language'] = cfg.get('language', 'en')
+                state['dashboard'] = cfg.get('dashboard', {'groups': [], 'cards': []})
 
             logger.info('Configuration loaded successfully')
 

@@ -524,9 +524,18 @@ function toggleNodeGroup(nodeId) {
 
 function selectFanFromTree(fanId, source) {
     currentFanId = fanId;
-    if (currentState && currentState.fans && currentState.fans[fanId]) {
+
+    // Switch to nodes view to show inspector
+    if (currentView !== 'nodes') {
+        showView('nodes');
+    }
+
+    // Update inspector
+    if (source === 'local' && currentState && currentState.fans && currentState.fans[fanId]) {
         updateInspector(currentState.fans[fanId]);
     }
+
+    // Rebuild tree to highlight selected
     buildNodeTree();
 }
 
@@ -604,6 +613,11 @@ function renderDashboardCard(card) {
             <div class="p-3">
                 ${bodyContent}
             </div>
+            <div class="card-resize-handle" onmousedown="event.stopPropagation(); startResizeCard(event, '${card.id}')">
+                <svg viewBox="0 0 16 16" class="w-4 h-4 text-gray-500">
+                    <path d="M14 14L14 8M14 14L8 14" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
         </div>
     `;
 }
@@ -661,6 +675,50 @@ function onDropCard() {
     draggedCardId = null;
     document.removeEventListener('mousemove', onDragCard);
     document.removeEventListener('mouseup', onDropCard);
+}
+
+// ============================================================================
+// DASHBOARD CARD RESIZE
+// ============================================================================
+
+let resizedCardId = null;
+let resizeStart = { x: 0, y: 0, w: 0, h: 0 };
+
+function startResizeCard(event, cardId) {
+    resizedCardId = cardId;
+    const card = dashboardState.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    resizeStart = { x: event.clientX, y: event.clientY, w: card.w, h: card.h };
+
+    document.addEventListener('mousemove', onResizeCard);
+    document.addEventListener('mouseup', onResizeCardEnd);
+    event.preventDefault();
+}
+
+function onResizeCard(event) {
+    if (!resizedCardId) return;
+    const card = dashboardState.cards.find(c => c.id === resizedCardId);
+    if (!card) return;
+
+    card.w = Math.max(120, resizeStart.w + (event.clientX - resizeStart.x));
+    card.h = Math.max(80, resizeStart.h + (event.clientY - resizeStart.y));
+
+    const el = document.querySelector(`[data-card-id="${resizedCardId}"]`);
+    if (el) {
+        el.style.width = card.w + 'px';
+        el.style.height = card.h + 'px';
+    }
+}
+
+function onResizeCardEnd() {
+    if (resizedCardId) {
+        saveDashboard();
+        renderDashboard();
+    }
+    resizedCardId = null;
+    document.removeEventListener('mousemove', onResizeCard);
+    document.removeEventListener('mouseup', onResizeCardEnd);
 }
 
 function removeCard(cardId) {

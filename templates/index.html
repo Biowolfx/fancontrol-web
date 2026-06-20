@@ -106,6 +106,34 @@
         body.compact-mode .text-6xl { font-size: 2.5rem !important; }
         body.compact-mode #schedule-grid td { width: 14px !important; height: 14px !important; }
         body.compact-mode #schedule-grid th { font-size: 8px !important; }
+
+        /* Dashboard cards */
+        .dashboard-card {
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+            user-select: none;
+        }
+        .dashboard-card:hover {
+            border-color: #06b6d4;
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+        }
+        .dashboard-group {
+            transition: border-color 0.2s ease;
+        }
+        .dashboard-group:hover {
+            border-color: #a855f7;
+        }
+        .card-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 16px;
+            height: 16px;
+            cursor: se-resize;
+            opacity: 0.5;
+        }
+        .card-resize-handle:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-cyber-bg text-gray-200 min-h-screen">
