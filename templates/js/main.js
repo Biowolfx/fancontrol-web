@@ -624,13 +624,129 @@ function loadDashboard() {
 }
 
 function showCardPicker() {
-    // Stub - will be implemented in Task 5
-    console.log('[FanControl] Card picker not yet implemented');
+    const modal = document.getElementById('card-picker-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    populatePickerSources();
+    updatePickerElements();
+}
+
+function hideCardPicker() {
+    const modal = document.getElementById('card-picker-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function populatePickerSources() {
+    const select = document.getElementById('picker-source');
+    if (!select) return;
+    select.innerHTML = '<option value="local">My Server (local)</option>';
+    for (const node of nodesData) {
+        select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name)}</option>`;
+    }
+}
+
+function updatePickerElements() {
+    const type = document.getElementById('picker-type')?.value;
+    const source = document.getElementById('picker-source')?.value;
+    const container = document.getElementById('picker-elements');
+    if (!container) return;
+
+    let elements = [];
+
+    if (source === 'local') {
+        if (type === 'fan' && currentState?.fans) {
+            elements = Object.entries(currentState.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
+        } else if (type === 'temperature' && currentState?.temp_sensors) {
+            elements = Object.entries(currentState.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
+        } else if (type === 'disk' && currentState?.hdd_sensors) {
+            elements = Object.entries(currentState.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
+        } else if (type === 'system') {
+            elements = [
+                { id: 'cpu_temp', label: 'CPU Temperature', extra: '' },
+                { id: 'uptime', label: 'Uptime', extra: '' },
+            ];
+        }
+    } else {
+        const node = nodesData.find(n => n.node_id === source);
+        if (node?.telemetry) {
+            const tel = node.telemetry;
+            if (type === 'fan' && tel.fans) {
+                elements = Object.entries(tel.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
+            } else if (type === 'temperature' && tel.temp_sensors) {
+                elements = Object.entries(tel.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
+            } else if (type === 'disk' && tel.hdd_sensors) {
+                elements = Object.entries(tel.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
+            }
+        }
+    }
+
+    container.innerHTML = elements.length > 0
+        ? elements.map(el => `
+            <label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded">
+                <span class="text-xs text-gray-300">${escapeHtml(el.label)}</span>
+                <span class="ml-auto text-xs text-gray-500">${el.extra}</span>
+            </label>
+        `).join('')
+        : '<div class="text-xs text-gray-500 text-center py-4">No elements found</div>';
+}
+
+function addSelectedCards() {
+    const type = document.getElementById('picker-type')?.value;
+    const source = document.getElementById('picker-source')?.value;
+    const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
+
+    checkboxes.forEach(cb => {
+        const card = {
+            id: 'card-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+            type: type,
+            source: source,
+            element_id: cb.value,
+            label: cb.dataset.label,
+            x: 20 + Math.random() * 100,
+            y: 20 + Math.random() * 100,
+            w: 200,
+            h: 120,
+            group_id: null
+        };
+        dashboardState.cards.push(card);
+    });
+
+    saveDashboard();
+    renderDashboard();
+    hideCardPicker();
 }
 
 function showGroupCreator() {
-    // Stub - will be implemented in Task 7
-    console.log('[FanControl] Group creator not yet implemented');
+    const modal = document.getElementById('group-creator-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const input = document.getElementById('group-name-input');
+    if (input) { input.value = ''; input.focus(); }
+}
+
+function hideGroupCreator() {
+    const modal = document.getElementById('group-creator-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function createGroup() {
+    const name = document.getElementById('group-name-input')?.value?.trim();
+    if (!name) return;
+
+    const group = {
+        id: 'group-' + Date.now(),
+        name: name,
+        x: 20,
+        y: dashboardState.cards.length * 150 + 20,
+        w: 400,
+        h: 200
+    };
+
+    dashboardState.groups.push(group);
+    saveDashboard();
+    renderDashboard();
+    hideGroupCreator();
 }
 
 function getStatusBadgeClass(status) {
