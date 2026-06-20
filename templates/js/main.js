@@ -638,7 +638,7 @@ function addSelectedCards() {
 }
 
 function renderPickerCard(card) {
-    const { id, type, source, sourceId, label } = card;
+    const { id, type, source, sourceId, label, link } = card;
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
 
@@ -665,10 +665,13 @@ function renderPickerCard(card) {
         valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
 
+    const linkHtml = link ? `<a href="${escapeHtml(link)}" target="_blank" class="text-xs text-gray-500 hover:text-neon-cyan truncate block mt-2" title="${escapeHtml(link)}">${escapeHtml(link)}</a>` : '';
+
     const el = document.createElement('div');
-    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
+    el.className = `bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${link ? 'cursor-pointer' : ''}`;
     el.setAttribute('data-card-id', id);
     el.setAttribute('draggable', 'true');
+    el.setAttribute('title', link || '');
     el.innerHTML = `
         <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
@@ -676,21 +679,27 @@ function renderPickerCard(card) {
                 <span class="text-lg">${icon}</span>
                 <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
             </div>
-            <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-sm transition-colors">×</button>
+            <button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-sm transition-colors">×</button>
         </div>
-        ${valueHtml}`;
+        ${valueHtml}${linkHtml}`;
 
     el.addEventListener('dragstart', onCardDragStart);
     el.addEventListener('dragover', onCardDragOver);
     el.addEventListener('drop', onCardDrop);
     el.addEventListener('dragend', onCardDragEnd);
+    el.addEventListener('click', () => {
+        if (!_cardDragOccurred) showCardEdit(id);
+    });
+
     canvas.appendChild(el);
 }
 
 let _draggedCard = null;
+let _cardDragOccurred = false;
 
 function onCardDragStart(e) {
     _draggedCard = this;
+    _cardDragOccurred = false;
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
@@ -699,6 +708,7 @@ function onCardDragStart(e) {
 function onCardDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    _cardDragOccurred = true;
     const canvas = document.getElementById('dashboard-canvas');
     const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
     if (afterElement) {
@@ -716,6 +726,7 @@ function onCardDrop(e) {
 function onCardDragEnd() {
     this.classList.remove('opacity-40');
     _draggedCard = null;
+    setTimeout(() => { _cardDragOccurred = false; }, 50);
     document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
 }
 
@@ -748,6 +759,79 @@ function removePickerCard(cardId) {
     const saved = getPickerCards().filter(c => c.id !== cardId);
     setPickerCards(saved);
     if (!saved.length) document.getElementById('dashboard-empty')?.classList.remove('hidden');
+}
+
+let _editingCardId = null;
+
+function showCardEdit(cardId) {
+    _editingCardId = cardId;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    const modal = document.getElementById('card-edit-modal');
+    const labelInput = document.getElementById('card-edit-label');
+    const linkInput = document.getElementById('card-edit-link');
+
+    labelInput.value = card.label || '';
+    linkInput.value = card.link || '';
+
+    modal.classList.remove('hidden');
+    labelInput.focus();
+}
+
+function hideCardEdit() {
+    const modal = document.getElementById('card-edit-modal');
+    if (modal) modal.classList.add('hidden');
+    _editingCardId = null;
+}
+
+function saveCardEdit() {
+    if (!_editingCardId) return;
+
+    const label = document.getElementById('card-edit-label').value.trim();
+    const link = document.getElementById('card-edit-link').value.trim();
+    if (!label) return;
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _editingCardId);
+    if (!card) return;
+
+    card.label = label;
+    if (link) card.link = link; else delete card.link;
+
+    setPickerCards(saved);
+
+    const cardEl = document.querySelector(`[data-card-id="${_editingCardId}"]`);
+    if (cardEl) {
+        const labelEl = cardEl.querySelector('.text-sm.text-gray-300');
+        if (labelEl) labelEl.textContent = label;
+
+        cardEl.classList.toggle('cursor-pointer', !!link);
+        cardEl.setAttribute('title', link || '');
+
+        const existingLink = cardEl.querySelector('a.text-xs');
+        const valueEl = cardEl.querySelector('.text-2xl');
+        const linkHtml = link ? `<a href="${escapeHtml(link)}" target="_blank" class="text-xs text-gray-500 hover:text-neon-cyan truncate block mt-2" title="${escapeHtml(link)}">${escapeHtml(link)}</a>` : '';
+
+        if (existingLink && !link) {
+            existingLink.remove();
+        } else if (valueEl) {
+            if (existingLink) {
+                if (link) {
+                    existingLink.href = link;
+                    existingLink.textContent = link;
+                    existingLink.title = link;
+                } else {
+                    existingLink.remove();
+                }
+            } else if (link) {
+                valueEl.insertAdjacentHTML('afterend', linkHtml);
+            }
+        }
+    }
+
+    hideCardEdit();
 }
 
 function getPickerCards() {
