@@ -194,87 +194,69 @@
     <!-- ======================================================================== -->
     <!-- MAIN DASHBOARD -->
     <!-- ======================================================================== -->
-    <div id="main-screen" class="hidden flex flex-col lg:flex-row h-screen">
+    <div id="main-screen" class="hidden flex flex-row h-screen">
         
         <!-- ======================================================================== -->
-        <!-- LEFT PANEL - Device List -->
+        <!-- LEFT SIDEBAR - Server Tree (always visible) -->
         <!-- ======================================================================== -->
-        <div class="w-full lg:w-80 xl:w-96 bg-cyber-card border-r border-cyber-accent flex flex-col overflow-hidden">
+        <div class="w-64 bg-cyber-card border-r border-cyber-accent flex flex-col overflow-hidden flex-shrink-0">
             
             <!-- Header -->
-            <div class="p-4 border-b border-cyber-accent">
-                <div class="flex items-center justify-between mb-2">
-                    <h1 class="text-lg font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
-                    <div class="flex items-center gap-2">
-                        <span id="header-version" class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-2 py-1 rounded"></span>
-                        <button onclick="toggleSettings()" class="relative text-gray-400 hover:text-neon-cyan transition-colors p-1" data-i18n-title="header.settings">
+            <div class="p-3 border-b border-cyber-accent">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-sm font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
+                    <div class="flex items-center gap-1">
+                        <span id="header-version" class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-1.5 py-0.5 rounded"></span>
+                        <button onclick="toggleSettings()" class="relative text-gray-400 hover:text-neon-cyan transition-colors p-1 text-sm">
                             ⚙
-                            <span id="update-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 bg-neon-red rounded-full animate-pulse"></span>
                         </button>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 text-xs text-gray-500">
-                    <span id="sync-status" class="flex items-center gap-1">
-                        <span class="w-2 h-2 bg-neon-green rounded-full"></span> <span data-i18n="header.synced">Synced</span>
-                    </span>
+                <div class="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                    <span class="w-1.5 h-1.5 bg-neon-green rounded-full"></span>
+                    <span data-i18n="header.synced">Synced</span>
                 </div>
             </div>
             
-            <!-- Navigation Tabs -->
+            <!-- Navigation -->
             <div class="flex border-b border-cyber-accent">
-                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-neon-cyan border-b-2 border-neon-cyan"
-                        data-view="dashboard" onclick="showView('dashboard')"
-                        data-i18n="nav.dashboard">
-                    Dashboard
+                <button id="nav-dashboard-btn" onclick="showView('dashboard')"
+                        class="flex-1 py-2 text-xs font-semibold text-neon-cyan border-b-2 border-neon-cyan transition-all">
+                    📊 <span data-i18n="nav.dashboard">Dashboard</span>
                 </button>
-                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-gray-500 hover:text-gray-300 border-b-2 border-transparent"
-                        data-view="nodes" onclick="showView('nodes')"
-                        data-i18n="nav.nodes">
-                    Nodes
-                </button>
-                <button class="nav-item flex-1 py-2.5 text-xs font-semibold transition-all duration-200 text-gray-500 hover:text-gray-300 border-b-2 border-transparent"
-                        data-view="settings" onclick="toggleSettings()"
-                        data-i18n="nav.settings">
-                    Settings
+                <button id="nav-settings-btn" onclick="toggleSettings()"
+                        class="flex-1 py-2 text-xs font-semibold text-gray-500 hover:text-gray-300 border-b-2 border-transparent transition-all">
+                    ⚙ <span data-i18n="nav.settings">Settings</span>
                 </button>
             </div>
             
-            <!-- Node Tree (shown on Nodes tab) -->
-            <div id="node-tree-container" class="flex-1 overflow-y-auto p-3 space-y-2 hidden">
-                <div id="node-tree"></div>
-                <div class="border-t border-cyber-accent pt-2 mt-2">
-                    <div class="flex gap-2">
-                        <input id="new-node-name" type="text" 
-                               class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
-                               placeholder="Node name" data-i18n-placeholder="nodes.name_placeholder"
-                               onkeydown="if(event.key==='Enter')addNode()">
-                        <button onclick="addNode()" 
-                                class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
-                            +
-                        </button>
-                    </div>
+            <!-- Server Tree -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-1" id="server-tree">
+                <div class="text-center text-gray-500 py-4 text-xs" data-i18n="setup.loading_fans">Loading...</div>
+            </div>
+            
+            <!-- Add Node -->
+            <div class="border-t border-cyber-accent p-2">
+                <div class="flex gap-1">
+                    <input id="new-node-name" type="text" 
+                           class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
+                           placeholder="Add server..." data-i18n-placeholder="nodes.name_placeholder"
+                           onkeydown="if(event.key==='Enter')addNode()">
+                    <button onclick="addNode()" 
+                            class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
+                        +
+                    </button>
                 </div>
-            </div>
-            
-            <!-- Fans List (legacy, kept for backward compat) -->
-            <div class="flex-1 overflow-y-auto p-3 space-y-2 hidden" id="fan-list">
-                <div class="text-center text-gray-500 py-8" data-i18n="setup.loading_fans">Loading fans...</div>
-            </div>
-            
-            <!-- Disks Summary -->
-            <div class="border-t border-cyber-accent p-3 hidden" id="disks-summary">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2" data-i18n="header.storage">Storage</h3>
-                <div id="disks-mini-list" class="space-y-1.5 max-h-40 overflow-y-auto"></div>
             </div>
         </div>
         
         <!-- ======================================================================== -->
-        <!-- RIGHT PANEL -->
+        <!-- MAIN CONTENT - Dashboard or Inspector -->
         <!-- ======================================================================== -->
-        <div class="flex-1 flex flex-col overflow-hidden bg-cyber-bg">
+        <div class="flex-1 flex flex-col overflow-hidden bg-cyber-bg relative">
             
-            <!-- Dashboard Canvas (full screen on Dashboard tab) -->
-            <div id="dashboard-canvas-container" class="hidden flex-1 overflow-auto">
+            <!-- Dashboard Canvas (full screen) -->
+            <div id="dashboard-canvas-container" class="flex-1 overflow-auto">
                 <div id="dashboard-canvas" class="relative min-h-full p-4">
                     <div id="dashboard-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
                         <div class="text-4xl mb-4">📊</div>
@@ -294,29 +276,32 @@
                 </button>
             </div>
             
-            <!-- Inspector (shown on Nodes tab or when fan selected) -->
-            <div id="dashboard-view" class="flex-1 flex flex-col overflow-hidden">
-            
-            <!-- Top Bar -->
-            <div class="p-4 border-b border-cyber-accent flex items-center justify-between">
-                <div>
-                    <h2 id="inspector-title" class="text-xl font-bold text-white" data-i18n="inspector.select">Select a device</h2>
-                    <p id="inspector-subtitle" class="text-xs text-gray-500" data-i18n="inspector.hint">Click on a fan to inspect</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div id="failsafe-indicator" class="hidden flex items-center gap-2 bg-red-900 bg-opacity-30 text-neon-red px-3 py-1 rounded-lg alert-pulse">
-                        <span class="w-2 h-2 bg-neon-red rounded-full"></span> FAILSAFE
+            <!-- Inspector (shown when fan selected) -->
+            <div id="inspector-container" class="hidden flex-1 flex flex-col overflow-hidden">
+                
+                <!-- Top Bar -->
+                <div class="p-4 border-b border-cyber-accent flex items-center justify-between">
+                    <div>
+                        <h2 id="inspector-title" class="text-xl font-bold text-white" data-i18n="inspector.select">Select a device</h2>
+                        <p id="inspector-subtitle" class="text-xs text-gray-500" data-i18n="inspector.hint">Click on a fan to inspect</p>
                     </div>
-                    <div id="standby-indicator" class="hidden flex items-center gap-2 bg-blue-900 bg-opacity-30 text-blue-400 px-3 py-1 rounded-lg">
-                        <span class="w-2 h-2 bg-blue-400 rounded-full"></span> STANDBY
-                    </div>
+                    <div class="flex items-center gap-3">
+                        <div id="failsafe-indicator" class="hidden flex items-center gap-2 bg-red-900 bg-opacity-30 text-neon-red px-3 py-1 rounded-lg alert-pulse">
+                            <span class="w-2 h-2 bg-neon-red rounded-full"></span> FAILSAFE
+                        </div>
+                        <div id="standby-indicator" class="hidden flex items-center gap-2 bg-blue-900 bg-opacity-30 text-blue-400 px-3 py-1 rounded-lg">
+                            <span class="w-2 h-2 bg-blue-400 rounded-full"></span> STANDBY
+                        </div>
                         <button onclick="startCalibration()" 
-                                class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-3 py-1.5 rounded-lg 
-                                       hover:bg-opacity-40 transition-all" data-i18n="setup.calibrate_btn_short">
+                                class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-3 py-1.5 rounded-lg hover:bg-opacity-40 transition-all" data-i18n="setup.calibrate_btn_short">
                             Recalibrate
                         </button>
+                        <button onclick="showView('dashboard')" 
+                                class="text-xs bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-600 transition-all">
+                            ← Back to Dashboard
+                        </button>
+                    </div>
                 </div>
-            </div>
             
             <!-- Inspector Content -->
             <div class="flex-1 overflow-y-auto p-6" id="inspector-content">
@@ -486,27 +471,9 @@
                         <div id="temp-chart" class="h-64"></div>
                     </div>
                 </div>
-            </div>
-            </div><!-- /dashboard-view -->
-            
-            <!-- Nodes View -->
-            <div id="nodes-view" class="hidden flex-1 overflow-y-auto p-6">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-bold text-white" data-i18n="nodes.title">Nodes</h2>
-                    <button onclick="loadNodes()" 
-                            class="text-xs bg-cyber-accent text-gray-400 px-3 py-1.5 rounded-lg hover:text-neon-cyan transition-all">
-                        ↻
-                    </button>
-                </div>
-                <div id="nodes-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-            </div>
-            
-            <!-- Node Detail View -->
-            <div id="node-detail-view" class="hidden flex-1 overflow-y-auto p-6">
-                <div id="node-detail-content"></div>
-            </div>
-        </div>
-    </div>
+            </div><!-- /inspector-container -->
+        </div><!-- /main content -->
+    </div><!-- /main-screen -->
     
     <!-- Sensor Popup -->
     <div id="sensor-popup" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60">

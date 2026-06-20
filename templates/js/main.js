@@ -287,10 +287,14 @@ function updateUI(data) {
     // Update chart
     updateChart();
 
-    // Refresh node tree if on nodes tab
-    if (currentView === 'nodes') {
-        buildNodeTree();
+    // Refresh server tree
+    buildServerTree();
+
+    // Refresh dashboard if on dashboard tab
+    if (currentView === 'dashboard') {
+        renderDashboard();
     }
+}
 
     // Refresh dashboard if on dashboard tab
     if (currentView === 'dashboard') {
@@ -314,8 +318,10 @@ function showMainScreen() {
     if (!currentState || !currentState.testing) {
         hideCalibrationModal();
     }
-    // Show dashboard view by default
-    showView(currentView || 'dashboard');
+    // Show dashboard by default
+    showView('dashboard');
+    // Build server tree
+    buildServerTree();
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -399,8 +405,8 @@ function selectFan(fanId) {
 // NODE TREE
 // ============================================================================
 
-function buildNodeTree() {
-    const container = document.getElementById('node-tree');
+function buildServerTree() {
+    const container = document.getElementById('server-tree');
     if (!container) return;
 
     let html = '';
@@ -413,7 +419,7 @@ function buildNodeTree() {
         html += renderRemoteNodeTree(node);
     }
 
-    container.innerHTML = html || `<div class="text-center text-gray-500 py-4 text-sm">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
+    container.innerHTML = html || `<div class="text-center text-gray-500 py-4 text-xs">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
 }
 
 function renderLocalServerTree() {
@@ -525,18 +531,16 @@ function toggleNodeGroup(nodeId) {
 function selectFanFromTree(fanId, source) {
     currentFanId = fanId;
 
-    // Switch to nodes view to show inspector
-    if (currentView !== 'nodes') {
-        showView('nodes');
-    }
+    // Show inspector view
+    showView('inspector');
 
     // Update inspector
     if (source === 'local' && currentState && currentState.fans && currentState.fans[fanId]) {
         updateInspector(currentState.fans[fanId]);
     }
 
-    // Rebuild tree to highlight selected
-    buildNodeTree();
+    // Rebuild server tree to highlight selected
+    buildServerTree();
 }
 
 function selectNodeFan(nodeId, fanId) {
@@ -2756,35 +2760,35 @@ function renderNodeDetail(node) {
 function showView(view) {
     currentView = view;
 
-    // Toggle left panel containers
-    const nodeTree = document.getElementById('node-tree-container');
-    if (nodeTree) nodeTree.classList.toggle('hidden', view !== 'nodes');
-
-    // Toggle right panel: canvas vs inspector
     const canvas = document.getElementById('dashboard-canvas-container');
-    const inspector = document.getElementById('dashboard-view');
+    const inspector = document.getElementById('inspector-container');
     const addBtn = document.getElementById('dashboard-add-btn');
     const groupBtn = document.getElementById('dashboard-group-btn');
 
-    if (canvas) canvas.classList.toggle('hidden', view !== 'dashboard');
-    if (inspector) inspector.classList.toggle('hidden', view === 'dashboard');
-    if (addBtn) addBtn.classList.toggle('hidden', view !== 'dashboard');
-    if (groupBtn) groupBtn.classList.toggle('hidden', view !== 'dashboard');
+    if (view === 'dashboard') {
+        if (canvas) canvas.classList.remove('hidden');
+        if (inspector) inspector.classList.add('hidden');
+        if (addBtn) addBtn.classList.remove('hidden');
+        if (groupBtn) groupBtn.classList.remove('hidden');
+        renderDashboard();
+    } else if (view === 'inspector') {
+        if (canvas) canvas.classList.add('hidden');
+        if (inspector) inspector.classList.remove('hidden');
+        if (addBtn) addBtn.classList.add('hidden');
+        if (groupBtn) groupBtn.classList.add('hidden');
+    }
 
-    // Update tab styles
-    document.querySelectorAll('.nav-item').forEach(el => {
-        const isActive = el.dataset.view === view;
-        if (isActive) {
-            el.classList.remove('text-gray-500', 'border-transparent');
-            el.classList.add('text-neon-cyan', 'border-neon-cyan');
+    // Update nav button styles
+    const dashBtn = document.getElementById('nav-dashboard-btn');
+    if (dashBtn) {
+        if (view === 'dashboard') {
+            dashBtn.classList.add('text-neon-cyan', 'border-neon-cyan');
+            dashBtn.classList.remove('text-gray-500', 'border-transparent');
         } else {
-            el.classList.add('text-gray-500', 'border-transparent');
-            el.classList.remove('text-neon-cyan', 'border-neon-cyan');
+            dashBtn.classList.remove('text-neon-cyan', 'border-neon-cyan');
+            dashBtn.classList.add('text-gray-500', 'border-transparent');
         }
-    });
-
-    if (view === 'nodes') buildNodeTree();
-    if (view === 'dashboard') renderDashboard();
+    }
 }
 
 async function addNode() {
