@@ -436,6 +436,96 @@ def api_save_dashboard():
     return jsonify({'status': 'saved'})
 
 
+@routes.route('/api/dashboard/presets')
+def api_get_dashboard_presets():
+    """Return saved dashboard presets."""
+    with state_lock:
+        presets = state.get('dashboard', {}).get('presets', [])
+    return jsonify({'presets': presets})
+
+
+@routes.route('/api/dashboard/presets', methods=['POST'])
+def api_save_dashboard_preset():
+    """Save or update a dashboard preset {name, cards} in memory and persist."""
+    data = request.get_json(silent=True) or {}
+    name = data.get('name')
+    cards = data.get('cards', [])
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    with state_lock:
+        dashboard = state.setdefault('dashboard', {})
+        presets = dashboard.setdefault('presets', [])
+        # replace if exists
+        for p in presets:
+            if p.get('name') == name:
+                p['cards'] = cards
+                break
+        else:
+            presets.append({'name': name, 'cards': cards})
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
+@routes.route('/api/dashboard/presets/<name>', methods=['DELETE'])
+def api_delete_dashboard_preset(name):
+    """Delete a named dashboard preset."""
+    with state_lock:
+        dashboard = state.setdefault('dashboard', {})
+        presets = dashboard.setdefault('presets', [])
+        new = [p for p in presets if p.get('name') != name]
+        dashboard['presets'] = new
+    save_config()
+    return jsonify({'status': 'deleted'})
+
+
+@routes.route('/api/dashboard/node/<node_id>', methods=['GET'])
+def api_get_dashboard_node(node_id):
+    """Get dashboard layout for a specific node (if saved)."""
+    with state_lock:
+        nodes = state.get('dashboard', {}).get('nodes', {})
+        layout = nodes.get(node_id)
+    if layout is None:
+        return jsonify({'cards': []})
+    return jsonify({'cards': layout})
+
+
+@routes.route('/api/dashboard/node/<node_id>', methods=['POST'])
+def api_save_dashboard_node(node_id):
+    """Save dashboard layout for a specific node."""
+    data = request.get_json(silent=True) or {}
+    cards = data.get('cards', [])
+    with state_lock:
+        dashboard = state.setdefault('dashboard', {})
+        nodes = dashboard.setdefault('nodes', {})
+        nodes[node_id] = cards
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
+@routes.route('/api/dashboard/user/<user_id>', methods=['GET'])
+def api_get_dashboard_user(user_id):
+    """Get dashboard layout for a specific user (no auth in this implementation)."""
+    with state_lock:
+        users = state.get('dashboard', {}).get('users', {})
+        layout = users.get(user_id)
+    if layout is None:
+        return jsonify({'cards': []})
+    return jsonify({'cards': layout})
+
+
+@routes.route('/api/dashboard/user/<user_id>', methods=['POST'])
+def api_save_dashboard_user(user_id):
+    """Save dashboard layout for a specific user (no auth)."""
+    data = request.get_json(silent=True) or {}
+    cards = data.get('cards', [])
+    with state_lock:
+        dashboard = state.setdefault('dashboard', {})
+        users = dashboard.setdefault('users', {})
+        users[user_id] = cards
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
 def _handle_set_config(data: dict) -> dict:
     """Handle fan configuration change atomically"""
     fan_key = data['fan']
@@ -609,3 +699,43 @@ def api_discover_nodes():
     from server.discovery import scan_for_agents
     nodes = scan_for_agents(timeout=5)
     return jsonify(nodes)
+
+
+@routes.route('/api/alerts')
+def api_list_alerts():
+    """List registered alerts/thresholds."""
+    with state_lock:
+        alerts = state.get('alerts', {})
+    return jsonify({'alerts': alerts})
+
+
+@routes.route('/api/alerts', methods=['POST'])
+def api_register_alert():
+    """Register or update an alert. Payload: {key, type, target, threshold, cmp, level, message}"""
+    data = request.get_json(silent=True) or {}
+    key = data.get('key')
+    if not key:
+        return jsonify({'error': 'key required'}), 400
+    with state_lock:
+        alerts = state.setdefault('alerts', {})
+        alerts[key] = {
+            'type': data.get('type', 'generic'),
+            'target': data.get('target'),
+            'threshold': data.get('threshold'),
+            'cmp': data.get('cmp', '>='),
+            'level': data.get('level', 'warning'),
+            'message': data.get('message')
+        }
+    save_config()
+    return jsonify({'status': 'saved'})
+
+
+@routes.route('/api/alerts/<key>', methods=['DELETE'])
+def api_delete_alert(key):
+    """Delete a registered alert by key."""
+    with state_lock:
+        alerts = state.setdefault('alerts', {})
+        if key in alerts:
+            del alerts[key]
+    save_config()
+    return jsonify({'status': 'deleted'})

@@ -472,6 +472,10 @@ def loop(socketio=None):
             
             if socketio:
                 socketio.emit('update', get_state())
+                try:
+                    check_alerts(socketio)
+                except Exception:
+                    logger.debug('check_alerts raised', exc_info=True)
             
             current_time = time.monotonic()
             if current_time - last_log > TELEMETRY_LOG_INTERVAL:
@@ -490,3 +494,79 @@ def loop(socketio=None):
         except Exception as e:
             logger.error(f'Loop error: {e}', exc_info=True)
             time.sleep(CONTROL_LOOP_INTERVAL)
+
+
+    def _compare(val, cmp, threshold):
+        try:
+            if cmp == '>=':
+                return val >= threshold
+            if cmp == '>':
+                return val > threshold
+            if cmp == '<=':
+                return val <= threshold
+            if cmp == '<':
+                return val < threshold
+            return False
+        except Exception:
+            return False
+
+
+    def check_alerts(socketio):
+        """Evaluate registered alerts in `state['alerts']` and emit 'alert' events."""
+        with state_lock:
+            alerts = dict(state.get('alerts', {}))
+            fired = state.setdefault('_alerts_fired', {})
+            fans = dict(state.get('fans', {}))
+            max_temp = state.get('max_hdd_temp', 0)
+            hdds = dict(state.get('hdd_sensors', {}))
+
+        for key, a in alerts.items():
+            a_type = a.get('type')
+            target = a.get('target')
+            threshold = a.get('threshold')
+            cmp = a.get('cmp', '>=')
+            level = a.get('level', 'warning')
+            message = a.get('message') or f'Alert {key}'
+
+            if threshold is None:
+                continue
+
+            value = None
+            if a_type == 'fan' and target:
+                f = fans.get(target)
+                if f:
+                    value = f.get('rpm') or f.get('current_pct') or 0
+            elif a_type in ('overview', 'max_temp'):
+                value = max_temp
+            elif a_type == 'disk' and target:
+                d = hdds.get(target)
+                if d:
+                    value = d.get('temp')
+            else:
+                # generic: try top-level state key
+                with state_lock:
+                    value = state.get(target)
+
+            if value is None:
+                continue
+
+            triggered = _compare(value, cmp, threshold)
+            previously = fired.get(key, False)
+
+            if triggered and not previously:
+                payload = {
+                    'key': key,
+                    'level': level,
+                    'message': message,
+                    'value': value,
+                    'threshold': threshold
+                }
+                socketio.emit('alert', payload)
+                with state_lock:
+                    fired[key] = True
+            elif not triggered and previously:
+                # cleared
+                payload = {'key': key, 'cleared': True}
+                socketio.emit('alert:cleared', payload)
+                with state_lock:
+                    fired[key] = False
