@@ -286,6 +286,16 @@ function updateUI(data) {
     
     // Update chart
     updateChart();
+
+    // Refresh node tree if on nodes tab
+    if (currentView === 'nodes') {
+        buildNodeTree();
+    }
+
+    // Refresh dashboard if on dashboard tab
+    if (currentView === 'dashboard') {
+        renderDashboard();
+    }
 }
 
 function showSetupScreen() {
@@ -303,6 +313,11 @@ function showMainScreen() {
     document.getElementById('main-screen').classList.remove('hidden');
     if (!currentState || !currentState.testing) {
         hideCalibrationModal();
+    }
+    // Show dashboard canvas by default
+    if (currentView === 'dashboard') {
+        const dashboardCanvas = document.getElementById('dashboard-canvas-container');
+        if (dashboardCanvas) dashboardCanvas.classList.remove('hidden');
     }
 }
 
@@ -381,6 +396,246 @@ function selectFan(fanId) {
     if (currentState && currentState.fans && currentState.fans[fanId]) {
         updateInspector(currentState.fans[fanId]);
     }
+}
+
+// ============================================================================
+// NODE TREE
+// ============================================================================
+
+let nodesData = [];
+
+function buildNodeTree() {
+    const container = document.getElementById('node-tree');
+    if (!container) return;
+
+    let html = '';
+
+    // Local server
+    html += renderLocalServerTree();
+
+    // Remote nodes
+    for (const node of nodesData) {
+        html += renderRemoteNodeTree(node);
+    }
+
+    container.innerHTML = html || `<div class="text-center text-gray-500 py-4 text-sm">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
+}
+
+function renderLocalServerTree() {
+    if (!currentState || !currentState.fans) return '';
+
+    const fans = currentState.fans;
+    const temps = currentState.temp_sensors || {};
+    const disks = currentState.hdd_sensors || {};
+    const fanCount = Object.keys(fans).length;
+    const diskCount = Object.keys(disks).length;
+
+    let html = `
+        <div class="node-group" data-node="local">
+            <div class="flex items-center gap-2 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
+                 onclick="toggleNodeGroup('local')">
+                <span class="text-neon-cyan text-xs">▼</span>
+                <span class="text-sm font-semibold text-white">🖥 ${t('nodes.local_server', 'My Server')}</span>
+                <span class="ml-auto text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded">${fanCount} ${t('nodes.fans', 'fans')}</span>
+            </div>
+            <div class="node-children ml-4 space-y-0.5" id="node-children-local">
+    `;
+
+    for (const [fanId, fan] of Object.entries(fans)) {
+        const isSelected = fanId === currentFanId;
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer transition-all ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
+                 onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
+                <span class="text-xs">🌀</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(fan.label)}</span>
+                <span class="ml-auto text-xs font-mono text-neon-cyan" id="tree-fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0}</span>
+            </div>
+        `;
+    }
+
+    for (const [sensorId, sensor] of Object.entries(temps)) {
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <span class="text-xs">🌡</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(sensor.label)}</span>
+                <span class="ml-auto text-xs font-mono text-neon-green">${sensor.value || 0}°C</span>
+            </div>
+        `;
+    }
+
+    if (diskCount > 0) {
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <span class="text-xs">💾</span>
+                <span class="text-xs text-gray-300">${diskCount} ${t('nodes.disks', 'disks')}</span>
+            </div>
+        `;
+    }
+
+    html += `</div></div>`;
+    return html;
+}
+
+function renderRemoteNodeTree(node) {
+    const telemetry = node.telemetry || {};
+    const fans = telemetry.fans || {};
+    const temps = telemetry.temp_sensors || {};
+    const fanCount = Object.keys(fans).length;
+    const statusColor = node.status === 'online' ? 'text-neon-green' : 'text-gray-500';
+    const statusDot = node.status === 'online' ? 'bg-neon-green' : 'bg-gray-500';
+
+    let html = `
+        <div class="node-group" data-node="${escapeHtml(node.node_id)}">
+            <div class="flex items-center gap-2 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
+                 onclick="toggleNodeGroup('${escapeHtml(node.node_id)}')">
+                <span class="w-2 h-2 ${statusDot} rounded-full"></span>
+                <span class="text-sm font-semibold text-white">🖥 ${escapeHtml(node.name)}</span>
+                <span class="ml-auto text-xs ${statusColor}">${node.status}</span>
+            </div>
+            <div class="node-children ml-4 space-y-0.5 hidden" id="node-children-${escapeHtml(node.node_id)}">
+    `;
+
+    for (const [fanId, fan] of Object.entries(fans)) {
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-cyber-accent"
+                 onclick="selectNodeFan('${escapeHtml(node.node_id)}', '${escapeHtml(fanId)}')">
+                <span class="text-xs">🌀</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(fan.label || fanId)}</span>
+                <span class="ml-auto text-xs font-mono text-neon-cyan">${fan.rpm || 0}</span>
+            </div>
+        `;
+    }
+
+    for (const [sensorId, sensor] of Object.entries(temps)) {
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <span class="text-xs">🌡</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(sensor.label || sensorId)}</span>
+                <span class="ml-auto text-xs font-mono text-neon-green">${sensor.value || 0}°C</span>
+            </div>
+        `;
+    }
+
+    html += `</div></div>`;
+    return html;
+}
+
+function toggleNodeGroup(nodeId) {
+    const children = document.getElementById(`node-children-${nodeId}`);
+    if (children) {
+        children.classList.toggle('hidden');
+    }
+}
+
+function selectFanFromTree(fanId, source) {
+    currentFanId = fanId;
+    if (currentState && currentState.fans && currentState.fans[fanId]) {
+        updateInspector(currentState.fans[fanId]);
+    }
+    buildNodeTree();
+}
+
+function selectNodeFan(nodeId, fanId) {
+    console.log('[FanControl] Select node fan:', nodeId, fanId);
+}
+
+// ============================================================================
+// CUSTOM DASHBOARD
+// ============================================================================
+
+let dashboardState = { groups: [], cards: [] };
+
+function renderDashboard() {
+    const cardsContainer = document.getElementById('dashboard-cards');
+    const groupsContainer = document.getElementById('dashboard-groups');
+    const emptyState = document.getElementById('dashboard-empty');
+
+    if (!cardsContainer) return;
+
+    const hasCards = dashboardState.cards.length > 0;
+    const hasGroups = dashboardState.groups.length > 0;
+
+    if (emptyState) {
+        emptyState.classList.toggle('hidden', hasCards || hasGroups);
+    }
+
+    // Render groups
+    if (groupsContainer) {
+        groupsContainer.innerHTML = dashboardState.groups.map(group => `
+            <div class="dashboard-group absolute border-2 border-dashed border-gray-600 rounded-lg p-2 mb-4"
+                 style="left:${group.x}px; top:${group.y}px; width:${group.w}px; min-height:${group.h}px;"
+                 data-group-id="${group.id}">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-gray-400">${escapeHtml(group.name)}</span>
+                    <button onclick="removeGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Render cards
+    cardsContainer.innerHTML = dashboardState.cards.map(card => renderDashboardCard(card)).join('');
+}
+
+function renderDashboardCard(card) {
+    const sourceName = card.source === 'local' ? 'Local' : (nodesData.find(n => n.node_id === card.source)?.name || card.source);
+
+    return `
+        <div class="dashboard-card absolute bg-cyber-card border border-cyber-accent rounded-lg overflow-hidden"
+             style="left:${card.x}px; top:${card.y}px; width:${card.w}px; height:${card.h}px;"
+             data-card-id="${card.id}">
+            <div class="flex items-center justify-between px-2 py-1 bg-cyber-accent border-b border-cyber-accent">
+                <span class="text-xs text-gray-400 truncate">${escapeHtml(card.label)} — ${sourceName}</span>
+                <button onclick="removeCard('${card.id}')" class="text-gray-600 hover:text-red-400 text-xs ml-1">×</button>
+            </div>
+            <div class="p-2">
+                <div class="text-sm text-gray-300">${escapeHtml(card.label)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function removeCard(cardId) {
+    dashboardState.cards = dashboardState.cards.filter(c => c.id !== cardId);
+    saveDashboard();
+    renderDashboard();
+}
+
+function removeGroup(groupId) {
+    dashboardState.cards.forEach(card => {
+        if (card.group_id === groupId) card.group_id = null;
+    });
+    dashboardState.groups = dashboardState.groups.filter(g => g.id !== groupId);
+    saveDashboard();
+    renderDashboard();
+}
+
+function saveDashboard() {
+    fetch('/api/dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dashboardState)
+    }).catch(err => console.error('Save dashboard error:', err));
+}
+
+function loadDashboard() {
+    fetch('/api/dashboard')
+        .then(r => r.json())
+        .then(data => {
+            dashboardState = data;
+            if (currentView === 'dashboard') renderDashboard();
+        })
+        .catch(err => console.error('Load dashboard error:', err));
+}
+
+function showCardPicker() {
+    // Stub - will be implemented in Task 5
+    console.log('[FanControl] Card picker not yet implemented');
+}
+
+function showGroupCreator() {
+    // Stub - will be implemented in Task 7
+    console.log('[FanControl] Group creator not yet implemented');
 }
 
 function getStatusBadgeClass(status) {
@@ -2238,10 +2493,25 @@ function renderNodeDetail(node) {
 
 function showView(view) {
     currentView = view;
+
+    // Toggle left panel containers
+    const dashboardCanvas = document.getElementById('dashboard-canvas-container');
+    const nodeTree = document.getElementById('node-tree-container');
+    if (dashboardCanvas) dashboardCanvas.classList.toggle('hidden', view !== 'dashboard');
+    if (nodeTree) nodeTree.classList.toggle('hidden', view !== 'nodes');
+
+    // Toggle right panel views
     document.getElementById('dashboard-view')?.classList.toggle('hidden', view !== 'dashboard');
     document.getElementById('nodes-view')?.classList.toggle('hidden', view !== 'nodes');
     document.getElementById('node-detail-view')?.classList.toggle('hidden', view !== 'node-detail');
-    
+
+    // Toggle floating buttons
+    const addBtn = document.getElementById('dashboard-add-btn');
+    const groupBtn = document.getElementById('dashboard-group-btn');
+    if (addBtn) addBtn.classList.toggle('hidden', view !== 'dashboard');
+    if (groupBtn) groupBtn.classList.toggle('hidden', view !== 'dashboard');
+
+    // Update tab styles
     document.querySelectorAll('.nav-item').forEach(el => {
         const isActive = el.dataset.view === view;
         if (isActive) {
@@ -2252,8 +2522,9 @@ function showView(view) {
             el.classList.remove('text-neon-cyan', 'border-neon-cyan');
         }
     });
-    
-    if (view === 'nodes') loadNodes();
+
+    if (view === 'nodes') buildNodeTree();
+    if (view === 'dashboard') renderDashboard();
 }
 
 async function addNode() {
