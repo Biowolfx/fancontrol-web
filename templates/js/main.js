@@ -166,6 +166,7 @@ function setDiscoverButtonState(loading) {
 
 console.log('[FanControl] Establishing Socket.IO connection...');
 const socket = io();
+window.socket = socket;
 
 let serverAvailable = true;
 
@@ -290,10 +291,7 @@ function updateUI(data) {
     // Refresh server tree
     buildServerTree();
 
-    // Refresh dashboard if on dashboard tab
-    if (currentView === 'dashboard') {
-        renderDashboard();
-    }
+    // Dashboard updates handled by dashboard.js
 }
 
 function showSetupScreen() {
@@ -542,222 +540,12 @@ function selectNodeFan(nodeId, fanId) {
 }
 
 // ============================================================================
-// CUSTOM DASHBOARD
+// CUSTOM DASHBOARD (stubs — dashboard.js handles layout via Gridstack)
 // ============================================================================
-
-let dashboardState = { groups: [], cards: [] };
-
-function renderDashboard() {
-    const cardsContainer = document.getElementById('dashboard-cards');
-    const groupsContainer = document.getElementById('dashboard-groups');
-    const emptyState = document.getElementById('dashboard-empty');
-
-    if (!cardsContainer) return;
-
-    const hasCards = dashboardState.cards.length > 0;
-    const hasGroups = dashboardState.groups.length > 0;
-
-    if (emptyState) {
-        emptyState.classList.toggle('hidden', hasCards || hasGroups);
-    }
-
-    // Render groups
-    if (groupsContainer) {
-        groupsContainer.innerHTML = dashboardState.groups.map(group => `
-            <div class="dashboard-group absolute border-2 border-dashed border-gray-600 rounded-lg p-2 mb-4"
-                 style="left:${group.x}px; top:${group.y}px; width:${group.w}px; min-height:${group.h}px;"
-                 data-group-id="${group.id}">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-semibold text-gray-400">${escapeHtml(group.name)}</span>
-                    <button onclick="removeGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Render cards
-    cardsContainer.innerHTML = dashboardState.cards.map(card => renderDashboardCard(card)).join('');
-}
-
-function renderDashboardCard(card) {
-    const liveData = getCardLiveData(card);
-    const sourceName = card.source === 'local' ? 'Local' : (nodesData.find(n => n.node_id === card.source)?.name || card.source);
-
-    let bodyContent = '';
-    if (card.type === 'fan') {
-        bodyContent = `
-            <div class="text-xl font-bold font-mono text-neon-cyan">${liveData.rpm || 0} <span class="text-xs text-gray-500">RPM</span></div>
-            <div class="text-sm text-gray-400">${liveData.pct || 0}% · ${liveData.mode || 'manual'}</div>
-        `;
-    } else if (card.type === 'temperature') {
-        const temp = liveData.value || 0;
-        const color = temp > 70 ? 'text-neon-red' : temp > 50 ? 'text-neon-orange' : 'text-neon-green';
-        bodyContent = `<div class="text-xl font-bold font-mono ${color}">${temp}°C</div>`;
-    } else if (card.type === 'disk') {
-        bodyContent = `<div class="text-xl font-bold font-mono text-neon-purple">${liveData.temp || 0}°C</div>`;
-    } else {
-        bodyContent = `<div class="text-xl font-bold font-mono text-neon-cyan">${liveData.value || '--'}</div>`;
-    }
-
-    return `
-        <div class="dashboard-card absolute bg-cyber-card border border-cyber-accent rounded-lg overflow-hidden cursor-move"
-             style="left:${card.x}px; top:${card.y}px; width:${card.w}px; height:${card.h}px;"
-             data-card-id="${card.id}"
-             onmousedown="startDragCard(event, '${card.id}')">
-            <div class="flex items-center justify-between px-2 py-1 bg-cyber-accent border-b border-cyber-accent">
-                <span class="text-xs text-gray-400 truncate">${escapeHtml(card.label)} — ${sourceName}</span>
-                <button onclick="event.stopPropagation(); removeCard('${card.id}')" class="text-gray-600 hover:text-red-400 text-xs ml-1">×</button>
-            </div>
-            <div class="p-3">
-                ${bodyContent}
-            </div>
-            <div class="card-resize-handle" onmousedown="event.stopPropagation(); startResizeCard(event, '${card.id}')">
-                <svg viewBox="0 0 16 16" class="w-4 h-4 text-gray-500">
-                    <path d="M14 14L14 8M14 14L8 14" stroke="currentColor" stroke-width="2" fill="none"/>
-                </svg>
-            </div>
-        </div>
-    `;
-}
-
-// ============================================================================
-// DASHBOARD DRAG AND DROP
-// ============================================================================
-
-let draggedCardId = null;
-let dragOffset = { x: 0, y: 0 };
-
-function startDragCard(event, cardId) {
-    // Don't drag if clicking remove button
-    if (event.target.tagName === 'BUTTON') return;
-
-    draggedCardId = cardId;
-    const card = dashboardState.cards.find(c => c.id === cardId);
-    if (!card) return;
-
-    const canvas = document.getElementById('dashboard-canvas');
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-
-    dragOffset.x = event.clientX - rect.left - card.x;
-    dragOffset.y = event.clientY - rect.top - card.y;
-
-    document.addEventListener('mousemove', onDragCard);
-    document.addEventListener('mouseup', onDropCard);
-    event.preventDefault();
-}
-
-function onDragCard(event) {
-    if (!draggedCardId) return;
-    const canvas = document.getElementById('dashboard-canvas');
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-
-    const card = dashboardState.cards.find(c => c.id === draggedCardId);
-    if (!card) return;
-
-    card.x = Math.max(0, event.clientX - rect.left - dragOffset.x);
-    card.y = Math.max(0, event.clientY - rect.top - dragOffset.y);
-
-    const el = document.querySelector(`[data-card-id="${draggedCardId}"]`);
-    if (el) {
-        el.style.left = card.x + 'px';
-        el.style.top = card.y + 'px';
-    }
-}
-
-function onDropCard() {
-    if (draggedCardId) {
-        saveDashboard();
-    }
-    draggedCardId = null;
-    document.removeEventListener('mousemove', onDragCard);
-    document.removeEventListener('mouseup', onDropCard);
-}
-
-// ============================================================================
-// DASHBOARD CARD RESIZE
-// ============================================================================
-
-let resizedCardId = null;
-let resizeStart = { x: 0, y: 0, w: 0, h: 0 };
-
-function startResizeCard(event, cardId) {
-    resizedCardId = cardId;
-    const card = dashboardState.cards.find(c => c.id === cardId);
-    if (!card) return;
-
-    resizeStart = { x: event.clientX, y: event.clientY, w: card.w, h: card.h };
-
-    document.addEventListener('mousemove', onResizeCard);
-    document.addEventListener('mouseup', onResizeCardEnd);
-    event.preventDefault();
-}
-
-function onResizeCard(event) {
-    if (!resizedCardId) return;
-    const card = dashboardState.cards.find(c => c.id === resizedCardId);
-    if (!card) return;
-
-    card.w = Math.max(120, resizeStart.w + (event.clientX - resizeStart.x));
-    card.h = Math.max(80, resizeStart.h + (event.clientY - resizeStart.y));
-
-    const el = document.querySelector(`[data-card-id="${resizedCardId}"]`);
-    if (el) {
-        el.style.width = card.w + 'px';
-        el.style.height = card.h + 'px';
-    }
-}
-
-function onResizeCardEnd() {
-    if (resizedCardId) {
-        saveDashboard();
-        renderDashboard();
-    }
-    resizedCardId = null;
-    document.removeEventListener('mousemove', onResizeCard);
-    document.removeEventListener('mouseup', onResizeCardEnd);
-}
-
-function removeCard(cardId) {
-    dashboardState.cards = dashboardState.cards.filter(c => c.id !== cardId);
-    saveDashboard();
-    renderDashboard();
-}
-
-function removeGroup(groupId) {
-    dashboardState.cards.forEach(card => {
-        if (card.group_id === groupId) card.group_id = null;
-    });
-    dashboardState.groups = dashboardState.groups.filter(g => g.id !== groupId);
-    saveDashboard();
-    renderDashboard();
-}
-
-function saveDashboard() {
-    fetch('/api/dashboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dashboardState)
-    }).catch(err => console.error('Save dashboard error:', err));
-}
-
-function loadDashboard() {
-    fetch('/api/dashboard')
-        .then(r => r.json())
-        .then(data => {
-            dashboardState = data;
-            if (currentView === 'dashboard') renderDashboard();
-        })
-        .catch(err => console.error('Load dashboard error:', err));
-}
 
 function showCardPicker() {
     const modal = document.getElementById('card-picker-modal');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    populatePickerSources();
-    updatePickerElements();
+    if (modal) modal.classList.remove('hidden');
 }
 
 function hideCardPicker() {
@@ -765,113 +553,16 @@ function hideCardPicker() {
     if (modal) modal.classList.add('hidden');
 }
 
-function populatePickerSources() {
-    const select = document.getElementById('picker-source');
-    if (!select) return;
-    select.innerHTML = '<option value="local">My Server (local)</option>';
-    for (const node of nodesData) {
-        select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name)}</option>`;
-    }
-}
-
-function updatePickerElements() {
-    const type = document.getElementById('picker-type')?.value;
-    const source = document.getElementById('picker-source')?.value;
-    const container = document.getElementById('picker-elements');
-    if (!container) return;
-
-    let elements = [];
-
-    if (source === 'local') {
-        if (type === 'fan' && currentState?.fans) {
-            elements = Object.entries(currentState.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
-        } else if (type === 'temperature' && currentState?.temp_sensors) {
-            elements = Object.entries(currentState.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
-        } else if (type === 'disk' && currentState?.hdd_sensors) {
-            elements = Object.entries(currentState.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
-        } else if (type === 'system') {
-            elements = [
-                { id: 'cpu_temp', label: 'CPU Temperature', extra: '' },
-                { id: 'uptime', label: 'Uptime', extra: '' },
-            ];
-        }
-    } else {
-        const node = nodesData.find(n => n.node_id === source);
-        if (node?.telemetry) {
-            const tel = node.telemetry;
-            if (type === 'fan' && tel.fans) {
-                elements = Object.entries(tel.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
-            } else if (type === 'temperature' && tel.temp_sensors) {
-                elements = Object.entries(tel.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
-            } else if (type === 'disk' && tel.hdd_sensors) {
-                elements = Object.entries(tel.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
-            }
-        }
-    }
-
-    container.innerHTML = elements.length > 0
-        ? elements.map(el => `
-            <label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
-                <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded">
-                <span class="text-xs text-gray-300">${escapeHtml(el.label)}</span>
-                <span class="ml-auto text-xs text-gray-500">${el.extra}</span>
-            </label>
-        `).join('')
-        : '<div class="text-xs text-gray-500 text-center py-4">No elements found</div>';
-}
-
 function addSelectedCards() {
-    const type = document.getElementById('picker-type')?.value;
-    const source = document.getElementById('picker-source')?.value;
-    const checkboxes = document.querySelectorAll('.picker-checkbox:checked');
-
-    let offsetX = 20;
-    let offsetY = 20;
-
-    // Find existing cards to offset new ones
-    if (dashboardState.cards.length > 0) {
-        const lastCard = dashboardState.cards[dashboardState.cards.length - 1];
-        offsetX = lastCard.x + lastCard.w + 20;
-        offsetY = lastCard.y;
-        // Wrap to next row if too wide
-        if (offsetX > 600) {
-            offsetX = 20;
-            offsetY = lastCard.y + lastCard.h + 20;
-        }
+    if (window.__fancontrol_dashboard && window.__fancontrol_dashboard.addCardsFromPicker) {
+        window.__fancontrol_dashboard.addCardsFromPicker();
     }
-
-    checkboxes.forEach(cb => {
-        const card = {
-            id: 'card-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-            type: type,
-            source: source,
-            element_id: cb.value,
-            label: cb.dataset.label,
-            x: offsetX,
-            y: offsetY,
-            w: 200,
-            h: 120,
-            group_id: null
-        };
-        dashboardState.cards.push(card);
-        offsetX += 220;
-        if (offsetX > 600) {
-            offsetX = 20;
-            offsetY += 140;
-        }
-    });
-
-    saveDashboard();
-    renderDashboard();
     hideCardPicker();
 }
 
 function showGroupCreator() {
     const modal = document.getElementById('group-creator-modal');
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    const input = document.getElementById('group-name-input');
-    if (input) { input.value = ''; input.focus(); }
+    if (modal) modal.classList.remove('hidden');
 }
 
 function hideGroupCreator() {
@@ -880,21 +571,6 @@ function hideGroupCreator() {
 }
 
 function createGroup() {
-    const name = document.getElementById('group-name-input')?.value?.trim();
-    if (!name) return;
-
-    const group = {
-        id: 'group-' + Date.now(),
-        name: name,
-        x: 20,
-        y: dashboardState.cards.length * 150 + 20,
-        w: 400,
-        h: 200
-    };
-
-    dashboardState.groups.push(group);
-    saveDashboard();
-    renderDashboard();
     hideGroupCreator();
 }
 
@@ -2764,7 +2440,6 @@ function showView(view) {
         if (inspector) inspector.classList.add('hidden');
         if (addBtn) addBtn.classList.remove('hidden');
         if (groupBtn) groupBtn.classList.remove('hidden');
-        renderDashboard();
     } else if (view === 'inspector') {
         if (canvas) canvas.classList.add('hidden');
         if (inspector) inspector.classList.remove('hidden');

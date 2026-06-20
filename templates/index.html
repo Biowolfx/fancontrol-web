@@ -45,10 +45,9 @@
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Gridstack (drag/resize dashboard) -->
+    <!-- Gridstack (dashboard layout) -->
     <link href="https://cdn.jsdelivr.net/npm/gridstack@8.2.0/dist/gridstack.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/gridstack@8.2.0/dist/gridstack-h5.js"></script>
-    
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     
@@ -157,25 +156,6 @@
                 </div>
             </div>
                 
-                            <!-- Card Settings Modal -->
-                            <div id="card-settings-modal" class="hidden fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-60">
-                                <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-md w-full mx-4">
-                                    <h3 class="text-lg font-bold text-white mb-3">Card Settings</h3>
-                                    <div class="mb-3">
-                                        <label class="text-sm text-gray-300 block mb-1">Threshold (°C)</label>
-                                        <input id="card-threshold" type="number" min="0" max="150" class="w-full bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-white">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="text-sm text-gray-300 block mb-1">Refresh (ms, 0=inherit)</label>
-                                        <input id="card-refresh" type="number" min="0" class="w-full bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-white">
-                                    </div>
-                                    <div class="flex gap-2">
-                                        <button id="card-settings-save" class="flex-1 py-2 rounded bg-neon-cyan text-black">Save</button>
-                                        <button id="card-settings-cancel" class="flex-1 py-2 rounded bg-cyber-accent text-gray-300">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-            
             <!-- Step 1: Intro -->
             <div id="setup-step-intro" class="text-center">
                 <div class="text-6xl mb-6">🌀</div>
@@ -209,6 +189,25 @@
                         Calibrating: determining PWM/RPM curves...
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Card Settings Modal -->
+    <div id="card-settings-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-60">
+        <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-bold text-white mb-3">Card Settings</h3>
+            <div class="mb-3">
+                <label class="text-sm text-gray-300 block mb-1">Threshold (°C)</label>
+                <input id="card-threshold" type="number" min="0" max="150" class="w-full bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-white">
+            </div>
+            <div class="mb-3">
+                <label class="text-sm text-gray-300 block mb-1">Refresh (ms, 0=inherit)</label>
+                <input id="card-refresh" type="number" min="0" class="w-full bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-white">
+            </div>
+            <div class="flex gap-2">
+                <button id="card-settings-save" class="flex-1 py-2 rounded bg-neon-cyan text-black">Save</button>
+                <button id="card-settings-cancel" class="flex-1 py-2 rounded bg-cyber-accent text-gray-300">Cancel</button>
             </div>
         </div>
     </div>
@@ -278,19 +277,16 @@
         <div class="flex-1 flex flex-col overflow-hidden bg-cyber-bg relative">
             
             <!-- Dashboard Canvas (full screen) -->
-            <div id="dashboard-canvas-container" class="flex-1 overflow-auto">
-                <div id="dashboard-canvas" class="relative min-h-full p-4">
+            <div id="dashboard-canvas-container" class="flex-1 overflow-auto relative">
+                <div id="dashboard-canvas" class="grid-stack">
                     <div id="dashboard-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
                         <div class="text-4xl mb-4">📊</div>
                         <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
                         <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
                     </div>
-                    <div id="dashboard-groups"></div>
-                    <div id="dashboard-cards"></div>
                 </div>
                 <!-- Dashboard toolbar -->
                 <div class="absolute top-4 left-6 z-50 flex items-center gap-2">
-                    <div class="bg-cyber-card border border-cyber-accent rounded-lg p-2 text-xs text-gray-300">Layout</div>
                     <select id="preset-select" class="text-xs bg-cyber-card border border-cyber-accent rounded px-2 py-1 text-gray-200">
                         <option value="">Default</option>
                     </select>
@@ -298,28 +294,19 @@
                     <button id="del-preset-btn" class="px-2 py-1 bg-red-700 rounded text-white text-xs">Delete Preset</button>
                     <button id="save-layout-btn" class="px-2 py-1 bg-neon-cyan rounded text-black text-xs">Save</button>
                     <button id="reset-layout-btn" class="px-2 py-1 bg-neon-purple rounded text-white text-xs">Reset</button>
-                    <div class="ml-4 bg-cyber-card border border-cyber-accent rounded-lg p-2 text-xs text-gray-300">History</div>
+                    <div class="ml-4"></div>
                     <select id="history-range" class="text-xs bg-cyber-card border border-cyber-accent rounded px-2 py-1 text-gray-200">
                         <option value="24">24h</option>
                         <option value="168">7d</option>
                         <option value="720">30d</option>
                     </select>
                 </div>
-                <!-- Export/Import Presets -->
                 <div class="absolute top-4 left-80 z-50 flex items-center gap-2">
-                    <button id="export-presets-btn" class="px-2 py-1 bg-cyber-accent rounded text-xs text-gray-300">Export Presets</button>
+                    <button id="export-presets-btn" class="px-2 py-1 bg-cyber-accent rounded text-xs text-gray-300">Export</button>
                     <label class="px-2 py-1 bg-cyber-accent rounded text-xs text-gray-300 cursor-pointer">
                         Import
                         <input id="import-presets-input" type="file" accept="application/json" class="hidden">
                     </label>
-                </div>
-
-                <!-- Threshold notification banner -->
-                <div id="threshold-banner" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-60">
-                    <div class="bg-red-900/80 border border-red-500/40 rounded-xl px-6 py-3 flex items-center gap-3 text-white">
-                        <span id="threshold-banner-text">Threshold exceeded</span>
-                        <button onclick="document.getElementById('threshold-banner').classList.add('hidden')" class="text-sm text-gray-200">Dismiss</button>
-                    </div>
                 </div>
                 <button id="dashboard-add-btn" onclick="showCardPicker()"
                         class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40">
@@ -525,7 +512,8 @@
                         <h4 class="text-sm font-semibold text-gray-300 mb-3" data-i18n="chart.temp_history">Temperature History (24h)</h4>
                         <div id="temp-chart" class="h-64"></div>
                     </div>
-                </div>
+                </div><!-- /inspector-fan -->
+                </div><!-- /inspector-content -->
             </div><!-- /inspector-container -->
         </div><!-- /main content -->
     </div><!-- /main-screen -->

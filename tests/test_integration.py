@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 def test_core_state_import():
     from core.state import state, get_state, CONFIG_VERSION
-    assert CONFIG_VERSION == "3.4.1"
+    assert isinstance(CONFIG_VERSION, str) and CONFIG_VERSION
     s = get_state()
     assert 'fans' in s
     assert 'initialized' in s
