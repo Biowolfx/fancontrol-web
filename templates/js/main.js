@@ -656,9 +656,8 @@ function addSelectedCards() {
         }
 
         try {
-            const gridEl = document.querySelector('#dashboard-canvas');
-            if (gridEl && gridEl.gridstack) {
-                gridEl.gridstack.addWidget(cardHtml);
+            if (window.__fancontrol_dashboard?.addWidget) {
+                window.__fancontrol_dashboard.addWidget(cardHtml);
             }
         } catch (e) { console.debug('addCard failed', e); }
 

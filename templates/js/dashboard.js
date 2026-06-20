@@ -620,5 +620,10 @@
     init();
   }
 
-  window.__fancontrol_dashboard = { updateOverview, saveLayout, resetLayout };
+  function addWidget(html) {
+    if (grid) return grid.addWidget(html);
+    return null;
+  }
+
+  window.__fancontrol_dashboard = { updateOverview, saveLayout, resetLayout, addWidget };
 })();
