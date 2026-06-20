@@ -296,12 +296,6 @@ function updateUI(data) {
     }
 }
 
-    // Refresh dashboard if on dashboard tab
-    if (currentView === 'dashboard') {
-        renderDashboard();
-    }
-}
-
 function showSetupScreen() {
     document.getElementById('setup-screen').classList.remove('hidden');
     document.getElementById('main-screen').classList.add('hidden');
