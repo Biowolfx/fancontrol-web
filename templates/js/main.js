@@ -704,7 +704,10 @@ function loadPickerCards() {
     if (!canvas) return;
     const dashApi = window.__fancontrol_dashboard;
     const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
-    cards.forEach(c => renderPickerCard(canvas, useGrid, dashApi, c));
+    cards.forEach(c => {
+        if (document.querySelector(`[data-card-id="${c.id}"]`)) return;
+        renderPickerCard(canvas, useGrid, dashApi, c);
+    });
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
 }
