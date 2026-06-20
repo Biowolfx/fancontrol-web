@@ -1068,8 +1068,9 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative col-span-full';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
     el.setAttribute('data-group-id', group.id);
+    if (group.width) el.style.width = group.width;
     if (group.minHeight) el.style.minHeight = group.minHeight;
 
     el.innerHTML = `
@@ -1151,7 +1152,9 @@ function onGroupDrop(e) {
 }
 
 let _resizingGroupId = null;
+let _resizeStartX = 0;
 let _resizeStartY = 0;
+let _resizeStartW = 0;
 let _resizeStartH = 0;
 
 function startGroupResize(e, groupId) {
@@ -1160,7 +1163,9 @@ function startGroupResize(e, groupId) {
     _resizingGroupId = groupId;
     const el = document.querySelector(`[data-group-id="${groupId}"]`);
     if (!el) return;
+    _resizeStartX = e.clientX;
     _resizeStartY = e.clientY;
+    _resizeStartW = el.offsetWidth;
     _resizeStartH = el.offsetHeight;
     document.addEventListener('mousemove', onGroupResize);
     document.addEventListener('mouseup', stopGroupResize);
@@ -1170,7 +1175,9 @@ function onGroupResize(e) {
     if (!_resizingGroupId) return;
     const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
     if (!el) return;
+    const w = Math.max(200, _resizeStartW + (e.clientX - _resizeStartX));
     const h = Math.max(100, _resizeStartH + (e.clientY - _resizeStartY));
+    el.style.width = w + 'px';
     el.style.minHeight = h + 'px';
 }
 
@@ -1180,6 +1187,7 @@ function stopGroupResize() {
     const group = groups.find(g => g.id === _resizingGroupId);
     const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
     if (group && el) {
+        group.width = el.style.width;
         group.minHeight = el.style.minHeight;
         setPickerGroups(groups);
     }
