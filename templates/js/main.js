@@ -666,18 +666,80 @@ function renderPickerCard(card) {
     }
 
     const el = document.createElement('div');
-    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg';
+    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
     el.setAttribute('data-card-id', id);
+    el.setAttribute('draggable', 'true');
     el.innerHTML = `
         <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
+                <span class="text-gray-600 text-xs select-none">⠿</span>
                 <span class="text-lg">${icon}</span>
                 <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
             </div>
             <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-sm transition-colors">×</button>
         </div>
         ${valueHtml}`;
+
+    el.addEventListener('dragstart', onCardDragStart);
+    el.addEventListener('dragover', onCardDragOver);
+    el.addEventListener('drop', onCardDrop);
+    el.addEventListener('dragend', onCardDragEnd);
     canvas.appendChild(el);
+}
+
+let _draggedCard = null;
+
+function onCardDragStart(e) {
+    _draggedCard = this;
+    this.classList.add('opacity-40');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.dataset.cardId);
+}
+
+function onCardDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const canvas = document.getElementById('dashboard-canvas');
+    const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
+    if (afterElement) {
+        canvas.insertBefore(_draggedCard, afterElement);
+    } else {
+        canvas.appendChild(_draggedCard);
+    }
+}
+
+function onCardDrop(e) {
+    e.preventDefault();
+    saveCardOrder();
+}
+
+function onCardDragEnd() {
+    this.classList.remove('opacity-40');
+    _draggedCard = null;
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+function getDragAfterElement(container, x, y) {
+    const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40)')];
+    return cards.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offsetX = x - box.left - box.width / 2;
+        const offsetY = y - box.top - box.height / 2;
+        const offset = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+        if (offset < 0 || offset < closest.offset) {
+            return { offset, element: child };
+        }
+        return closest;
+    }, { offset: Number.POSITIVE_INFINITY }).element;
+}
+
+function saveCardOrder() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    const ordered = [...canvas.querySelectorAll('[data-card-id]')].map(el => el.dataset.cardId);
+    const saved = getPickerCards();
+    const orderedCards = ordered.map(id => saved.find(c => c.id === id)).filter(Boolean);
+    setPickerCards(orderedCards);
 }
 
 function removePickerCard(cardId) {
