@@ -18,8 +18,7 @@ executor = ThreadPoolExecutor(max_workers=8)
 HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
 
 CALIBRATION_STEPS = [
-    0, 13, 26, 38, 51, 64, 77, 89, 102, 115, 128,
-    140, 153, 166, 179, 191, 204, 217, 230, 242, 255
+    0, 25, 51, 76, 102, 127, 153, 178, 204, 229, 255
 ]
 CALIBRATION_SETTLE_TIME = 5
 

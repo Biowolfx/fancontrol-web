@@ -34,8 +34,12 @@ from server.socket_handlers import register_handlers
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
 
-LOG_DIR = '/data/logs'
-Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+LOG_DIR = os.getenv('FANCONTROL_LOG_DIR', str(DATA_DIR / 'logs'))
+try:
+    Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+except Exception:
+    # Ignore permission errors during import (testing or restricted environments)
+    pass
 
 # Logger setup
 logger = logging.getLogger('fancontrol')
@@ -50,15 +54,21 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(fmt)
 logger.addHandler(console_handler)
 
-file_handler = RotatingFileHandler(
-    f'{LOG_DIR}/fancontrol.log',
-    maxBytes=10*1024*1024,
-    backupCount=5,
-    encoding='utf-8'
-)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(fmt)
-logger.addHandler(file_handler)
+try:
+    file_handler = RotatingFileHandler(
+        f'{LOG_DIR}/fancontrol.log',
+        maxBytes=10*1024*1024,
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(fmt)
+    logger.addHandler(file_handler)
+except Exception:
+    # If creating the file handler fails (permissions, missing dirs), continue
+    # with console logging only — avoid raising during import.
+    pass
+
 
 # Flask & SocketIO
 app = Flask(__name__, static_folder='static', static_url_path='/static')
