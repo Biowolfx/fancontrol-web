@@ -310,11 +310,9 @@ function showMainScreen() {
     if (!currentState || !currentState.testing) {
         hideCalibrationModal();
     }
-    // Show dashboard by default
     showView('dashboard');
-    // Build server tree
     buildServerTree();
-    // Start live updates for dashboard cards
+    loadPickerCards();
     startPickerLiveUpdate();
 }
 
@@ -625,53 +623,89 @@ function addSelectedCards() {
     const dashApi = window.__fancontrol_dashboard;
     const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
 
+    const saved = getPickerCards();
+
     checkboxes.forEach(cb => {
         const cardId = `picker-${source}-${cb.value}`;
         if (document.querySelector(`[data-card-id="${cardId}"]`)) return;
+        if (saved.some(c => c.id === cardId)) return;
 
         const label = cb.dataset.label || cb.value;
-        let valueHtml = '';
-        let valueId = '';
-
-        if (type === 'fan') {
-            valueId = `picker-rpm-${cardId}`;
-            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-cyan" data-fan-id="${cb.value}" data-source="${source}">-- RPM</div>`;
-        } else if (type === 'temperature') {
-            valueId = `picker-temp-${cardId}`;
-            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-green" data-temp-id="${cb.value}" data-source="${source}">--°C</div>`;
-        } else if (type === 'disk') {
-            valueId = `picker-disk-${cardId}`;
-            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-purple" data-disk-id="${cb.value}" data-source="${source}">--°C</div>`;
-        } else {
-            valueId = `picker-sys-${cardId}`;
-            valueHtml = `<div id="${valueId}" class="text-lg font-bold font-mono text-neon-cyan">--</div>`;
-        }
-
-        if (useGrid) {
-            const wrapHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${cardId}">
-                <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3" data-card-id="${cardId}">
-                    <div class="text-xs text-gray-400 mb-1">${escapeHtml(label)}</div>
-                    ${valueHtml}
-                </div>
-            </div>`;
-            try { dashApi.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
-        } else {
-            const card = document.createElement('div');
-            card.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-3';
-            card.setAttribute('data-card-id', cardId);
-            card.style.cssText = 'width:220px;min-height:100px;display:inline-block;vertical-align:top;margin:8px;';
-            card.innerHTML = `
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
-                    <button onclick="this.closest('[data-card-id]').remove()" class="text-gray-600 hover:text-red-400 text-xs">×</button>
-                </div>
-                ${valueHtml}`;
-            canvas.appendChild(card);
-        }
+        renderPickerCard(canvas, useGrid, dashApi, { id: cardId, type, source, sourceId: cb.value, label });
+        saved.push({ id: cardId, type, source, sourceId: cb.value, label });
     });
 
+    setPickerCards(saved);
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     hideCardPicker();
+    startPickerLiveUpdate();
+}
+
+function renderPickerCard(canvas, useGrid, dashApi, card) {
+    const { id, type, source, sourceId, label } = card;
+    let valueHtml = '';
+
+    if (type === 'fan') {
+        valueHtml = `<div class="text-lg font-bold font-mono text-neon-cyan" data-fan-id="${sourceId}" data-source="${source}">-- RPM</div>`;
+    } else if (type === 'temperature') {
+        valueHtml = `<div class="text-lg font-bold font-mono text-neon-green" data-temp-id="${sourceId}" data-source="${source}">--°C</div>`;
+    } else if (type === 'disk') {
+        valueHtml = `<div class="text-lg font-bold font-mono text-neon-purple" data-disk-id="${sourceId}" data-source="${source}">--°C</div>`;
+    } else {
+        valueHtml = `<div class="text-lg font-bold font-mono text-neon-cyan">--</div>`;
+    }
+
+    if (useGrid) {
+        const wrapHtml = `<div class="grid-stack-item" gs-w="3" gs-h="2" data-gs-id="${id}">
+            <div class="grid-stack-item-content bg-cyber-card border border-cyber-accent rounded-xl p-3" data-card-id="${id}">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
+                    <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
+                </div>
+                ${valueHtml}
+            </div>
+        </div>`;
+        try { dashApi.addWidget(wrapHtml); } catch(e) { console.debug('grid addWidget failed', e); }
+    } else {
+        const el = document.createElement('div');
+        el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-3';
+        el.setAttribute('data-card-id', id);
+        el.style.cssText = 'width:220px;min-height:100px;display:inline-block;vertical-align:top;margin:8px;';
+        el.innerHTML = `
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-gray-400 truncate">${escapeHtml(label)}</span>
+                <button onclick="removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs">×</button>
+            </div>
+            ${valueHtml}`;
+        canvas.appendChild(el);
+    }
+}
+
+function removePickerCard(cardId) {
+    const el = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (el) el.remove();
+    const saved = getPickerCards().filter(c => c.id !== cardId);
+    setPickerCards(saved);
+    if (!saved.length) document.getElementById('dashboard-empty')?.classList.remove('hidden');
+}
+
+function getPickerCards() {
+    try { return JSON.parse(localStorage.getItem('fc_picker_cards') || '[]'); } catch(e) { return []; }
+}
+
+function setPickerCards(cards) {
+    localStorage.setItem('fc_picker_cards', JSON.stringify(cards));
+}
+
+function loadPickerCards() {
+    const cards = getPickerCards();
+    if (!cards.length) return;
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    const dashApi = window.__fancontrol_dashboard;
+    const useGrid = !!(dashApi?.isGridReady && dashApi.isGridReady());
+    cards.forEach(c => renderPickerCard(canvas, useGrid, dashApi, c));
+    document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
 }
 
