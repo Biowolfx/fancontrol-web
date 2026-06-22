@@ -343,29 +343,21 @@ def api_update_apply():
 
         # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        logger.info(f'[UPDATE] Container name: {container_name}')
-
-        # Write restart script to file for reliability
-        restart_script_path = '/tmp/fancontrol_restart.py'
-        try:
-            with open(restart_script_path, 'w') as f:
-                f.write('import time, os, sys, logging\n')
-                f.write('logging.basicConfig(filename="/tmp/fancontrol_restart.log", level=logging.INFO)\n')
-                f.write('logging.info(f"[RESTART] Script started, PID={os.getpid()}")\n')
-                f.write('try:\n')
-                f.write('    logging.info("[RESTART] Sleeping 2s...")\n')
-                f.write('    time.sleep(2)\n')
-                f.write('    logging.info("[RESTART] Calling os._exit(0)")\n')
-                f.write('    os._exit(0)\n')
-                f.write('except Exception as e:\n')
-                f.write('    logging.error(f"[RESTART] Error: {e}")\n')
-            logger.info(f'[UPDATE] Restart script written to {restart_script_path}')
-        except Exception as e:
-            logger.error(f'[UPDATE] Failed to write restart script: {e}')
-
+        restart_script = """import time, os, signal
+logging.basicConfig(filename="/tmp/fancontrol_restart.log", level=logging.INFO)
+try:
+    logging.info(f"[RESTART] Script started, PID={os.getpid()}, PPID={os.getppid()}")
+    logging.info("[RESTART] Sleeping 2s...")
+    time.sleep(2)
+    logging.info("[RESTART] Sending SIGTERM to PID 1 (Flask main process)")
+    os.kill(1, signal.SIGTERM)
+    logging.info("[RESTART] SIGTERM sent")
+except Exception as e:
+    logging.error(f"[RESTART] Error: {e}")
+"""
         try:
             proc = subprocess.Popen(
-                ['python3', restart_script_path],
+                ['python3', '-c', restart_script],
                 stdout=open('/tmp/fancontrol_restart.log', 'w'),
                 stderr=subprocess.STDOUT,
                 start_new_session=True
