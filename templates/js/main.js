@@ -427,12 +427,32 @@ function getHiddenSensors() {
 }
 
 function hideSensor(sensorId) {
-    const hidden = getHiddenSensors();
-    if (!hidden.includes(sensorId)) {
-        hidden.push(sensorId);
-        localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+    const el = document.querySelector(`[data-sensor-id="${sensorId}"]`);
+    if (el) {
+        el.style.transition = 'opacity 0.3s, max-height 0.3s, margin 0.3s, padding 0.3s';
+        el.style.overflow = 'hidden';
+        el.style.opacity = '0';
+        el.style.maxHeight = '0';
+        el.style.marginTop = '0';
+        el.style.marginBottom = '0';
+        el.style.paddingTop = '0';
+        el.style.paddingBottom = '0';
+        setTimeout(() => {
+            const hidden = getHiddenSensors();
+            if (!hidden.includes(sensorId)) {
+                hidden.push(sensorId);
+                localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+            }
+            buildServerTree();
+        }, 320);
+    } else {
+        const hidden = getHiddenSensors();
+        if (!hidden.includes(sensorId)) {
+            hidden.push(sensorId);
+            localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+        }
+        buildServerTree();
     }
-    buildServerTree();
 }
 
 function restoreSensor(sensorId) {
@@ -476,7 +496,7 @@ function renderLocalServerTree() {
     for (const [fanId, fan] of visibleFans) {
         const isSelected = fanId === currentFanId;
         html += `
-            <div class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
+            <div data-sensor-id="fan:${escapeHtml(fanId)}" class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
                  onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
                 <span class="text-xs">🌀</span>
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(fan.label)}</span>
@@ -488,7 +508,7 @@ function renderLocalServerTree() {
 
     for (const [sensorId, sensor] of visibleTemps) {
         html += `
-            <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
+            <div data-sensor-id="temp:${escapeHtml(sensorId)}" class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                 <span class="text-xs">🌡</span>
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(sensor.label)}</span>
                 <span class="ml-auto text-xs font-mono text-neon-green">${sensor.value || 0}°C</span>
@@ -499,7 +519,7 @@ function renderLocalServerTree() {
 
     for (const [diskId, disk] of visibleDisks) {
         html += `
-            <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
+            <div data-sensor-id="disk:${escapeHtml(diskId)}" class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                 <span class="text-xs">💾</span>
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(disk.label || diskId)}</span>
                 <span class="ml-auto text-xs font-mono ${getTempColorClass(disk.temp)}">${disk.temp > 0 ? disk.temp + '°C' : '--'}</span>
