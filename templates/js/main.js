@@ -422,14 +422,45 @@ function buildServerTree() {
     });
 }
 
+function getHiddenSensors() {
+    try { return JSON.parse(localStorage.getItem('fc_hidden_sensors') || '[]'); } catch { return []; }
+}
+
+function hideSensor(sensorId) {
+    const hidden = getHiddenSensors();
+    if (!hidden.includes(sensorId)) {
+        hidden.push(sensorId);
+        localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+    }
+    buildServerTree();
+}
+
+function restoreSensor(sensorId) {
+    const hidden = getHiddenSensors().filter(id => id !== sensorId);
+    localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+    buildServerTree();
+}
+
+function restoreAllSensors() {
+    localStorage.removeItem('fc_hidden_sensors');
+    buildServerTree();
+}
+
 function renderLocalServerTree() {
     if (!currentState || !currentState.fans) return '';
 
     const fans = currentState.fans;
     const temps = currentState.temp_sensors || {};
     const disks = currentState.hdd_sensors || {};
-    const fanCount = Object.keys(fans).length;
-    const diskCount = Object.keys(disks).length;
+    const hidden = getHiddenSensors();
+
+    const visibleFans = Object.entries(fans).filter(([id]) => !hidden.includes(`fan:${id}`));
+    const visibleTemps = Object.entries(temps).filter(([id]) => !hidden.includes(`temp:${id}`));
+    const visibleDisks = Object.entries(disks).filter(([id]) => !hidden.includes(`disk:${id}`));
+    const hiddenFans = Object.entries(fans).filter(([id]) => hidden.includes(`fan:${id}`));
+    const hiddenTemps = Object.entries(temps).filter(([id]) => hidden.includes(`temp:${id}`));
+    const hiddenDisks = Object.entries(disks).filter(([id]) => hidden.includes(`disk:${id}`));
+    const hasHidden = hiddenFans.length + hiddenTemps.length + hiddenDisks.length > 0;
 
     let html = `
         <div class="node-group" data-node="local">
@@ -437,41 +468,88 @@ function renderLocalServerTree() {
                  onclick="toggleNodeGroup('local')">
                 <span class="text-neon-cyan text-xs">▼</span>
                 <span class="text-sm font-semibold text-white">🖥 ${t('nodes.local_server', 'My Server')}</span>
-                <span class="ml-auto text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded">${fanCount} ${t('nodes.fans', 'fans')}</span>
+                <span class="ml-auto text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded">${visibleFans.length} ${t('nodes.fans', 'fans')}</span>
             </div>
-            <div class="node-children ml-4 space-y-0.5" id="node-children-local">
+            <div class="node-children ml-4 space-y-px" id="node-children-local">
     `;
 
-    for (const [fanId, fan] of Object.entries(fans)) {
+    for (const [fanId, fan] of visibleFans) {
         const isSelected = fanId === currentFanId;
         html += `
-            <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer transition-all ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
+            <div class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
                  onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
                 <span class="text-xs">🌀</span>
-                <span class="text-xs text-gray-300 truncate">${escapeHtml(fan.label)}</span>
+                <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(fan.label)}</span>
                 <span class="ml-auto text-xs font-mono text-neon-cyan" id="tree-fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0}</span>
+                <button onclick="event.stopPropagation(); hideSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
             </div>
         `;
     }
 
-    for (const [sensorId, sensor] of Object.entries(temps)) {
+    for (const [sensorId, sensor] of visibleTemps) {
         html += `
-            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+            <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                 <span class="text-xs">🌡</span>
-                <span class="text-xs text-gray-300 truncate">${escapeHtml(sensor.label)}</span>
+                <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(sensor.label)}</span>
                 <span class="ml-auto text-xs font-mono text-neon-green">${sensor.value || 0}°C</span>
+                <button onclick="event.stopPropagation(); hideSensor('temp:${escapeHtml(sensorId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
             </div>
         `;
     }
 
-    for (const [diskId, disk] of Object.entries(disks)) {
+    for (const [diskId, disk] of visibleDisks) {
         html += `
-            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+            <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                 <span class="text-xs">💾</span>
-                <span class="text-xs text-gray-300 truncate">${escapeHtml(disk.label || diskId)}</span>
+                <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(disk.label || diskId)}</span>
                 <span class="ml-auto text-xs font-mono ${getTempColorClass(disk.temp)}">${disk.temp > 0 ? disk.temp + '°C' : '--'}</span>
+                <button onclick="event.stopPropagation(); hideSensor('disk:${escapeHtml(diskId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
             </div>
         `;
+    }
+
+    if (hasHidden) {
+        const totalHidden = hiddenFans.length + hiddenTemps.length + hiddenDisks.length;
+        html += `
+            <div class="mt-1 border-t border-gray-700/50 pt-1">
+                <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent cursor-pointer"
+                     onclick="toggleNodeGroup('local-hidden')">
+                    <span class="text-neon-cyan text-[10px]">▶</span>
+                    <span class="text-[10px] text-gray-500">Удалённые (${totalHidden})</span>
+                    <button onclick="event.stopPropagation(); restoreAllSensors()" class="ml-auto text-[10px] text-gray-600 hover:text-neon-green px-1">↺ все</button>
+                </div>
+                <div class="node-children hidden ml-4 space-y-px" id="node-children-local-hidden">
+        `;
+
+        for (const [fanId, fan] of hiddenFans) {
+            html += `
+                <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
+                    <span class="text-xs opacity-50">🌀</span>
+                    <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(fan.label)}</span>
+                    <button onclick="restoreSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                </div>
+            `;
+        }
+        for (const [sensorId, sensor] of hiddenTemps) {
+            html += `
+                <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
+                    <span class="text-xs opacity-50">🌡</span>
+                    <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(sensor.label)}</span>
+                    <button onclick="restoreSensor('temp:${escapeHtml(sensorId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                </div>
+            `;
+        }
+        for (const [diskId, disk] of hiddenDisks) {
+            html += `
+                <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
+                    <span class="text-xs opacity-50">💾</span>
+                    <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(disk.label || diskId)}</span>
+                    <button onclick="restoreSensor('disk:${escapeHtml(diskId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                </div>
+            `;
+        }
+
+        html += `</div></div>`;
     }
 
     html += `</div></div>`;
@@ -1952,9 +2030,11 @@ function applyPWM(value) {
 
 function buildSensorList(data) {
     allSensors = [];
-    
+    const hidden = getHiddenSensors();
+
     if (data.hdd_sensors) {
         for (const [id, disk] of Object.entries(data.hdd_sensors)) {
+            if (hidden.includes(`disk:${id}`)) continue;
             allSensors.push({
                 id: `hdd:${id}`,
                 label: disk.label,
@@ -1964,9 +2044,10 @@ function buildSensorList(data) {
             });
         }
     }
-    
+
     if (data.temp_sensors) {
         for (const [id, sensor] of Object.entries(data.temp_sensors)) {
+            if (hidden.includes(`temp:${id}`)) continue;
             allSensors.push({
                 id: `temp:${id}`,
                 label: sensor.label,
