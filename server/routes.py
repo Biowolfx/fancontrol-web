@@ -339,25 +339,19 @@ def api_update_apply():
 
         # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        restart_script = f'''import socket, time
+        restart_script = f"""import subprocess, time
 time.sleep(2)
 try:
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(10)
-    s.connect('/var/run/docker.sock')
-    s.sendall(b'POST /containers/{container_name}/restart?t=5 HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n')
-    print('Docker socket restart:', s.recv(4096).decode().splitlines()[0])
-    s.close()
+    r = subprocess.run(['docker', 'restart', '{container_name}'], capture_output=True, text=True, timeout=30)
+    print(f'Restart result: rc={{r.returncode}} stdout={{r.stdout.strip()}} stderr={{r.stderr.strip()}}')
 except Exception as e:
-    print('Docker socket failed:', e)
-    import subprocess
-    subprocess.run(['docker', 'restart', '{container_name}'], timeout=30)
-'''
+    print(f'Restart error: {{e}}')
+"""
         try:
             subprocess.Popen(
                 ['python3', '-c', restart_script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=open('/tmp/fancontrol_restart.log', 'w'),
+                stderr=subprocess.STDOUT,
                 start_new_session=True
             )
             logger.info(f'Restart scheduled for container {container_name}')
