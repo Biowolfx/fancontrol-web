@@ -859,6 +859,25 @@
         </div>
     </div>
 
+    <!-- SMART Detail Modal -->
+    <div id="smart-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+        <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-white" id="smart-modal-title">SMART Data</h3>
+                <div class="flex items-center gap-2">
+                    <button onclick="refreshSmartData()" class="text-gray-400 hover:text-neon-cyan text-sm transition-colors" title="Обновить">🔄</button>
+                    <button onclick="hideSmartModal()" class="text-gray-400 hover:text-white text-lg">&times;</button>
+                </div>
+            </div>
+            <div id="smart-device-info" class="text-xs text-gray-400 mb-3"></div>
+            <div id="smart-attributes-container" class="flex-1 overflow-y-auto space-y-1"></div>
+            <div class="flex gap-2 mt-4 pt-4 border-t border-gray-700">
+                <button onclick="saveSmartSelection()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm">Сохранить выбор</button>
+                <button onclick="hideSmartModal()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Group Creator Modal -->
     <div id="group-creator-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-sm w-full mx-4">
