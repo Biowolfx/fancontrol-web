@@ -830,7 +830,6 @@ function renderPickerCard(card) {
     }
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
-    el.style.overflow = 'hidden';
     el.style.alignSelf = 'start';
 
     canvas.appendChild(el);
@@ -900,7 +899,6 @@ function updateCanvasColumns() {
     canvas.style.display = 'grid';
     canvas.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     canvas.style.gridAutoRows = '100px';
-    canvas.style.gridAutoFlow = 'dense';
     canvas.style.gap = '8px';
     canvas.style.position = 'relative';
 }
@@ -1047,7 +1045,7 @@ function onCardMouseMove(e) {
         _cardDragClone.style.cssText = `
             position:fixed;z-index:10000;pointer-events:none;
             width:${_cardMouseDown.cardEl.offsetWidth}px;
-            opacity:0.85;transform:scale(1.03);
+            opacity:0.85;
             box-shadow:0 8px 32px rgba(0,0,0,0.4);
             transition:none;
         `;
