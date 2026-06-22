@@ -339,22 +339,18 @@ def api_update_apply():
 
         # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        restart_script = f"""import subprocess, time
+        restart_script = """import time, os
 time.sleep(2)
-try:
-    r = subprocess.run(['docker', 'restart', '{container_name}'], capture_output=True, text=True, timeout=30)
-    print(f'Restart result: rc={{r.returncode}} stdout={{r.stdout.strip()}} stderr={{r.stderr.strip()}}')
-except Exception as e:
-    print(f'Restart error: {{e}}')
+os._exit(0)
 """
         try:
             subprocess.Popen(
                 ['python3', '-c', restart_script],
-                stdout=open('/tmp/fancontrol_restart.log', 'w'),
-                stderr=subprocess.STDOUT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 start_new_session=True
             )
-            logger.info(f'Restart scheduled for container {container_name}')
+            logger.info(f'Restart scheduled — process will exit in 2s, Docker will restart container {container_name}')
         except Exception as e:
             logger.error(f'Failed to schedule restart: {e}')
 
