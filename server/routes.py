@@ -344,16 +344,8 @@ def api_update_apply():
         # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
         restart_script = """import time, os, signal
-logging.basicConfig(filename="/tmp/fancontrol_restart.log", level=logging.INFO)
-try:
-    logging.info(f"[RESTART] Script started, PID={os.getpid()}, PPID={os.getppid()}")
-    logging.info("[RESTART] Sleeping 2s...")
-    time.sleep(2)
-    logging.info("[RESTART] Sending SIGTERM to PID 1 (Flask main process)")
-    os.kill(1, signal.SIGTERM)
-    logging.info("[RESTART] SIGTERM sent")
-except Exception as e:
-    logging.error(f"[RESTART] Error: {e}")
+time.sleep(2)
+os.kill(1, signal.SIGTERM)
 """
         try:
             proc = subprocess.Popen(
