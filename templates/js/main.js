@@ -684,6 +684,8 @@ function renderPickerCard(card) {
 
     const configBtn = type === 'fan'
         ? `<button onclick="event.stopPropagation(); showCardConfig('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Configure">⚙</button>`
+        : type === 'disk'
+        ? `<button onclick="event.stopPropagation(); showSmartModal('${id}')" class="text-gray-600 hover:text-neon-purple text-xs transition-colors" title="SMART">⚙</button>`
         : '';
     const editBtn = `<button onclick="event.stopPropagation(); showCardEdit('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Edit name">✎</button>`;
     const removeBtn = `<button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>`;
@@ -712,6 +714,14 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     canvas.appendChild(el);
+
+    if (type === 'disk') {
+        el.addEventListener('click', (e) => {
+            if (_cardDragOccurred || e.target.closest('button')) return;
+            showSmartModal(id);
+        });
+    }
+
     updateCardDetails(id);
 }
 
