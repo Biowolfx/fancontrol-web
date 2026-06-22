@@ -836,7 +836,6 @@ function renderPickerCard(card) {
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.overflow = 'hidden';
-    if (card.rowSpan) el.style.gridRow = `span ${card.rowSpan}`;
 
     canvas.appendChild(el);
 
@@ -950,31 +949,6 @@ function onCardResizeEnd(e) {
     _cardResizing = null;
 }
 
-function onCardResizeEnd(e) {
-    if (!_cardResizing) return;
-    const el = _cardResizing.el;
-    const cardId = _cardResizing.cardId;
-
-    const colSpan = el._resizeColSpan || 1;
-    const rowSpan = el._resizeRowSpan || 1;
-
-    el.setAttribute('draggable', 'true');
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-
-    document.removeEventListener('mousemove', onCardResizeMove);
-    document.removeEventListener('mouseup', onCardResizeEnd);
-
-    const saved = getPickerCards();
-    const card = saved.find(c => c.id === cardId);
-    if (card) {
-        card.colSpan = colSpan;
-        setPickerCards(saved);
-    }
-
-    _cardResizing = null;
-}
-
 function getGridCell(canvas, x, y) {
     const rect = canvas.getBoundingClientRect();
     const cols = getCanvasCols();
@@ -1035,18 +1009,49 @@ function onCardDrop(e) {
         const cardId = _draggedCard.dataset.cardId;
         const saved = getPickerCards();
         const card = saved.find(c => c.id === cardId);
-        if (card) {
-            card.col = _dropTarget.col;
-            card.row = _dropTarget.row;
-            _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
-            _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
-            setPickerCards(saved);
+        if (!card) return;
+
+        const newCol = _dropTarget.col;
+        const newRow = _dropTarget.row;
+        const newColSpan = card.colSpan || 3;
+        const newRowSpan = card.rowSpan || 1;
+
+        // Check for collision with other cards
+        const targetCells = [];
+        for (let r = newRow; r < newRow + newRowSpan; r++) {
+            for (let c = newCol; c < newCol + newColSpan; c++) {
+                targetCells.push(`${c},${r}`);
+            }
         }
-        if (card?.groupId) {
-            delete card.groupId;
-            _draggedCard.classList.add('cursor-grab');
-            _draggedCard.classList.remove('cursor-default');
+
+        // Find colliding card and swap positions
+        const oldCol = card.col;
+        const oldRow = card.row;
+        for (const other of saved) {
+            if (other.id === cardId || !other.col || !other.row) continue;
+            const otherCells = [];
+            for (let r = other.row; r < other.row + (other.rowSpan || 1); r++) {
+                for (let c = other.col; c < other.col + (other.colSpan || 3); c++) {
+                    otherCells.push(`${c},${r}`);
+                }
+            }
+            if (targetCells.some(tc => otherCells.includes(tc))) {
+                other.col = oldCol;
+                other.row = oldRow;
+                const otherEl = document.querySelector(`[data-card-id="${other.id}"]`);
+                if (otherEl) {
+                    otherEl.style.gridColumn = `${other.col} / span ${other.colSpan || 3}`;
+                    otherEl.style.gridRow = `${other.row} / span ${other.rowSpan || 1}`;
+                }
+                break;
+            }
         }
+
+        card.col = newCol;
+        card.row = newRow;
+        _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
+        _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
+        setPickerCards(saved);
     }
 }
 
