@@ -840,7 +840,7 @@ function renderPickerCard(card) {
 
 let _draggedCard = null;
 let _cardDragOccurred = false;
-let _lastDragInsert = null;
+let _dropTarget = null;
 
 let _cardResizing = null;
 let _cardResizeStartX = 0;
@@ -928,7 +928,7 @@ function onCardResizeEnd(e) {
 function onCardDragStart(e) {
     _draggedCard = this;
     _cardDragOccurred = false;
-    _lastDragInsert = null;
+    _dropTarget = null;
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
@@ -940,18 +940,18 @@ function onCardDragOver(e) {
     _cardDragOccurred = true;
     const canvas = document.getElementById('dashboard-canvas');
     const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
-    if (afterElement && afterElement !== _lastDragInsert) {
-        _lastDragInsert = afterElement;
-        canvas.insertBefore(_draggedCard, afterElement);
-    } else if (!afterElement && _lastDragInsert !== null) {
-        _lastDragInsert = null;
-        canvas.appendChild(_draggedCard);
-    }
+    _dropTarget = afterElement;
 }
 
 function onCardDrop(e) {
     e.preventDefault();
-    if (_draggedCard) {
+    if (_draggedCard && _dropTarget !== undefined) {
+        const canvas = document.getElementById('dashboard-canvas');
+        if (_dropTarget) {
+            canvas.insertBefore(_draggedCard, _dropTarget);
+        } else {
+            canvas.appendChild(_draggedCard);
+        }
         const cardId = _draggedCard.dataset.cardId;
         const saved = getPickerCards();
         const cardData = saved.find(c => c.id === cardId);
@@ -974,18 +974,23 @@ function onCardDragEnd() {
 
 function getDragAfterElement(container, x, y) {
     const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40)')];
-    return cards.reduce((closest, child) => {
+    let closest = null;
+    let closestDist = Infinity;
+    for (const child of cards) {
         const box = child.getBoundingClientRect();
-        const offsetX = x - box.left - box.width / 2;
-        const offsetY = y - box.top - box.height / 2;
-        if (Math.abs(offsetY) > box.height / 2) return closest;
-        if (offsetX < 0 && offsetX > closest.offset) {
-            return { offset: offsetX, element: child };
+        const cx = box.left + box.width / 2;
+        const cy = box.top + box.height / 2;
+        const dist = Math.hypot(x - cx, y - cy);
+        if (dist < closestDist) {
+            closestDist = dist;
+            closest = child;
         }
-        return closest;
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    if (!closest) return null;
+    const box = closest.getBoundingClientRect();
+    const isAfter = x > box.left + box.width / 2 || y > box.top + box.height / 2;
+    return isAfter ? closest.nextElementSibling : closest;
 }
-
 function saveCardOrder() {
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
