@@ -132,8 +132,8 @@ function applyTranslations() {
         }
     });
     // Update page title
-    const ver = currentState?.config_version || '3.3.0';
-    if (translations['app.title']) {
+    const ver = currentState?.config_version;
+    if (translations['app.title'] && ver) {
         document.title = `${translations['app.title']} v${ver}`;
     }
 }
