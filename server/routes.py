@@ -318,7 +318,6 @@ def api_update_apply():
         old_req = ''
         new_req = ''
         try:
-            # Read pre-pull requirements from current running code
             with open('/app/requirements.txt', 'r') as f:
                 old_req = f.read()
         except Exception:
@@ -330,28 +329,33 @@ def api_update_apply():
             pass
         deps_changed = old_req != new_req
 
-        # Restart container via Docker socket API (CLI can't restart itself)
+        # Schedule restart in background so response reaches browser first
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        try:
-            import socket as sock
-            s = sock.socket(sock.AF_UNIX, sock.SOCK_STREAM)
-            s.connect('/var/run/docker.sock')
-            req = f'POST /containers/{container_name}/restart?t=5 HTTP/1.0\r\nHost: localhost\r\n\r\n'
-            s.sendall(req.encode())
-            resp = s.recv(4096).decode()
-            s.close()
-            logger.info(f'Docker socket restart response: {resp.splitlines()[0]}')
-        except Exception as e:
-            logger.error(f'Docker socket restart failed: {e}')
-            # Fallback: try CLI
+        def _do_restart():
+            import time as _t
+            _t.sleep(1)
             try:
-                restart = subprocess.run(
-                    ['docker', 'restart', container_name],
-                    capture_output=True, text=True, timeout=30
-                )
-                logger.info(f'Docker CLI restart: {restart.stdout.strip()} {restart.stderr.strip()}')
-            except Exception as e2:
-                logger.error(f'Docker CLI restart also failed: {e2}')
+                import socket as sock
+                s = sock.socket(sock.AF_UNIX, sock.SOCK_STREAM)
+                s.settimeout(10)
+                s.connect('/var/run/docker.sock')
+                req = f'POST /containers/{container_name}/restart?t=5 HTTP/1.0\r\nHost: localhost\r\n\r\n'
+                s.sendall(req.encode())
+                resp = s.recv(4096).decode()
+                s.close()
+                logger.info(f'Docker socket restart response: {resp.splitlines()[0]}')
+            except Exception as e:
+                logger.error(f'Docker socket restart failed: {e}')
+                try:
+                    restart = subprocess.run(
+                        ['docker', 'restart', container_name],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    logger.info(f'Docker CLI restart: {restart.stdout.strip()} {restart.stderr.strip()}')
+                except Exception as e2:
+                    logger.error(f'Docker CLI restart also failed: {e2}')
+
+        threading.Thread(target=_do_restart, daemon=True).start()
 
         return jsonify({
             'status': 'ok',
