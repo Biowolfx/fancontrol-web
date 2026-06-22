@@ -824,7 +824,8 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.gridColumn = `span ${card.colSpan || 3}`;
+    el.style.gridColumn = `${card.col || 'auto'} / span ${card.colSpan || 3}`;
+    el.style.gridRow = `${card.row || 'auto'} / span ${card.rowSpan || 1}`;
     el.style.overflow = 'hidden';
     if (card.rowSpan) el.style.gridRow = `span ${card.rowSpan}`;
 
@@ -861,7 +862,10 @@ function onCardResizeStart(e, cardId) {
     const el = document.querySelector(`[data-card-id="${cardId}"]`);
     if (!el) return;
 
-    _cardResizing = { cardId, el };
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+
+    _cardResizing = { cardId, el, col: card?.col, row: card?.row };
     _cardResizeStartX = e.clientX;
     _cardResizeStartY = e.clientY;
     _cardResizeStartW = el.offsetWidth;
@@ -895,14 +899,46 @@ function onCardResizeMove(e) {
     if (!canvas) return;
 
     const dx = e.clientX - _cardResizeStartX;
+    const dy = e.clientY - _cardResizeStartY;
     const cols = getCanvasCols();
     const colWidth = canvas.offsetWidth / cols;
+    const rowHeight = 100 + 8;
 
     const newW = _cardResizeStartW + dx;
+    const newH = _cardResizeStartH + dy;
     const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / colWidth)));
+    const newRowSpan = Math.max(1, Math.min(4, Math.round(newH / rowHeight)));
 
-    el.style.gridColumn = `span ${newColSpan}`;
+    el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
+    el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
     el._resizeColSpan = newColSpan;
+    el._resizeRowSpan = newRowSpan;
+}
+
+function onCardResizeEnd(e) {
+    if (!_cardResizing) return;
+    const el = _cardResizing.el;
+    const cardId = _cardResizing.cardId;
+
+    const colSpan = el._resizeColSpan || 3;
+    const rowSpan = el._resizeRowSpan || 1;
+
+    el.setAttribute('draggable', 'true');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+
+    document.removeEventListener('mousemove', onCardResizeMove);
+    document.removeEventListener('mouseup', onCardResizeEnd);
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (card) {
+        card.colSpan = colSpan;
+        card.rowSpan = rowSpan;
+        setPickerCards(saved);
+    }
+
+    _cardResizing = null;
 }
 
 function onCardResizeEnd(e) {
@@ -930,6 +966,16 @@ function onCardResizeEnd(e) {
     _cardResizing = null;
 }
 
+function getGridCell(canvas, x, y) {
+    const rect = canvas.getBoundingClientRect();
+    const cols = getCanvasCols();
+    const colWidth = rect.width / cols;
+    const rowHeight = 100 + 8;
+    const col = Math.max(1, Math.min(cols, Math.ceil((x - rect.left) / colWidth)));
+    const row = Math.max(1, Math.ceil((y - rect.top) / rowHeight));
+    return { col, row };
+}
+
 function onCardDragStart(e) {
     _draggedCard = this;
     _cardDragOccurred = false;
@@ -944,25 +990,25 @@ function onCardDragOver(e) {
     e.dataTransfer.dropEffect = 'move';
     _cardDragOccurred = true;
     const canvas = document.getElementById('dashboard-canvas');
-    const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
-    _dropTarget = afterElement;
+    const cell = getGridCell(canvas, e.clientX, e.clientY);
+    _dropTarget = cell;
 }
 
 function onCardDrop(e) {
     e.preventDefault();
-    if (_draggedCard && _dropTarget !== undefined) {
-        const canvas = document.getElementById('dashboard-canvas');
-        if (_dropTarget) {
-            canvas.insertBefore(_draggedCard, _dropTarget);
-        } else {
-            canvas.appendChild(_draggedCard);
-        }
+    if (_draggedCard && _dropTarget) {
         const cardId = _draggedCard.dataset.cardId;
         const saved = getPickerCards();
-        const cardData = saved.find(c => c.id === cardId);
-        if (cardData?.groupId) {
-            delete cardData.groupId;
+        const card = saved.find(c => c.id === cardId);
+        if (card) {
+            card.col = _dropTarget.col;
+            card.row = _dropTarget.row;
+            _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
+            _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
             setPickerCards(saved);
+        }
+        if (card?.groupId) {
+            delete card.groupId;
             _draggedCard.classList.add('cursor-grab');
             _draggedCard.classList.remove('cursor-default');
         }
