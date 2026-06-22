@@ -1001,8 +1001,11 @@ function onCardDragStart(e) {
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
-    const rect = this.getBoundingClientRect();
-    e.dataTransfer.setDragImage(this, e.clientX - rect.left, e.clientY - rect.top);
+    const ghost = document.createElement('div');
+    ghost.style.cssText = 'width:1px;height:1px;opacity:0;position:absolute;top:-9999px;';
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 0, 0);
+    requestAnimationFrame(() => ghost.remove());
 }
 
 function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
