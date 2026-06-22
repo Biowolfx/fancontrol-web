@@ -261,14 +261,7 @@ def api_update_check():
         # Fallback: read CONFIG_VERSION from remote core/state.py
         if not remote_version:
             try:
-                fetch_cmd = (
-                    f'import urllib.request, ssl, re; '
-                    f'ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; '
-                    f'r = urllib.request.urlopen("https://raw.githubusercontent.com/{repo}/main/core/state.py", timeout=10, context=ctx); '
-                    f'c = r.read().decode(); '
-                    f'm = re.search(r"CONFIG_VERSION\\s*=\\s*[\\"\\']([^\\"\\']+)[\\"\\']", c); '
-                    f'print(m.group(1) if m else "")'
-                )
+                fetch_cmd = 'import urllib.request, ssl, re; ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen("https://raw.githubusercontent.com/'+repo+'/main/core/state.py",timeout=10,context=ctx).read().decode(); m=re.search(r"CONFIG_VERSION\s*=\s*[\'\"](.*?)[\'\"]",c); print(m.group(1) if m else "")'
                 result = subprocess.run(['python3', '-c', fetch_cmd], capture_output=True, text=True, timeout=15)
                 remote_version = result.stdout.strip()
                 if not remote_version:
