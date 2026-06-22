@@ -823,9 +823,11 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.alignSelf = 'start';
-    if (card.colSpan && card.colSpan > 1) el.style.gridColumn = `span ${card.colSpan}`;
-    if (card.rowSpan && card.rowSpan > 1) el.style.gridRow = `span ${card.rowSpan}`;
+    el.style.alignSelf = 'flex-start';
+    const cols = getCanvasCols();
+    const span = card.colSpan || 1;
+    el.style.flex = `0 0 calc(${(100 / cols) * span}% - ${12}px)`;
+    el.style.minWidth = '0';
 
     canvas.appendChild(el);
 
@@ -874,6 +876,13 @@ function onCardResizeStart(e, cardId) {
     document.addEventListener('mouseup', onCardResizeEnd);
 }
 
+function getCanvasCols() {
+    const w = window.innerWidth;
+    if (w >= 1280) return 5;
+    if (w >= 1024) return 4;
+    return 2;
+}
+
 function onCardResizeMove(e) {
     if (!_cardResizing) return;
     const el = _cardResizing.el;
@@ -881,24 +890,16 @@ function onCardResizeMove(e) {
     if (!canvas) return;
 
     const dx = e.clientX - _cardResizeStartX;
-    const dy = e.clientY - _cardResizeStartY;
-
-    const canvasStyle = getComputedStyle(canvas);
-    const gap = parseInt(canvasStyle.gap) || 12;
-    const cols = canvasStyle.gridTemplateColumns.split(' ').length;
-    const colWidth = (canvas.offsetWidth - gap * (cols + 1)) / cols;
-    const rowHeight = 120 + gap;
+    const cols = getCanvasCols();
+    const canvasWidth = canvas.offsetWidth;
+    const gap = 12;
+    const colWidth = (canvasWidth - gap * (cols - 1)) / cols;
 
     const newW = _cardResizeStartW + dx;
-    const newH = _cardResizeStartH + dy;
-
     const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
-    const newRowSpan = Math.max(1, Math.min(3, Math.round(newH / rowHeight)));
 
-    el.style.gridColumn = `span ${newColSpan}`;
-    el.style.gridRow = `span ${newRowSpan}`;
+    el.style.flex = `0 0 calc(${(100 / cols) * newColSpan}% - ${gap}px)`;
     el._resizeColSpan = newColSpan;
-    el._resizeRowSpan = newRowSpan;
 }
 
 function onCardResizeEnd(e) {
@@ -920,7 +921,6 @@ function onCardResizeEnd(e) {
     const card = saved.find(c => c.id === cardId);
     if (card) {
         card.colSpan = colSpan;
-        card.rowSpan = rowSpan;
         setPickerCards(saved);
     }
 

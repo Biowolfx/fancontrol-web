@@ -280,7 +280,7 @@
                     <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
                     <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
                 </div>
-                <div id="dashboard-canvas" class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4" style="grid-auto-rows: minmax(120px, auto);"></div>
+                <div id="dashboard-canvas" class="flex flex-wrap gap-3 p-4"></div>
                 <button id="dashboard-add-btn" onclick="showCardPicker()"
                         class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40">
                     +
@@ -911,6 +911,6 @@
         </div>
     </div>
 
-    <script src="/js/main.js?v=3.5.30"></script>
+    <script src="/js/main.js?v=3.5.31"></script>
 </body>
 </html>
