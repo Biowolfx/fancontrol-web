@@ -1738,7 +1738,7 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative col-span-full';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
     el.setAttribute('data-group-id', group.id);
     el.setAttribute('draggable', 'true');
     if (group.minHeight) el.style.minHeight = group.minHeight;
@@ -1751,7 +1751,7 @@ function renderDashboardGroup(group) {
             </div>
             <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
         </div>
-        <div class="group-cards grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-h-[60px]"></div>
+        <div class="group-cards grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[40px]"></div>
         <div class="group-resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-30 hover:opacity-80 transition-opacity"></div>`;
 
     el.addEventListener('dragstart', onGroupDragStart);
