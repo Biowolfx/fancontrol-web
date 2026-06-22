@@ -1119,11 +1119,28 @@ function renderNvmeAttributes(container, selectedIds) {
             if (currentUnit !== 'raw' && attr.unit_divisor) {
                 displayValue = formatBytes(attr.value * attr.unit_divisor, currentUnit);
             }
+        } else if (attr.unit === 'hours') {
+            const currentUnit = smartUnits[key] || 'raw';
+            unitHtml = `
+                <select data-smart-unit="${key}" onchange="onSmartUnitChange('${key}', this.value)"
+                    class="text-[10px] bg-cyber-bg border border-gray-600 rounded px-1 py-0.5 text-gray-300 ml-1">
+                    <option value="raw" ${currentUnit === 'raw' ? 'selected' : ''}>Часы</option>
+                    <option value="days" ${currentUnit === 'days' ? 'selected' : ''}>Дни</option>
+                    <option value="months" ${currentUnit === 'months' ? 'selected' : ''}>Месяцы</option>
+                </select>`;
+            if (currentUnit === 'days') {
+                displayValue = (parseInt(attr.value || '0') / 24).toFixed(1);
+            } else if (currentUnit === 'months') {
+                displayValue = (parseInt(attr.value || '0') / 720).toFixed(1);
+            }
         }
 
         let suffix = '';
         if (key === 'temperature') suffix = '°C';
-        else if (key === 'percentage_used' || key === 'available_spare') suffix = '%';
+        else if (key === 'percentage_used' || key === 'available_spare' || key === 'available_spare_threshold') suffix = '%';
+        else if (key === 'controller_busy_time' || key === 'warning_temp_time' || key === 'critical_comp_time') suffix = ' мин';
+        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'days') suffix = ' дн';
+        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'months') suffix = ' мес';
 
         return `
         <div class="flex items-center gap-3 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
