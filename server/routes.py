@@ -303,12 +303,12 @@ def api_update_check():
 
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
-    """Pull latest code, sync to /app, then kill process."""
+    """Pull latest code, sync to /app, then exit process."""
     try:
         repo_dir = '/repo'
         app_dir = '/app'
 
-        logger.info(f'[UPDATE] Starting update. Repo: {os.path.isdir(repo_dir)}, app.py: {os.path.isfile(os.path.join(repo_dir, "app.py"))}')
+        logger.info(f'[UPDATE] Starting. PID={os.getpid()}')
 
         # Git pull
         pull = subprocess.run(
@@ -319,9 +319,7 @@ def api_update_apply():
 
         pull_output = pull.stdout.strip() + '\n' + pull.stderr.strip()
         already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
-
-        logger.info(f'[UPDATE] Git pull rc={pull.returncode}, already_up={already_up}')
-        logger.info(f'[UPDATE] Git: {pull_output.strip()[:300]}')
+        logger.info(f'[UPDATE] Git rc={pull.returncode}, up={already_up}: {pull_output.strip()[:200]}')
 
         if pull.returncode != 0 and not already_up:
             return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
@@ -336,7 +334,6 @@ def api_update_apply():
                 if os.path.isfile(src):
                     shutil.copy2(src, dst)
                     synced.append(f)
-
         for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
             src = os.path.join(repo_dir, d)
             dst = os.path.join(app_dir, d)
@@ -345,35 +342,16 @@ def api_update_apply():
                     shutil.rmtree(dst)
                 shutil.copytree(src, dst)
                 synced.append(f'{d}/')
+        logger.info(f'[UPDATE] Synced {len(synced)} items')
 
-        logger.info(f'[UPDATE] Synced {len(synced)} items: {", ".join(synced[:10])}')
+        # Schedule process exit AFTER response is sent
+        import threading
+        def delayed_exit():
+            logger.info('[UPDATE] Exiting process')
+            os._exit(0)
+        threading.Timer(1.0, delayed_exit).start()
 
-        # Verify version after sync
-        try:
-            with open(os.path.join(app_dir, 'core', 'state.py')) as f:
-                for line in f:
-                    if 'CONFIG_VERSION' in line:
-                        logger.info(f'[UPDATE] Synced version: {line.strip()}')
-                        break
-        except Exception as e:
-            logger.error(f'[UPDATE] Version check failed: {e}')
-
-        # Kill PID 1 directly (SIGKILL cannot be ignored)
-        try:
-            os.kill(1, signal.SIGKILL)
-            logger.info('[UPDATE] SIGKILL sent to PID 1')
-        except ProcessLookupError:
-            logger.error('[UPDATE] PID 1 not found')
-        except PermissionError:
-            logger.error('[UPDATE] No permission to kill PID 1, trying subprocess fallback')
-            subprocess.Popen(['kill', '-9', '1'], start_new_session=True)
-
-        return jsonify({
-            'status': 'ok',
-            'already_up_to_date': already_up,
-            'deps_changed': False,
-            'message': f'Synced {len(synced)} items. Restarting...'
-        })
+        return jsonify({'status': 'ok', 'message': f'Synced. Restarting in 1s...'})
 
     except Exception as e:
         logger.error(f'[UPDATE] Error: {e}', exc_info=True)
