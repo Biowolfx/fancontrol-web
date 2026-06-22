@@ -118,8 +118,9 @@ def api_get_disk_smart(disk_id):
     import time as _time
     from core.hardware import _smart_cache, _smart_cache_time, SMART_CACHE_TTL
 
+    force_refresh = request.args.get('refresh', '0') == '1'
     now = _time.monotonic()
-    if disk_id in _smart_cache and (now - _smart_cache_time.get(disk_id, 0)) < SMART_CACHE_TTL:
+    if not force_refresh and disk_id in _smart_cache and (now - _smart_cache_time.get(disk_id, 0)) < SMART_CACHE_TTL:
         return jsonify(_smart_cache[disk_id])
 
     with state_lock:
