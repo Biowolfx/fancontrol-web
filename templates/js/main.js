@@ -822,7 +822,6 @@ function renderPickerCard(card) {
 
     el.addEventListener('mousedown', onCardMouseDown);
 
-    el.style.position = 'relative';
     if (!card.col || !card.row) {
         const saved = getPickerCards().filter(c => c.id !== card.id);
         const pos = findNextPosition(saved, card.colSpan || 3);
@@ -832,6 +831,7 @@ function renderPickerCard(card) {
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.overflow = 'hidden';
+    el.style.alignSelf = 'start';
 
     canvas.appendChild(el);
 
@@ -897,7 +897,12 @@ function updateCanvasColumns() {
     if (w >= 1280) cols = 12;
     else if (w >= 1024) cols = 8;
     else if (w >= 640) cols = 6;
+    canvas.style.display = 'grid';
     canvas.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    canvas.style.gridAutoRows = '100px';
+    canvas.style.gridAutoFlow = 'dense';
+    canvas.style.gap = '8px';
+    canvas.style.position = 'relative';
 }
 
 function onCardResizeMove(e) {
@@ -1078,7 +1083,6 @@ function onCardMouseMove(e) {
     _cardDropPreview.style.display = 'block';
 
     if (!_cardDropPreview.parentElement) {
-        canvas.style.position = 'relative';
         canvas.appendChild(_cardDropPreview);
     }
 
