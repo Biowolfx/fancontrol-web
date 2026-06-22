@@ -257,6 +257,24 @@ def api_update_check():
         m_ver = re.search(r'[vV]?(\d+\.\d+\.\d+)', commit_msg)
         if m_ver:
             remote_version = m_ver.group(1)
+
+        # Fallback: read CONFIG_VERSION from remote core/state.py
+        if not remote_version:
+            try:
+                raw_url = f'https://raw.githubusercontent.com/{repo}/main/core/state.py'
+                conn2 = http.client.HTTPSConnection(ip, 443, timeout=10, context=ctx)
+                conn2.request('GET', f'/repos/{repo}/contents/core/state.py', headers=headers)
+                resp2 = conn2.getresponse()
+                if resp2.status == 200:
+                    import base64
+                    file_data = json.loads(resp2.read())
+                    content = base64.b64decode(file_data['content']).decode()
+                    m_cfg = re.search(r'CONFIG_VERSION\s*=\s*["\']([^"\']+)["\']', content)
+                    if m_cfg:
+                        remote_version = m_cfg.group(1)
+                conn2.close()
+            except Exception:
+                pass
         
         # Determine if update is available
         # If remote version extracted from commit message → compare versions
