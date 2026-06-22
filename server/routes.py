@@ -302,9 +302,10 @@ def api_update_check():
 
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
-    """Pull latest code and restart container. Entrypoint syncs code from /repo."""
+    """Pull latest code, sync to /app, then kill process."""
     try:
         repo_dir = '/repo'
+        app_dir = '/app'
 
         logger.info(f'[UPDATE] Starting update. Repo dir exists: {os.path.isdir(repo_dir)}, app.py exists: {os.path.isfile(os.path.join(repo_dir, "app.py"))}')
 
@@ -325,6 +326,40 @@ def api_update_apply():
             logger.error(f'[UPDATE] Git pull FAILED: {pull_output}')
             return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
 
+        # Sync code from /repo to /app directly (don't rely on entrypoint)
+        try:
+            import shutil
+            for f in os.listdir(repo_dir):
+                if f.endswith('.py') or f.endswith('.txt') or f in ('Dockerfile', 'docker-compose.yml'):
+                    src = os.path.join(repo_dir, f)
+                    dst = os.path.join(app_dir, f)
+                    if os.path.isfile(src):
+                        shutil.copy2(src, dst)
+                        logger.info(f'[UPDATE] Synced {f}')
+
+            for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
+                src = os.path.join(repo_dir, d)
+                dst = os.path.join(app_dir, d)
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(src, dst)
+                    logger.info(f'[UPDATE] Synced dir {d}/')
+
+            # Verify sync
+            new_version = 'unknown'
+            try:
+                with open(os.path.join(app_dir, 'core', 'state.py')) as f:
+                    for line in f:
+                        if 'CONFIG_VERSION' in line:
+                            new_version = line.strip()
+                            break
+            except Exception:
+                pass
+            logger.info(f'[UPDATE] Synced. New version: {new_version}')
+        except Exception as e:
+            logger.error(f'[UPDATE] Sync error: {e}', exc_info=True)
+
         # Check if requirements changed
         old_req = ''
         new_req = ''
@@ -339,24 +374,18 @@ def api_update_apply():
         except Exception:
             pass
         deps_changed = old_req != new_req
-        logger.info(f'[UPDATE] deps_changed={deps_changed}')
 
-        # Schedule restart via detached subprocess (thread dies with request)
-        container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        restart_script = """import time, os, signal
-time.sleep(2)
-os.kill(1, signal.SIGTERM)
-"""
+        # Kill process — Docker restarts automatically
         try:
-            proc = subprocess.Popen(
-                ['python3', '-c', restart_script],
-                stdout=open('/tmp/fancontrol_restart.log', 'w'),
-                stderr=subprocess.STDOUT,
+            subprocess.Popen(
+                ['sh', '-c', 'sleep 1 && kill -9 1'],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 start_new_session=True
             )
-            logger.info(f'[UPDATE] Restart subprocess spawned: pid={proc.pid}')
+            logger.info('[UPDATE] Kill signal scheduled in 1s')
         except Exception as e:
-            logger.error(f'[UPDATE] Failed to spawn restart subprocess: {e}')
+            logger.error(f'[UPDATE] Failed to schedule kill: {e}')
 
         return jsonify({
             'status': 'ok',
