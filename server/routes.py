@@ -261,20 +261,20 @@ def api_update_check():
         # Fallback: read CONFIG_VERSION from remote core/state.py
         if not remote_version:
             try:
-                raw_url = f'https://raw.githubusercontent.com/{repo}/main/core/state.py'
-                conn2 = http.client.HTTPSConnection(ip, 443, timeout=10, context=ctx)
-                conn2.request('GET', f'/repos/{repo}/contents/core/state.py', headers=headers)
-                resp2 = conn2.getresponse()
-                if resp2.status == 200:
-                    import base64
-                    file_data = json.loads(resp2.read())
-                    content = base64.b64decode(file_data['content']).decode()
-                    m_cfg = re.search(r'CONFIG_VERSION\s*=\s*["\']([^"\']+)["\']', content)
-                    if m_cfg:
-                        remote_version = m_cfg.group(1)
-                conn2.close()
-            except Exception:
-                pass
+                fetch_cmd = (
+                    f'import urllib.request, ssl, re; '
+                    f'ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; '
+                    f'r = urllib.request.urlopen("https://raw.githubusercontent.com/{repo}/main/core/state.py", timeout=10, context=ctx); '
+                    f'c = r.read().decode(); '
+                    f'm = re.search(r"CONFIG_VERSION\\s*=\\s*[\\"\\']([^\\"\\']+)[\\"\\']", c); '
+                    f'print(m.group(1) if m else "")'
+                )
+                result = subprocess.run(['python3', '-c', fetch_cmd], capture_output=True, text=True, timeout=15)
+                remote_version = result.stdout.strip()
+                if not remote_version:
+                    logger.warning(f'Update check: could not extract remote version from state.py')
+            except Exception as e:
+                logger.error(f'Update check: failed to fetch remote version: {e}')
         
         # Determine if update is available
         # If remote version extracted from commit message → compare versions
