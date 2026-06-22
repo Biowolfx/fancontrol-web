@@ -824,8 +824,8 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.alignSelf = 'start';
     el.style.gridColumn = `span ${card.colSpan || 3}`;
+    el.style.overflow = 'hidden';
     if (card.rowSpan) el.style.gridRow = `span ${card.rowSpan}`;
 
     canvas.appendChild(el);
@@ -886,7 +886,6 @@ function updateCanvasColumns() {
     else if (w >= 1024) cols = 8;
     else if (w >= 640) cols = 6;
     canvas.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    canvas.style.gridAutoRows = `${Math.floor(80 * (12 / cols))}px`;
 }
 
 function onCardResizeMove(e) {
@@ -1750,7 +1749,6 @@ function renderDashboardGroup(group) {
     el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
     el.setAttribute('data-group-id', group.id);
     el.setAttribute('draggable', 'true');
-    el.style.alignSelf = 'start';
     el.style.gridColumn = `span ${group.colSpan || getCanvasCols()}`;
     el.style.display = 'flex';
     el.style.flexDirection = 'column';
