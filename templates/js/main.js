@@ -1296,6 +1296,7 @@ function saveSmartSelection() {
     setPickerCards(saved);
     updateCardDetails(_smartModalCardId);
     hideSmartModal();
+    saveDashboardToServer();
 }
 
 function toggleCardOption(cardId, option, enabled) {
@@ -3496,7 +3497,14 @@ async function switchLanguage(code) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[FanControl] Neon Cyberpunk Edition initialized');
-    
+
+    window.addEventListener('beforeunload', () => {
+        if (_dashboardSaveTimer) {
+            clearTimeout(_dashboardSaveTimer);
+            saveDashboardToServer();
+        }
+    });
+
     // Load language
     await loadLang(currentLang);
     updateLangButtons();
