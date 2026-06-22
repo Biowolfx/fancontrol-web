@@ -822,8 +822,6 @@ function renderPickerCard(card) {
         <div class="card-resize-handle"></div>`;
 
     el.addEventListener('dragstart', onCardDragStart);
-    el.addEventListener('dragover', onCardDragOver);
-    el.addEventListener('drop', onCardDrop);
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
@@ -887,7 +885,12 @@ function onCardResizeStart(e, cardId) {
     document.addEventListener('mouseup', onCardResizeEnd);
 }
 
-function getCanvasCols() { return 12; }
+function getCanvasCols() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return 12;
+    const style = getComputedStyle(canvas);
+    return style.gridTemplateColumns.split(' ').length || 12;
+}
 
 function updateCanvasColumns() {
     const canvas = document.getElementById('dashboard-canvas');
@@ -951,11 +954,16 @@ function onCardResizeEnd(e) {
 
 function getGridCell(canvas, x, y) {
     const rect = canvas.getBoundingClientRect();
+    const cs = getComputedStyle(canvas);
+    const padL = parseFloat(cs.paddingLeft) || 16;
+    const padT = parseFloat(cs.paddingTop) || 16;
+    const padR = parseFloat(cs.paddingRight) || 16;
     const cols = getCanvasCols();
-    const colWidth = rect.width / cols;
+    const contentW = rect.width - padL - padR;
+    const colWidth = contentW / cols;
     const rowHeight = 100 + 8;
-    const col = Math.max(1, Math.min(cols, Math.ceil((x - rect.left) / colWidth)));
-    const row = Math.max(1, Math.ceil((y - rect.top) / rowHeight));
+    const col = Math.max(1, Math.min(cols, Math.ceil((x - rect.left - padL) / colWidth)));
+    const row = Math.max(1, Math.ceil((y - rect.top - padT) / rowHeight));
     return { col, row };
 }
 
@@ -994,61 +1002,192 @@ function onCardDragStart(e) {
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
 }
 
+function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
+    const saved = getPickerCards();
+    for (const c of saved) {
+        if (c.id === excludeCardId || !c.col || !c.row) continue;
+        const cs = c.col, rs = c.row;
+        const ce = cs + (c.colSpan || 3) - 1;
+        const re = rs + (c.rowSpan || 1) - 1;
+        const ne = col + colSpan - 1;
+        const nr = row + rowSpan - 1;
+        if (col <= ce && ne >= cs && row <= re && nr >= rs) return true;
+    }
+    const canvas = document.getElementById('dashboard-canvas');
+    if (canvas) {
+        const cols = getCanvasCols();
+        const cs2 = getComputedStyle(canvas);
+        const padL = parseFloat(cs2.paddingLeft) || 16;
+        const padT = parseFloat(cs2.paddingTop) || 16;
+        const padR = parseFloat(cs2.paddingRight) || 16;
+        const contentW = canvas.offsetWidth - padL - padR;
+        const colW = contentW / cols;
+        const rowH = 100 + 8;
+        const gap = 8;
+        const ne = col + colSpan - 1;
+        const nr = row + rowSpan - 1;
+        for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
+            const rect = gEl.getBoundingClientRect();
+            const cRect = canvas.getBoundingClientRect();
+            const gColStart = Math.max(1, Math.round((rect.left - cRect.left - padL) / (colW + gap)) + 1);
+            const gColEnd = Math.max(gColStart, Math.round((rect.right - cRect.left - padL) / (colW + gap)));
+            const gRowStart = Math.max(1, Math.round((rect.top - cRect.top - padT) / (rowH + gap)) + 1);
+            const gRowEnd = Math.max(gRowStart, Math.round((rect.bottom - cRect.top - padT) / (rowH + gap)));
+            if (col <= gColEnd && ne >= gColStart && row <= gRowEnd && nr >= gRowStart) return true;
+        }
+    }
+    return false;
+}
+
+function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
+    const cols = getCanvasCols();
+    if (colSpan > cols) colSpan = cols;
+    const occupied = new Set();
+    for (const c of savedCards) {
+        if (c.id === excludeCardId || !c.col || !c.row) continue;
+        const cs = c.col, rs = c.row;
+        const sp = c.colSpan || 3, sr = c.rowSpan || 1;
+        for (let r = rs; r < rs + sr; r++) {
+            for (let c2 = cs; c2 < cs + sp; c2++) {
+                occupied.add(`${c2},${r}`);
+            }
+        }
+    }
+    const canvas = document.getElementById('dashboard-canvas');
+    if (canvas) {
+        const cs2 = getComputedStyle(canvas);
+        const padL = parseFloat(cs2.paddingLeft) || 16;
+        const padT = parseFloat(cs2.paddingTop) || 16;
+        const padR = parseFloat(cs2.paddingRight) || 16;
+        const contentW = canvas.offsetWidth - padL - padR;
+        const colW = contentW / cols;
+        const rowH = 100 + 8;
+        const gap = 8;
+        for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
+            const rect = gEl.getBoundingClientRect();
+            const cRect = canvas.getBoundingClientRect();
+            const gColStart = Math.max(1, Math.round((rect.left - cRect.left - padL) / (colW + gap)) + 1);
+            const gColEnd = Math.max(gColStart, Math.round((rect.right - cRect.left - padL) / (colW + gap)));
+            const gRowStart = Math.max(1, Math.round((rect.top - cRect.top - padT) / (rowH + gap)) + 1);
+            const gRowEnd = Math.max(gRowStart, Math.round((rect.bottom - cRect.top - padT) / (rowH + gap)));
+            for (let r = gRowStart; r <= gRowEnd; r++) {
+                for (let c2 = gColStart; c2 <= gColEnd; c2++) {
+                    occupied.add(`${c2},${r}`);
+                }
+            }
+        }
+    }
+    for (let row = 1; row <= 50; row++) {
+        for (let col = 1; col <= cols - colSpan + 1; col++) {
+            let fits = true;
+            for (let r = row; r < row + rowSpan && fits; r++) {
+                for (let c = col; c < col + colSpan && fits; c++) {
+                    if (occupied.has(`${c},${r}`)) fits = false;
+                }
+            }
+            if (fits) return { col, row };
+        }
+    }
+    return { col: 1, row: 1 };
+}
+
+let _cardDropPreview = null;
+
+function onCanvasCardDragOver(e) {
+    if (!_draggedCard) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    _cardDragOccurred = true;
+
+    const canvas = document.getElementById('dashboard-canvas');
+    const cell = getGridCell(canvas, e.clientX, e.clientY);
+    const cardId = _draggedCard.dataset.cardId;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    const colSpan = card.colSpan || 3;
+    const rowSpan = card.rowSpan || 1;
+    const cols = getCanvasCols();
+    const clampedCol = Math.max(1, Math.min(cols - colSpan + 1, cell.col));
+    const clampedRow = Math.max(1, cell.row);
+
+    const occupied = isCellOccupied(clampedCol, clampedRow, colSpan, rowSpan, cardId);
+
+    if (!_cardDropPreview) {
+        _cardDropPreview = document.createElement('div');
+        _cardDropPreview.className = 'card-drop-preview';
+        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:all 0.1s ease;';
+    }
+
+    const padLeft = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
+    const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
+    const contentW = canvas.offsetWidth - padLeft - (parseInt(getComputedStyle(canvas).paddingRight) || 16);
+    const colW = contentW / cols;
+    const rowH = 100 + 8;
+    const gap = 8;
+    _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
+    _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
+    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
+    _cardDropPreview.style.height = (rowSpan * rowH + (rowSpan - 1) * gap) + 'px';
+    _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
+    _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
+    _cardDropPreview.style.display = 'block';
+
+    if (!_cardDropPreview.parentElement) {
+        canvas.style.position = 'relative';
+        canvas.appendChild(_cardDropPreview);
+    }
+
+    _dropTarget = { col: clampedCol, row: clampedRow, occupied };
+}
+
+function onCanvasCardDrop(e) {
+    e.preventDefault();
+    if (_cardDropPreview) {
+        _cardDropPreview.style.display = 'none';
+    }
+    if (!_draggedCard || !_dropTarget) return;
+
+    const cardId = _draggedCard.dataset.cardId;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    const colSpan = card.colSpan || 3;
+    const rowSpan = card.rowSpan || 1;
+    let newCol = _dropTarget.col;
+    let newRow = _dropTarget.row;
+
+    if (_dropTarget.occupied) {
+        const free = findFreePosition(saved, colSpan, rowSpan, cardId);
+        newCol = free.col;
+        newRow = free.row;
+    }
+
+    card.col = newCol;
+    card.row = newRow;
+    _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
+    _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
+    setPickerCards(saved);
+}
+
 function onCardDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     _cardDragOccurred = true;
-    const canvas = document.getElementById('dashboard-canvas');
-    const cell = getGridCell(canvas, e.clientX, e.clientY);
-    _dropTarget = cell;
 }
 
 function onCardDrop(e) {
     e.preventDefault();
-    if (_draggedCard && _dropTarget) {
+    if (_draggedCard && _dropTarget && !_dropTarget.occupied) {
         const cardId = _draggedCard.dataset.cardId;
         const saved = getPickerCards();
         const card = saved.find(c => c.id === cardId);
         if (!card) return;
 
-        const newCol = _dropTarget.col;
-        const newRow = _dropTarget.row;
-        const newColSpan = card.colSpan || 3;
-        const newRowSpan = card.rowSpan || 1;
-
-        // Check for collision with other cards
-        const targetCells = [];
-        for (let r = newRow; r < newRow + newRowSpan; r++) {
-            for (let c = newCol; c < newCol + newColSpan; c++) {
-                targetCells.push(`${c},${r}`);
-            }
-        }
-
-        // Find colliding card and swap positions
-        const oldCol = card.col;
-        const oldRow = card.row;
-        for (const other of saved) {
-            if (other.id === cardId || !other.col || !other.row) continue;
-            const otherCells = [];
-            for (let r = other.row; r < other.row + (other.rowSpan || 1); r++) {
-                for (let c = other.col; c < other.col + (other.colSpan || 3); c++) {
-                    otherCells.push(`${c},${r}`);
-                }
-            }
-            if (targetCells.some(tc => otherCells.includes(tc))) {
-                other.col = oldCol;
-                other.row = oldRow;
-                const otherEl = document.querySelector(`[data-card-id="${other.id}"]`);
-                if (otherEl) {
-                    otherEl.style.gridColumn = `${other.col} / span ${other.colSpan || 3}`;
-                    otherEl.style.gridRow = `${other.row} / span ${other.rowSpan || 1}`;
-                }
-                break;
-            }
-        }
-
-        card.col = newCol;
-        card.row = newRow;
+        card.col = _dropTarget.col;
+        card.row = _dropTarget.row;
         _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
         _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
         setPickerCards(saved);
@@ -1058,6 +1197,10 @@ function onCardDrop(e) {
 function onCardDragEnd() {
     this.classList.remove('opacity-40');
     _draggedCard = null;
+    _dropTarget = null;
+    if (_cardDropPreview) {
+        _cardDropPreview.style.display = 'none';
+    }
     setTimeout(() => { _cardDragOccurred = false; }, 50);
     document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
 }
@@ -1700,6 +1843,8 @@ async function loadPickerCards() {
     if (!canvas._groupHandlersAttached) {
         canvas.addEventListener('dragover', onGroupDragOver);
         canvas.addEventListener('drop', onGroupDropOutside);
+        canvas.addEventListener('dragover', onCanvasCardDragOver);
+        canvas.addEventListener('drop', onCanvasCardDrop);
         canvas._groupHandlersAttached = true;
     }
 
