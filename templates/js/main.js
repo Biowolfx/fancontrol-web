@@ -464,11 +464,12 @@ function renderLocalServerTree() {
         `;
     }
 
-    if (diskCount > 0) {
+    for (const [diskId, disk] of Object.entries(disks)) {
         html += `
             <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
                 <span class="text-xs">💾</span>
-                <span class="text-xs text-gray-300">${diskCount} ${t('nodes.disks', 'disks')}</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(disk.label || diskId)}</span>
+                <span class="ml-auto text-xs font-mono ${getTempColorClass(disk.temp)}">${disk.temp > 0 ? disk.temp + '°C' : '--'}</span>
             </div>
         `;
     }
@@ -1413,9 +1414,10 @@ function updateInspector(fan) {
     // Update slider (only if not dragging)
     if (!isDragging) {
         const slider = document.getElementById('pwm-slider');
-        slider.value = fan.current_pct || fan.manual_pct || 50;
+        const pct = fan.current_pct != null ? fan.current_pct : (fan.manual_pct != null ? fan.manual_pct : 50);
+        slider.value = pct;
         slider.disabled = (mode === 'auto');
-        document.getElementById('pwm-value-display').textContent = `${fan.current_pct || fan.manual_pct || 50}%`;
+        document.getElementById('pwm-value-display').textContent = `${pct}%`;
     }
     
     // Update mode buttons
