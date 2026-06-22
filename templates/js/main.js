@@ -221,6 +221,11 @@ socket.on('test_progress', (progress) => {
     updateCalibrationModal(progress);
 });
 
+socket.on('hidden_sensors', (data) => {
+    _hiddenSensors = data.hiddenSensors || [];
+    buildServerTree();
+});
+
 socket.on('test_complete', (result) => {
     console.log('[FanControl] Calibration complete:', result);
     hideCalibrationModal();

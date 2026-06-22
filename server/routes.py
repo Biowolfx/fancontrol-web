@@ -465,12 +465,17 @@ def api_save_dashboard():
     """Save dashboard layout (cards, groups, positions, hidden sensors)."""
     data = request.get_json(silent=True) or {}
     with state_lock:
+        old_hidden = state.get('dashboard', {}).get('hiddenSensors', [])
         state['dashboard'] = {
             'groups': data.get('groups', []),
             'cards': data.get('cards', []),
-            'hiddenSensors': data.get('hiddenSensors', state.get('dashboard', {}).get('hiddenSensors', []))
+            'hiddenSensors': data.get('hiddenSensors', old_hidden)
         }
+        new_hidden = state['dashboard']['hiddenSensors']
     save_config()
+    if old_hidden != new_hidden:
+        from app import socketio
+        socketio.emit('hidden_sensors', {'hiddenSensors': new_hidden})
     return jsonify({'status': 'saved'})
 
 
