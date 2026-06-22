@@ -805,7 +805,6 @@ function renderPickerCard(card) {
     const el = document.createElement('div');
     el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
     el.setAttribute('data-card-id', id);
-    el.setAttribute('draggable', 'true');
     el.innerHTML = `
         <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
@@ -821,8 +820,7 @@ function renderPickerCard(card) {
         <div class="card-details"></div>
         <div class="card-resize-handle"></div>`;
 
-    el.addEventListener('dragstart', onCardDragStart);
-    el.addEventListener('dragend', onCardDragEnd);
+    el.addEventListener('mousedown', onCardMouseDown);
 
     el.style.position = 'relative';
     if (!card.col || !card.row) {
@@ -852,7 +850,6 @@ function renderPickerCard(card) {
     updateCardDetails(id);
 }
 
-let _draggedCard = null;
 let _cardDragOccurred = false;
 let _dropTarget = null;
 
@@ -994,18 +991,170 @@ function findNextPosition(savedCards, colSpan) {
     return { col: 1, row: 1 };
 }
 
-function onCardDragStart(e) {
-    _draggedCard = this;
-    _cardDragOccurred = false;
+let _cardMouseDown = null;
+let _cardDragClone = null;
+
+function onCardMouseDown(e) {
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.card-resize-handle')) return;
+    if (e.button !== 0) return;
+    const cardEl = e.target.closest('[data-card-id]');
+    if (!cardEl || cardEl.closest('[data-group-id]')) return;
+    e.preventDefault();
+
+    const cardId = cardEl.dataset.cardId;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    const rect = cardEl.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    _cardMouseDown = {
+        cardId, cardEl, card,
+        startX: e.clientX, startY: e.clientY,
+        offsetX, offsetY, dragging: false
+    };
+
+    document.addEventListener('mousemove', onCardMouseMove);
+    document.addEventListener('mouseup', onCardMouseUp);
+}
+
+function onCardMouseMove(e) {
+    if (!_cardMouseDown) return;
+    const dx = Math.abs(e.clientX - _cardMouseDown.startX);
+    const dy = Math.abs(e.clientY - _cardMouseDown.startY);
+    if (!_cardMouseDown.dragging && (dx < 4 && dy < 4)) return;
+
+    if (!_cardMouseDown.dragging) {
+        _cardMouseDown.dragging = true;
+        _cardMouseDown.cardEl.classList.add('opacity-40');
+        _cardDragOccurred = true;
+
+        _cardDragClone = _cardMouseDown.cardEl.cloneNode(true);
+        _cardDragClone.classList.remove('opacity-40');
+        _cardDragClone.style.cssText = `
+            position:fixed;z-index:10000;pointer-events:none;
+            width:${_cardMouseDown.cardEl.offsetWidth}px;
+            opacity:0.85;transform:scale(1.03);
+            box-shadow:0 8px 32px rgba(0,0,0,0.4);
+            transition:none;
+        `;
+        document.body.appendChild(_cardDragClone);
+    }
+
+    const cloneW = _cardMouseDown.cardEl.offsetWidth;
+    const cloneH = _cardMouseDown.cardEl.offsetHeight;
+    _cardDragClone.style.left = (e.clientX - _cardMouseDown.offsetX) + 'px';
+    _cardDragClone.style.top = (e.clientY - _cardMouseDown.offsetY) + 'px';
+
+    const canvas = document.getElementById('dashboard-canvas');
+    const cell = getGridCell(canvas, e.clientX, e.clientY);
+    const card = _cardMouseDown.card;
+    const colSpan = card.colSpan || 3;
+    const rowSpan = card.rowSpan || 1;
+    const cols = getCanvasCols();
+    const clampedCol = Math.max(1, Math.min(cols - colSpan + 1, cell.col));
+    const clampedRow = Math.max(1, cell.row);
+    const occupied = isCellOccupied(clampedCol, clampedRow, colSpan, rowSpan, card.id);
+
+    if (!_cardDropPreview) {
+        _cardDropPreview = document.createElement('div');
+        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:all 0.1s ease;';
+    }
+
+    const padLeft = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
+    const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
+    const contentW = canvas.offsetWidth - padLeft - (parseInt(getComputedStyle(canvas).paddingRight) || 16);
+    const colW = contentW / cols;
+    const rowH = 100 + 8;
+    const gap = 8;
+    _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
+    _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
+    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
+    _cardDropPreview.style.height = (rowSpan * rowH + (rowSpan - 1) * gap) + 'px';
+    _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
+    _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
+    _cardDropPreview.style.display = 'block';
+
+    if (!_cardDropPreview.parentElement) {
+        canvas.style.position = 'relative';
+        canvas.appendChild(_cardDropPreview);
+    }
+
+    _dropTarget = { col: clampedCol, row: clampedRow, occupied };
+
+    const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
+    document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));
+    if (groupEl && !groupEl.contains(_cardMouseDown.cardEl)) {
+        groupEl.classList.add('drag-hover');
+        groupEl.style.borderColor = '#a855f7';
+        groupEl.style.background = 'rgba(168,85,247,0.1)';
+    }
+}
+
+function onCardMouseUp(e) {
+    document.removeEventListener('mousemove', onCardMouseMove);
+    document.removeEventListener('mouseup', onCardMouseUp);
+
+    if (_cardDragClone) {
+        _cardDragClone.remove();
+        _cardDragClone = null;
+    }
+    if (_cardDropPreview) {
+        _cardDropPreview.style.display = 'none';
+    }
+
+    document.querySelectorAll('[data-group-id].drag-hover').forEach(el => {
+        el.classList.remove('drag-hover');
+        el.style.borderColor = '';
+        el.style.background = '';
+    });
+
+    if (!_cardMouseDown) return;
+
+    const { cardEl, card, dragging } = _cardMouseDown;
+    cardEl.classList.remove('opacity-40');
+
+    if (dragging && _dropTarget) {
+        const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
+        if (groupEl && !groupEl.contains(cardEl)) {
+            const groupCards = groupEl.querySelector('.group-cards');
+            if (groupCards) {
+                const saved = getPickerCards();
+                const cardData = saved.find(c => c.id === card.id);
+                if (cardData) {
+                    cardData.groupId = groupEl.dataset.groupId;
+                    setPickerCards(saved);
+                }
+                groupCards.appendChild(cardEl);
+                cardEl.classList.remove('cursor-grab');
+                cardEl.classList.add('cursor-default');
+            }
+        } else {
+            const saved = getPickerCards();
+            const cardData = saved.find(c => c.id === card.id);
+            if (cardData) {
+                let newCol = _dropTarget.col;
+                let newRow = _dropTarget.row;
+                if (_dropTarget.occupied) {
+                    const free = findFreePosition(saved, cardData.colSpan || 3, cardData.rowSpan || 1, card.id);
+                    newCol = free.col;
+                    newRow = free.row;
+                }
+                cardData.col = newCol;
+                cardData.row = newRow;
+                cardEl.style.gridColumn = `${newCol} / span ${cardData.colSpan || 3}`;
+                cardEl.style.gridRow = `${newRow} / span ${cardData.rowSpan || 1}`;
+                setPickerCards(saved);
+                updateCanvasMinHeight();
+            }
+        }
+    }
+
+    _cardMouseDown = null;
     _dropTarget = null;
-    this.classList.add('opacity-40');
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', this.dataset.cardId);
-    const ghost = document.createElement('div');
-    ghost.style.cssText = 'width:1px;height:1px;opacity:0;position:absolute;top:-9999px;';
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 0, 0);
-    requestAnimationFrame(() => ghost.remove());
+    setTimeout(() => { _cardDragOccurred = false; }, 50);
 }
 
 function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
@@ -1098,119 +1247,6 @@ function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
 }
 
 let _cardDropPreview = null;
-
-function onCanvasCardDragOver(e) {
-    if (!_draggedCard) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    _cardDragOccurred = true;
-
-    const canvas = document.getElementById('dashboard-canvas');
-    const cell = getGridCell(canvas, e.clientX, e.clientY);
-    const cardId = _draggedCard.dataset.cardId;
-    const saved = getPickerCards();
-    const card = saved.find(c => c.id === cardId);
-    if (!card) return;
-
-    const colSpan = card.colSpan || 3;
-    const rowSpan = card.rowSpan || 1;
-    const cols = getCanvasCols();
-    const clampedCol = Math.max(1, Math.min(cols - colSpan + 1, cell.col));
-    const clampedRow = Math.max(1, cell.row);
-
-    const occupied = isCellOccupied(clampedCol, clampedRow, colSpan, rowSpan, cardId);
-
-    if (!_cardDropPreview) {
-        _cardDropPreview = document.createElement('div');
-        _cardDropPreview.className = 'card-drop-preview';
-        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:all 0.1s ease;';
-    }
-
-    const padLeft = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
-    const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
-    const contentW = canvas.offsetWidth - padLeft - (parseInt(getComputedStyle(canvas).paddingRight) || 16);
-    const colW = contentW / cols;
-    const rowH = 100 + 8;
-    const gap = 8;
-    _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
-    _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
-    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
-    _cardDropPreview.style.height = (rowSpan * rowH + (rowSpan - 1) * gap) + 'px';
-    _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
-    _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
-    _cardDropPreview.style.display = 'block';
-
-    if (!_cardDropPreview.parentElement) {
-        canvas.style.position = 'relative';
-        canvas.appendChild(_cardDropPreview);
-    }
-
-    _dropTarget = { col: clampedCol, row: clampedRow, occupied };
-}
-
-function onCanvasCardDrop(e) {
-    e.preventDefault();
-    if (_cardDropPreview) {
-        _cardDropPreview.style.display = 'none';
-    }
-    if (!_draggedCard || !_dropTarget) return;
-
-    const cardId = _draggedCard.dataset.cardId;
-    const saved = getPickerCards();
-    const card = saved.find(c => c.id === cardId);
-    if (!card) return;
-
-    const colSpan = card.colSpan || 3;
-    const rowSpan = card.rowSpan || 1;
-    let newCol = _dropTarget.col;
-    let newRow = _dropTarget.row;
-
-    if (_dropTarget.occupied) {
-        const free = findFreePosition(saved, colSpan, rowSpan, cardId);
-        newCol = free.col;
-        newRow = free.row;
-    }
-
-    card.col = newCol;
-    card.row = newRow;
-    _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
-    _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
-    setPickerCards(saved);
-    updateCanvasMinHeight();
-}
-
-function onCardDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    _cardDragOccurred = true;
-}
-
-function onCardDrop(e) {
-    e.preventDefault();
-    if (_draggedCard && _dropTarget && !_dropTarget.occupied) {
-        const cardId = _draggedCard.dataset.cardId;
-        const saved = getPickerCards();
-        const card = saved.find(c => c.id === cardId);
-        if (!card) return;
-
-        card.col = _dropTarget.col;
-        card.row = _dropTarget.row;
-        _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
-        _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
-        setPickerCards(saved);
-    }
-}
-
-function onCardDragEnd() {
-    this.classList.remove('opacity-40');
-    _draggedCard = null;
-    _dropTarget = null;
-    if (_cardDropPreview) {
-        _cardDropPreview.style.display = 'none';
-    }
-    setTimeout(() => { _cardDragOccurred = false; }, 50);
-    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-}
 
 function getDragAfterElement(container, x, y) {
     const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40), [data-group-id]:not(.opacity-40)')];
@@ -1851,8 +1887,6 @@ async function loadPickerCards() {
     if (!canvas._groupHandlersAttached) {
         canvas.addEventListener('dragover', onGroupDragOver);
         canvas.addEventListener('drop', onGroupDropOutside);
-        canvas.addEventListener('dragover', onCanvasCardDragOver);
-        canvas.addEventListener('drop', onCanvasCardDrop);
         canvas._groupHandlersAttached = true;
     }
 
@@ -2156,13 +2190,6 @@ function onGroupDragStart(e) {
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/group', this.dataset.groupId);
-}
-
-function onGroupCardDragOver(e) {
-    if (e.dataTransfer.types.includes('text/group')) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    this.classList.add('border-neon-purple', 'bg-purple-900/10');
 }
 
 function onGroupDragOver(e) {
