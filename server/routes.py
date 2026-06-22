@@ -246,8 +246,8 @@ def api_history():
 
 @routes.route('/api/update/check')
 def api_update_check():
-    """Check for updates — reads CONFIG_VERSION from remote core/state.py on GitHub."""
-    import urllib.request, ssl
+    """Check for updates — reads CONFIG_VERSION from remote core/state.py via GitHub API."""
+    import urllib.request, ssl, base64
 
     current_version = CONFIG_VERSION
     repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
@@ -272,13 +272,15 @@ def api_update_check():
     except Exception as e:
         logger.error(f'Update check: failed to fetch commit info: {e}')
 
+    # Use GitHub Contents API (not raw URL — raw is CDN-cached and stale)
     try:
         req2 = urllib.request.Request(
-            f'https://raw.githubusercontent.com/{repo}/main/core/state.py',
-            headers={'User-Agent': 'fancontrol-web'}
+            f'https://api.github.com/repos/{repo}/contents/core/state.py?ref=main',
+            headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'fancontrol-web'}
         )
         with urllib.request.urlopen(req2, timeout=10, context=ctx) as resp:
-            content = resp.read().decode()
+            file_data = json.loads(resp.read())
+            content = base64.b64decode(file_data['content']).decode()
             m = re.search(r"CONFIG_VERSION\s*=\s*['\"](.+?)['\"]", content)
             if m:
                 remote_version = m.group(1)
