@@ -823,6 +823,7 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
+    el.style.alignSelf = 'start';
     if (card.colSpan && card.colSpan > 1) el.style.gridColumn = `span ${card.colSpan}`;
     if (card.rowSpan && card.rowSpan > 1) el.style.gridRow = `span ${card.rowSpan}`;
 
