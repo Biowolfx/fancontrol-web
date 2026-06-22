@@ -815,7 +815,8 @@ function renderPickerCard(card) {
             </div>
         </div>
         ${valueHtml}
-        <div class="card-details"></div>`;
+        <div class="card-details"></div>
+        <div class="card-resize-handle"></div>`;
 
     el.addEventListener('dragstart', onCardDragStart);
     el.addEventListener('dragover', onCardDragOver);
@@ -823,10 +824,16 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.breakInside = 'avoid';
-    el.style.marginBottom = '12px';
+    el.style.alignSelf = 'start';
+    el.style.gridColumn = `span ${card.colSpan || 3}`;
+    if (card.rowSpan) el.style.gridRow = `span ${card.rowSpan}`;
 
     canvas.appendChild(el);
+
+    const resizeHandle = el.querySelector('.card-resize-handle');
+    if (resizeHandle) {
+        resizeHandle.addEventListener('mousedown', (e) => onCardResizeStart(e, id));
+    }
 
     if (type === 'disk') {
         el.addEventListener('click', (e) => {
@@ -868,17 +875,18 @@ function onCardResizeStart(e, cardId) {
     document.addEventListener('mouseup', onCardResizeEnd);
 }
 
-function getCanvasCols() {
-    const w = window.innerWidth;
-    if (w >= 1280) return 5;
-    if (w >= 1024) return 4;
-    return 2;
-}
+function getCanvasCols() { return 12; }
 
 function updateCanvasColumns() {
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
-    canvas.style.columnCount = getCanvasCols();
+    const w = window.innerWidth;
+    let cols = 4;
+    if (w >= 1280) cols = 12;
+    else if (w >= 1024) cols = 8;
+    else if (w >= 640) cols = 6;
+    canvas.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    canvas.style.gridAutoRows = `${Math.floor(80 * (12 / cols))}px`;
 }
 
 function onCardResizeMove(e) {
@@ -889,14 +897,12 @@ function onCardResizeMove(e) {
 
     const dx = e.clientX - _cardResizeStartX;
     const cols = getCanvasCols();
-    const canvasWidth = canvas.offsetWidth;
-    const gap = 12;
-    const colWidth = (canvasWidth - gap * (cols - 1)) / cols;
+    const colWidth = canvas.offsetWidth / cols;
 
     const newW = _cardResizeStartW + dx;
-    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
+    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / colWidth)));
 
-    el.style.flex = `0 0 calc(${(100 / cols) * newColSpan}% - ${gap}px)`;
+    el.style.gridColumn = `span ${newColSpan}`;
     el._resizeColSpan = newColSpan;
 }
 
@@ -973,7 +979,7 @@ function onCardDragEnd() {
 }
 
 function getDragAfterElement(container, x, y) {
-    const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40)')];
+    const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40), [data-group-id]:not(.opacity-40)')];
     let closest = null;
     let closestDist = Infinity;
     for (const child of cards) {
@@ -1741,10 +1747,13 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative col-span-full';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
     el.setAttribute('data-group-id', group.id);
     el.setAttribute('draggable', 'true');
     el.style.alignSelf = 'start';
+    el.style.gridColumn = `span ${group.colSpan || getCanvasCols()}`;
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
     if (group.minHeight) el.style.minHeight = group.minHeight;
 
     el.innerHTML = `
@@ -1755,7 +1764,7 @@ function renderDashboardGroup(group) {
             </div>
             <button onclick="removePickerGroup('${group.id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>
         </div>
-        <div class="group-cards flex flex-wrap gap-3 min-h-[40px]"></div>
+        <div class="group-cards flex flex-wrap gap-2 flex-1"></div>
         <div class="group-resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-ns-resize opacity-30 hover:opacity-80 transition-opacity"></div>`;
 
     el.addEventListener('dragstart', onGroupDragStart);
@@ -1872,10 +1881,12 @@ function stopGroupResize() {
 }
 
 let _draggedGroup = null;
+let _groupDropTarget = null;
 
 function onGroupDragStart(e) {
     if (e.target.closest('.group-resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
     _draggedGroup = this;
+    _groupDropTarget = null;
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/group', this.dataset.groupId);
@@ -1893,16 +1904,19 @@ function onGroupDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const canvas = document.getElementById('dashboard-canvas');
-    const afterElement = getDragAfterElement(canvas, e.clientX, e.clientY);
-    if (afterElement && afterElement !== _draggedGroup) {
-        canvas.insertBefore(_draggedGroup, afterElement);
-    } else if (!afterElement) {
-        canvas.appendChild(_draggedGroup);
-    }
+    _groupDropTarget = getDragAfterElement(canvas, e.clientX, e.clientY);
 }
 
 function onGroupDragEnd() {
     if (_draggedGroup) {
+        if (_groupDropTarget !== undefined) {
+            const canvas = document.getElementById('dashboard-canvas');
+            if (_groupDropTarget) {
+                canvas.insertBefore(_draggedGroup, _groupDropTarget);
+            } else {
+                canvas.appendChild(_draggedGroup);
+            }
+        }
         _draggedGroup.classList.remove('opacity-40');
         _draggedGroup = null;
         saveGroupOrder();
