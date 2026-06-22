@@ -1001,6 +1001,8 @@ function onCardDragStart(e) {
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', this.dataset.cardId);
+    const rect = this.getBoundingClientRect();
+    e.dataTransfer.setDragImage(this, e.clientX - rect.left, e.clientY - rect.top);
 }
 
 function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
