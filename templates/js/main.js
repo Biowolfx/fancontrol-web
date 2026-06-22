@@ -1010,6 +1010,15 @@ function renderSataAttributes(container, selectedIds) {
                     <option value="gb" ${currentUnit === 'gb' ? 'selected' : ''}>ГБ</option>
                     <option value="tb" ${currentUnit === 'tb' ? 'selected' : ''}>ТБ</option>
                 </select>`;
+        } else if (attr.unit === 'hours') {
+            const currentUnit = smartUnits[attr.id] || 'raw';
+            unitHtml = `
+                <select data-smart-unit="${attr.id}" onchange="onSmartUnitChange(${attr.id}, this.value)"
+                    class="text-[10px] bg-cyber-bg border border-gray-600 rounded px-1 py-0.5 text-gray-300 ml-1">
+                    <option value="raw" ${currentUnit === 'raw' ? 'selected' : ''}>Часы</option>
+                    <option value="days" ${currentUnit === 'days' ? 'selected' : ''}>Дни</option>
+                    <option value="months" ${currentUnit === 'months' ? 'selected' : ''}>Месяцы</option>
+                </select>`;
         }
 
         let displayValue = attr.raw;
@@ -1017,6 +1026,13 @@ function renderSataAttributes(container, selectedIds) {
             const unit = smartUnits[attr.id] || 'raw';
             if (unit !== 'raw') {
                 displayValue = formatBytes(parseInt(attr.raw_num || attr.raw) * attr.unit_divisor, unit);
+            }
+        } else if (attr.unit === 'hours') {
+            const unit = smartUnits[attr.id] || 'raw';
+            if (unit === 'days') {
+                displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + ' дн';
+            } else if (unit === 'months') {
+                displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + ' мес';
             }
         }
 
@@ -1074,12 +1090,40 @@ function renderNvmeAttributes(container, selectedIds) {
         return;
     }
 
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _smartModalCardId);
+    const smartUnits = card?.smartUnits || {};
+
     container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
         const statusColor = attr.criticality === 'critical' ? 'text-red-400' :
                            attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
         const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
                          attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
         const checked = selectedIds.includes(key) ? 'checked' : '';
+
+        let unitHtml = '';
+        let displayValue = attr.value;
+
+        if (attr.unit === 'nvme_blocks') {
+            const currentUnit = smartUnits[key] || 'raw';
+            unitHtml = `
+                <select data-smart-unit="${key}" onchange="onSmartUnitChange('${key}', this.value)"
+                    class="text-[10px] bg-cyber-bg border border-gray-600 rounded px-1 py-0.5 text-gray-300 ml-1">
+                    <option value="raw" ${currentUnit === 'raw' ? 'selected' : ''}>Raw</option>
+                    <option value="bytes" ${currentUnit === 'bytes' ? 'selected' : ''}>Байты</option>
+                    <option value="kb" ${currentUnit === 'kb' ? 'selected' : ''}>КБ</option>
+                    <option value="mb" ${currentUnit === 'mb' ? 'selected' : ''}>МБ</option>
+                    <option value="gb" ${currentUnit === 'gb' ? 'selected' : ''}>ГБ</option>
+                    <option value="tb" ${currentUnit === 'tb' ? 'selected' : ''}>ТБ</option>
+                </select>`;
+            if (currentUnit !== 'raw' && attr.unit_divisor) {
+                displayValue = formatBytes(attr.value * attr.unit_divisor, currentUnit);
+            }
+        }
+
+        let suffix = '';
+        if (key === 'temperature') suffix = '°C';
+        else if (key === 'percentage_used' || key === 'available_spare') suffix = '%';
 
         return `
         <div class="flex items-center gap-3 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
@@ -1090,11 +1134,12 @@ function renderNvmeAttributes(container, selectedIds) {
                 <div class="flex items-center">
                     <span class="text-sm text-gray-200 truncate">${escapeHtml(attr.description)}</span>
                     ${critBadge}
+                    ${unitHtml}
                 </div>
                 <div class="text-[10px] text-gray-500 truncate">${escapeHtml(attr.tooltip)}</div>
             </div>
             <div class="text-right shrink-0">
-                <div class="text-sm font-mono ${statusColor}">${attr.value}${key === 'temperature' ? '°C' : key.includes('percentage') || key.includes('spare') ? '%' : ''}</div>
+                <div class="text-sm font-mono ${statusColor}">${displayValue}${suffix}</div>
             </div>
         </div>`;
     }).join('');
@@ -1236,6 +1281,18 @@ function updateDiskCardDetails(card, detailsEl) {
                         const unit = smartUnits[attr.id] || 'raw';
                         if (unit !== 'raw') {
                             displayValue = formatBytes(parseInt(attr.raw_num || attr.raw) * attr.unit_divisor, unit) + ' ' + getUnitLabel(unit);
+                        }
+                    } else if (attr.unit === 'hours') {
+                        const unit = smartUnits[attr.id] || 'raw';
+                        if (unit === 'days') {
+                            displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + ' дн';
+                        } else if (unit === 'months') {
+                            displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + ' мес';
+                        }
+                    } else if (attr.unit === 'nvme_blocks') {
+                        const unit = smartUnits[attr.id] || 'raw';
+                        if (unit !== 'raw') {
+                            displayValue = formatBytes(attr.value * (attr.unit_divisor || 1), unit) + ' ' + getUnitLabel(unit);
                         }
                     }
                     html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
