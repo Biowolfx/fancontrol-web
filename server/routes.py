@@ -338,7 +338,7 @@ def api_update_apply():
         deps_changed = old_req != new_req
 
         # Restart container — entrypoint will sync /repo → /app
-        container_name = os.getenv('HOSTNAME', 'fancontrol-web')
+        container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
         restart = subprocess.run(
             ['docker', 'restart', container_name],
             capture_output=True, text=True, timeout=30
