@@ -187,6 +187,41 @@ def main():
     logger.info(f'Mode: {args.mode}')
     logger.info(f'PID: {os.getpid()}')
     logger.info(f'Config: {CONFIG_PATH} (exists: {CONFIG_PATH.exists()})')
+
+    # Check /repo sync status
+    repo_dir = '/repo'
+    if os.path.isdir(repo_dir) and os.path.isfile(os.path.join(repo_dir, 'app.py')):
+        try:
+            with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
+                for line in f:
+                    if 'CONFIG_VERSION' in line:
+                        logger.info(f'/repo version: {line.strip()}')
+                        break
+        except Exception:
+            logger.info('/repo: cannot read version')
+
+        # Check /app templates version
+        try:
+            with open('/app/templates/index.html') as f:
+                for line in f:
+                    if 'main.js?v=' in line:
+                        logger.info(f'/app template: {line.strip()}')
+                        break
+        except Exception:
+            logger.info('/app: cannot read template')
+
+        # Check /repo templates version
+        try:
+            with open(os.path.join(repo_dir, 'templates', 'index.html')) as f:
+                for line in f:
+                    if 'main.js?v=' in line:
+                        logger.info(f'/repo template: {line.strip()}')
+                        break
+        except Exception:
+            logger.info('/repo: cannot read template')
+    else:
+        logger.info('/repo: NOT FOUND or no app.py')
+
     logger.info('=' * 60)
 
     if args.mode == 'setup':

@@ -253,6 +253,8 @@ def api_update_check():
     current_version = CONFIG_VERSION
     repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
 
+    logger.info(f'[CHECK] Current version: {current_version}, checking remote...')
+
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -289,6 +291,7 @@ def api_update_check():
         logger.error(f'Update check: failed to fetch remote state.py: {e}')
 
     has_update = bool(remote_version and current_version and remote_version != current_version)
+    logger.info(f'[CHECK] Result: has_update={has_update}, current={current_version}, remote={remote_version}')
 
     return jsonify({
         'status': 'ok',
@@ -308,9 +311,19 @@ def api_update_apply():
         repo_dir = '/repo'
         app_dir = '/app'
 
-        logger.info(f'[UPDATE] Starting. PID={os.getpid()}')
+        logger.info(f'[UPDATE] ====== START ====== PID={os.getpid()} VERSION={CONFIG_VERSION}')
 
-        # Git pull
+        # Step 1: Check repo exists
+        repo_exists = os.path.isdir(repo_dir)
+        app_py = os.path.isfile(os.path.join(repo_dir, 'app.py'))
+        logger.info(f'[UPDATE] Step 1: /repo exists={repo_exists}, app.py={app_py}')
+
+        if not repo_exists or not app_py:
+            logger.error(f'[UPDATE] /repo not ready!')
+            return jsonify({'status': 'error', 'message': '/repo not ready'}), 500
+
+        # Step 2: Git pull
+        logger.info('[UPDATE] Step 2: git pull...')
         pull = subprocess.run(
             ['git', '-C', repo_dir, 'pull', '--ff-only', 'origin', 'main'],
             capture_output=True, text=True, timeout=60,
@@ -319,12 +332,25 @@ def api_update_apply():
 
         pull_output = pull.stdout.strip() + '\n' + pull.stderr.strip()
         already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
-        logger.info(f'[UPDATE] Git rc={pull.returncode}, up={already_up}: {pull_output.strip()[:200]}')
+        logger.info(f'[UPDATE] Step 2 result: rc={pull.returncode}, already_up={already_up}')
+        logger.info(f'[UPDATE] Step 2 output: {pull_output.strip()[:300]}')
 
         if pull.returncode != 0 and not already_up:
+            logger.error(f'[UPDATE] Git pull FAILED')
             return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
 
-        # Sync code from /repo to /app
+        # Step 3: Check what version /repo has after pull
+        try:
+            with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
+                for line in f:
+                    if 'CONFIG_VERSION' in line:
+                        logger.info(f'[UPDATE] Step 3: /repo version after pull: {line.strip()}')
+                        break
+        except Exception as e:
+            logger.error(f'[UPDATE] Step 3: Cannot read /repo version: {e}')
+
+        # Step 4: Sync /repo → /app
+        logger.info('[UPDATE] Step 4: syncing files...')
         import shutil
         synced = []
         for f in os.listdir(repo_dir):
@@ -342,19 +368,31 @@ def api_update_apply():
                     shutil.rmtree(dst)
                 shutil.copytree(src, dst)
                 synced.append(f'{d}/')
-        logger.info(f'[UPDATE] Synced {len(synced)} items')
+        logger.info(f'[UPDATE] Step 4: synced {len(synced)} items: {", ".join(synced[:15])}')
 
-        # Schedule process exit AFTER response is sent
+        # Step 5: Verify /app version after sync
+        try:
+            with open(os.path.join(app_dir, 'core', 'state.py')) as f:
+                for line in f:
+                    if 'CONFIG_VERSION' in line:
+                        logger.info(f'[UPDATE] Step 5: /app version after sync: {line.strip()}')
+                        break
+        except Exception as e:
+            logger.error(f'[UPDATE] Step 5: Cannot read /app version: {e}')
+
+        # Step 6: Schedule process exit
+        logger.info('[UPDATE] Step 6: scheduling os._exit(0) in 1s...')
         import threading
         def delayed_exit():
-            logger.info('[UPDATE] Exiting process')
+            logger.info('[UPDATE] Step 6: os._exit(0) called!')
             os._exit(0)
         threading.Timer(1.0, delayed_exit).start()
 
+        logger.info('[UPDATE] ====== DONE (waiting for timer) ======')
         return jsonify({'status': 'ok', 'message': f'Synced. Restarting in 1s...'})
 
     except Exception as e:
-        logger.error(f'[UPDATE] Error: {e}', exc_info=True)
+        logger.error(f'[UPDATE] ERROR: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
