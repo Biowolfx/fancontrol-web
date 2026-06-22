@@ -950,6 +950,7 @@ function onCardResizeEnd(e) {
     }
 
     _cardResizing = null;
+    updateCanvasMinHeight();
 }
 
 function getGridCell(canvas, x, y) {
@@ -1170,6 +1171,7 @@ function onCanvasCardDrop(e) {
     _draggedCard.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     _draggedCard.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     setPickerCards(saved);
+    updateCanvasMinHeight();
 }
 
 function onCardDragOver(e) {
@@ -1239,6 +1241,7 @@ function removePickerCard(cardId) {
     const saved = getPickerCards().filter(c => c.id !== cardId);
     setPickerCards(saved);
     if (!saved.length) document.getElementById('dashboard-empty')?.classList.remove('hidden');
+    updateCanvasMinHeight();
 }
 
 let _editingCardId = null;
@@ -1879,6 +1882,32 @@ async function loadPickerCards() {
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
     prefetchSmartForCards();
+    updateCanvasMinHeight();
+}
+
+function updateCanvasMinHeight() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    let maxRow = 0;
+    for (const c of getPickerCards()) {
+        if (!c.row) continue;
+        const bottom = c.row + (c.rowSpan || 1) - 1;
+        if (bottom > maxRow) maxRow = bottom;
+    }
+    for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
+        const rect = gEl.getBoundingClientRect();
+        const cRect = canvas.getBoundingClientRect();
+        const cs = getComputedStyle(canvas);
+        const padT = parseFloat(cs.paddingTop) || 16;
+        const rowH = 100 + 8;
+        const gap = 8;
+        const gRowEnd = Math.max(1, Math.round((rect.bottom - cRect.top - padT) / (rowH + gap)) + 1);
+        if (gRowEnd > maxRow) maxRow = gRowEnd;
+    }
+    const minRows = Math.max(maxRow + 5, 8);
+    const rowH = 100 + 8;
+    const padY = 32;
+    canvas.style.minHeight = (minRows * rowH - 8 + padY) + 'px';
 }
 
 async function prefetchSmartForCards() {
@@ -2033,6 +2062,7 @@ function removePickerGroup(groupId) {
     if (!saved.length && !document.querySelector('[data-card-id]')) {
         document.getElementById('dashboard-empty')?.classList.remove('hidden');
     }
+    updateCanvasMinHeight();
 }
 
 function onGroupDragLeave(e) {
