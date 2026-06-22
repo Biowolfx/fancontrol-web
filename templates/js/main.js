@@ -814,14 +814,24 @@ function renderPickerCard(card) {
             </div>
         </div>
         ${valueHtml}
-        <div class="card-details"></div>`;
+        <div class="card-details"></div>
+        <div class="card-resize-handle"></div>`;
 
     el.addEventListener('dragstart', onCardDragStart);
     el.addEventListener('dragover', onCardDragOver);
     el.addEventListener('drop', onCardDrop);
     el.addEventListener('dragend', onCardDragEnd);
 
+    el.style.position = 'relative';
+    if (card.colSpan && card.colSpan > 1) el.style.gridColumn = `span ${card.colSpan}`;
+    if (card.rowSpan && card.rowSpan > 1) el.style.gridRow = `span ${card.rowSpan}`;
+
     canvas.appendChild(el);
+
+    const resizeHandle = el.querySelector('.card-resize-handle');
+    if (resizeHandle) {
+        resizeHandle.addEventListener('mousedown', (e) => onCardResizeStart(e, id));
+    }
 
     if (type === 'disk') {
         el.addEventListener('click', (e) => {
@@ -836,6 +846,85 @@ function renderPickerCard(card) {
 let _draggedCard = null;
 let _cardDragOccurred = false;
 let _lastDragInsert = null;
+
+let _cardResizing = null;
+let _cardResizeStartX = 0;
+let _cardResizeStartY = 0;
+let _cardResizeStartW = 0;
+let _cardResizeStartH = 0;
+
+function onCardResizeStart(e, cardId) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!el) return;
+
+    _cardResizing = { cardId, el };
+    _cardResizeStartX = e.clientX;
+    _cardResizeStartY = e.clientY;
+    _cardResizeStartW = el.offsetWidth;
+    _cardResizeStartH = el.offsetHeight;
+
+    el.setAttribute('draggable', 'false');
+    document.body.style.cursor = 'se-resize';
+    document.body.style.userSelect = 'none';
+
+    document.addEventListener('mousemove', onCardResizeMove);
+    document.addEventListener('mouseup', onCardResizeEnd);
+}
+
+function onCardResizeMove(e) {
+    if (!_cardResizing) return;
+    const el = _cardResizing.el;
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+
+    const dx = e.clientX - _cardResizeStartX;
+    const dy = e.clientY - _cardResizeStartY;
+
+    const canvasStyle = getComputedStyle(canvas);
+    const gap = parseInt(canvasStyle.gap) || 12;
+    const cols = canvasStyle.gridTemplateColumns.split(' ').length;
+    const colWidth = (canvas.offsetWidth - gap * (cols + 1)) / cols;
+    const rowHeight = 120 + gap;
+
+    const newW = _cardResizeStartW + dx;
+    const newH = _cardResizeStartH + dy;
+
+    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
+    const newRowSpan = Math.max(1, Math.min(3, Math.round(newH / rowHeight)));
+
+    el.style.gridColumn = `span ${newColSpan}`;
+    el.style.gridRow = `span ${newRowSpan}`;
+    el._resizeColSpan = newColSpan;
+    el._resizeRowSpan = newRowSpan;
+}
+
+function onCardResizeEnd(e) {
+    if (!_cardResizing) return;
+    const el = _cardResizing.el;
+    const cardId = _cardResizing.cardId;
+
+    const colSpan = el._resizeColSpan || 1;
+    const rowSpan = el._resizeRowSpan || 1;
+
+    el.setAttribute('draggable', 'true');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+
+    document.removeEventListener('mousemove', onCardResizeMove);
+    document.removeEventListener('mouseup', onCardResizeEnd);
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (card) {
+        card.colSpan = colSpan;
+        card.rowSpan = rowSpan;
+        setPickerCards(saved);
+    }
+
+    _cardResizing = null;
+}
 
 function onCardDragStart(e) {
     _draggedCard = this;

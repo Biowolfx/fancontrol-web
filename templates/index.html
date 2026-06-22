@@ -125,15 +125,31 @@
         }
         .card-resize-handle {
             position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 16px;
-            height: 16px;
+            bottom: 4px;
+            right: 4px;
+            width: 18px;
+            height: 18px;
             cursor: se-resize;
-            opacity: 0.5;
+            opacity: 0;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .card-resize-handle::after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid #6b7280;
+            border-bottom: 2px solid #6b7280;
+            border-radius: 0 0 2px 0;
+        }
+        [data-card-id]:hover .card-resize-handle {
+            opacity: 0.6;
         }
         .card-resize-handle:hover {
-            opacity: 1;
+            opacity: 1 !important;
         }
     </style>
 </head>
@@ -264,7 +280,7 @@
                     <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>
                     <p class="text-xs text-gray-600 mt-1" data-i18n="dashboard.empty_hint">Click + to add monitoring cards</p>
                 </div>
-                <div id="dashboard-canvas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4"></div>
+                <div id="dashboard-canvas" class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 p-4" style="grid-auto-rows: minmax(120px, auto);"></div>
                 <button id="dashboard-add-btn" onclick="showCardPicker()"
                         class="fixed bottom-6 right-6 w-12 h-12 bg-neon-cyan rounded-full text-black text-2xl font-bold shadow-lg hover:bg-cyan-400 transition-all z-40">
                     +
