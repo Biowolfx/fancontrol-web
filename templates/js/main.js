@@ -956,25 +956,62 @@ function updateCardDetails(cardId) {
     detailsEl.innerHTML = html;
 }
 
+let _pickerCards = null;
+let _pickerGroups = null;
+let _dashboardSaveTimer = null;
+
+async function loadDashboardFromServer() {
+    try {
+        const resp = await fetch('/api/dashboard');
+        if (resp.ok) {
+            const data = await resp.json();
+            _pickerCards = data.cards || [];
+            _pickerGroups = data.groups || [];
+            return;
+        }
+    } catch (e) {}
+    _pickerCards = [];
+    _pickerGroups = [];
+}
+
 function getPickerCards() {
-    try { return JSON.parse(localStorage.getItem('fc_picker_cards') || '[]'); } catch(e) { return []; }
+    return _pickerCards || [];
 }
 
 function setPickerCards(cards) {
-    localStorage.setItem('fc_picker_cards', JSON.stringify(cards));
+    _pickerCards = cards;
+    scheduleDashboardSave();
 }
 
 function getPickerGroups() {
-    try { return JSON.parse(localStorage.getItem('fc_picker_groups') || '[]'); } catch(e) { return []; }
+    return _pickerGroups || [];
 }
 
 function setPickerGroups(groups) {
-    localStorage.setItem('fc_picker_groups', JSON.stringify(groups));
+    _pickerGroups = groups;
+    scheduleDashboardSave();
 }
 
-function loadPickerCards() {
+function scheduleDashboardSave() {
+    if (_dashboardSaveTimer) clearTimeout(_dashboardSaveTimer);
+    _dashboardSaveTimer = setTimeout(saveDashboardToServer, 500);
+}
+
+async function saveDashboardToServer() {
+    try {
+        await fetch('/api/dashboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cards: _pickerCards || [], groups: _pickerGroups || [] })
+        });
+    } catch (e) {}
+}
+
+async function loadPickerCards() {
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
+
+    await loadDashboardFromServer();
 
     if (!canvas._groupHandlersAttached) {
         canvas.addEventListener('dragover', onGroupDragOver);
