@@ -1543,6 +1543,21 @@ async function loadPickerCards() {
     });
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
+    prefetchSmartForCards();
+}
+
+async function prefetchSmartForCards() {
+    const cards = getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length);
+    for (const card of cards) {
+        if (_smartCache[card.sourceId]) continue;
+        try {
+            const data = await fetchDiskSmart(card.sourceId);
+            if (data && !data.error) {
+                _smartCache[card.sourceId] = data;
+                updateCardDetails(card.id);
+            }
+        } catch (e) {}
+    }
 }
 
 let _pickerLiveTimer = null;
