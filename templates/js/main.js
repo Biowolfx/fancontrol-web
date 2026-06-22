@@ -884,6 +884,176 @@ function hideCardConfig() {
     _configuringCardId = null;
 }
 
+let _smartModalDiskId = null;
+let _smartAttributes = [];
+let _smartAttrType = 'sata';
+let _smartCache = {};
+
+async function fetchDiskSmart(diskId, forceRefresh = false) {
+    try {
+        const url = forceRefresh
+            ? `/api/disks/${diskId}/smart?refresh=1`
+            : `/api/disks/${diskId}/smart`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } catch (e) {
+        console.error('SMART fetch error:', e);
+        return null;
+    }
+}
+
+function showSmartModal(diskId) {
+    _smartModalDiskId = diskId;
+    const disk = currentState?.hdd_sensors?.[diskId];
+    const title = document.getElementById('smart-modal-title');
+    if (title && disk) {
+        title.textContent = `SMART — ${disk.label || disk.dev_name}`;
+    }
+    document.getElementById('smart-modal')?.classList.remove('hidden');
+    refreshSmartData();
+}
+
+function hideSmartModal() {
+    document.getElementById('smart-modal')?.classList.add('hidden');
+    _smartModalDiskId = null;
+}
+
+async function refreshSmartData() {
+    if (!_smartModalDiskId) return;
+    const container = document.getElementById('smart-attributes-container');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-center text-gray-400 py-4">Загрузка...</div>';
+
+    const data = await fetchDiskSmart(_smartModalDiskId, true);
+    if (!data || data.error) {
+        container.innerHTML = `<div class="text-center text-red-400 py-4">${data?.error || 'Ошибка загрузки SMART данных'}</div>`;
+        return;
+    }
+
+    _smartCache[_smartModalDiskId] = data;
+
+    const infoEl = document.getElementById('smart-device-info');
+    if (infoEl && data.device_info) {
+        const info = data.device_info;
+        infoEl.textContent = [info.model, info.serial, info.firmware, info.capacity].filter(Boolean).join(' | ');
+    }
+
+    _smartAttrType = data.attr_type || 'sata';
+    _smartAttributes = data.attributes || [];
+
+    renderSmartAttributes();
+}
+
+function renderSmartAttributes() {
+    const container = document.getElementById('smart-attributes-container');
+    if (!container) return;
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _smartModalDiskId);
+    const selectedIds = card?.smartAttributes || [];
+
+    if (_smartAttrType === 'nvme') {
+        renderNvmeAttributes(container, selectedIds);
+    } else {
+        renderSataAttributes(container, selectedIds);
+    }
+}
+
+function renderSataAttributes(container, selectedIds) {
+    if (!_smartAttributes.length) {
+        container.innerHTML = '<div class="text-center text-gray-400 py-4">Нет SMART атрибутов</div>';
+        return;
+    }
+
+    container.innerHTML = _smartAttributes.map(attr => {
+        const statusColor = attr.status === 'critical' ? 'text-red-400' :
+                           attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
+        const statusBg = attr.status === 'critical' ? 'bg-red-500/10' :
+                        attr.status === 'warning' ? 'bg-yellow-500/10' : 'bg-green-500/10';
+        const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
+                         attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
+        const checked = selectedIds.includes(String(attr.id)) ? 'checked' : '';
+
+        return `
+        <div class="flex items-center gap-3 p-2 rounded ${statusBg} hover:bg-white/5 transition-colors group"
+             title="${escapeHtml(attr.tooltip)}">
+            <input type="checkbox" data-smart-id="${attr.id}" ${checked}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="text-xs text-gray-500 w-8">${attr.id}</span>
+                    <span class="text-sm text-gray-200 truncate">${escapeHtml(attr.description)}</span>
+                    ${critBadge}
+                </div>
+                <div class="text-[10px] text-gray-500 truncate">${escapeHtml(attr.tooltip)}</div>
+            </div>
+            <div class="text-right shrink-0">
+                <div class="text-sm font-mono ${statusColor}">${attr.value}</div>
+                <div class="text-[10px] text-gray-500">worst:${attr.worst} thr:${attr.threshold}</div>
+            </div>
+            <div class="text-right shrink-0 w-16">
+                <div class="text-xs text-gray-400 font-mono">${attr.raw}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderNvmeAttributes(container, selectedIds) {
+    const attrs = _smartAttributes;
+    if (!Object.keys(attrs).length) {
+        container.innerHTML = '<div class="text-center text-gray-400 py-4">Нет NVMe атрибутов</div>';
+        return;
+    }
+
+    container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
+        const statusColor = attr.criticality === 'critical' ? 'text-red-400' :
+                           attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
+        const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
+                         attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
+        const checked = selectedIds.includes(key) ? 'checked' : '';
+
+        return `
+        <div class="flex items-center gap-3 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
+             title="${escapeHtml(attr.tooltip)}">
+            <input type="checkbox" data-smart-key="${key}" ${checked}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-200 truncate">${escapeHtml(attr.description)}</span>
+                    ${critBadge}
+                </div>
+                <div class="text-[10px] text-gray-500 truncate">${escapeHtml(attr.tooltip)}</div>
+            </div>
+            <div class="text-right shrink-0">
+                <div class="text-sm font-mono ${statusColor}">${attr.value}${key === 'temperature' ? '°C' : key.includes('percentage') || key.includes('spare') ? '%' : ''}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function saveSmartSelection() {
+    if (!_smartModalDiskId) return;
+
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _smartModalDiskId);
+    if (!card) return;
+
+    const checkboxes = document.querySelectorAll('#smart-attributes-container input[type="checkbox"]');
+    const selected = [];
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            selected.push(cb.dataset.smartId || cb.dataset.smartKey);
+        }
+    });
+
+    card.smartAttributes = selected;
+    setPickerCards(saved);
+    updateCardDetails(_smartModalDiskId);
+    hideSmartModal();
+}
+
 function toggleCardOption(cardId, option, enabled) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
