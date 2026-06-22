@@ -306,6 +306,8 @@ def api_update_apply():
     try:
         repo_dir = '/repo'
 
+        logger.info(f'[UPDATE] Starting update. Repo dir exists: {os.path.isdir(repo_dir)}, app.py exists: {os.path.isfile(os.path.join(repo_dir, "app.py"))}')
+
         # Git pull (public repo, no auth needed)
         pull = subprocess.run(
             ['git', '-C', repo_dir, 'pull', '--ff-only', 'origin', 'main'],
@@ -316,11 +318,12 @@ def api_update_apply():
         pull_output = pull.stdout.strip() + '\n' + pull.stderr.strip()
         already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
 
-        if pull.returncode != 0 and not already_up:
-            logger.error(f'Git pull failed: {pull_output}')
-            return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
+        logger.info(f'[UPDATE] Git pull rc={pull.returncode}, already_up={already_up}')
+        logger.info(f'[UPDATE] Git pull output: {pull_output.strip()[:500]}')
 
-        logger.info(f'Git pull result: {pull_output.strip()}')
+        if pull.returncode != 0 and not already_up:
+            logger.error(f'[UPDATE] Git pull FAILED: {pull_output}')
+            return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
 
         # Check if requirements changed
         old_req = ''
@@ -336,23 +339,40 @@ def api_update_apply():
         except Exception:
             pass
         deps_changed = old_req != new_req
+        logger.info(f'[UPDATE] deps_changed={deps_changed}')
 
         # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        restart_script = """import time, os
-time.sleep(2)
-os._exit(0)
-"""
+        logger.info(f'[UPDATE] Container name: {container_name}')
+
+        # Write restart script to file for reliability
+        restart_script_path = '/tmp/fancontrol_restart.py'
         try:
-            subprocess.Popen(
-                ['python3', '-c', restart_script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            with open(restart_script_path, 'w') as f:
+                f.write('import time, os, sys, logging\n')
+                f.write('logging.basicConfig(filename="/tmp/fancontrol_restart.log", level=logging.INFO)\n')
+                f.write('logging.info(f"[RESTART] Script started, PID={os.getpid()}")\n')
+                f.write('try:\n')
+                f.write('    logging.info("[RESTART] Sleeping 2s...")\n')
+                f.write('    time.sleep(2)\n')
+                f.write('    logging.info("[RESTART] Calling os._exit(0)")\n')
+                f.write('    os._exit(0)\n')
+                f.write('except Exception as e:\n')
+                f.write('    logging.error(f"[RESTART] Error: {e}")\n')
+            logger.info(f'[UPDATE] Restart script written to {restart_script_path}')
+        except Exception as e:
+            logger.error(f'[UPDATE] Failed to write restart script: {e}')
+
+        try:
+            proc = subprocess.Popen(
+                ['python3', restart_script_path],
+                stdout=open('/tmp/fancontrol_restart.log', 'w'),
+                stderr=subprocess.STDOUT,
                 start_new_session=True
             )
-            logger.info(f'Restart scheduled — process will exit in 2s, Docker will restart container {container_name}')
+            logger.info(f'[UPDATE] Restart subprocess spawned: pid={proc.pid}')
         except Exception as e:
-            logger.error(f'Failed to schedule restart: {e}')
+            logger.error(f'[UPDATE] Failed to spawn restart subprocess: {e}')
 
         return jsonify({
             'status': 'ok',
@@ -362,7 +382,7 @@ os._exit(0)
         })
 
     except Exception as e:
-        logger.error(f'Update apply error: {e}', exc_info=True)
+        logger.error(f'[UPDATE] Update apply error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

@@ -34,6 +34,9 @@ COPY installer/ /app/installer/
 COPY <<'ENTRYPOINT' /app/entrypoint.sh
 #!/bin/bash
 set -e
+echo "[entrypoint] Starting at $(date)"
+echo "[entrypoint] /repo exists: $([ -d /repo ] && echo yes || echo no)"
+echo "[entrypoint] /repo/app.py exists: $([ -f /repo/app.py ] && echo yes || echo no)"
 if [ -d "/repo" ] && [ -f "/repo/app.py" ]; then
     echo "[entrypoint] Syncing code from /repo to /app"
     rm -f /app/*.py /app/*.txt
@@ -43,6 +46,10 @@ if [ -d "/repo" ] && [ -f "/repo/app.py" ]; then
     for dir in core server agent installer tests; do
         [ -d "/repo/$dir" ] && cp -a "/repo/$dir" /app/ 2>/dev/null || true
     done
+    echo "[entrypoint] Sync complete. core/state.py version: $(grep CONFIG_VERSION /app/core/state.py 2>/dev/null || echo 'NOT FOUND')"
+    echo "[entrypoint] main.js version: $(grep 'main.js?v=' /app/templates/index.html 2>/dev/null || echo 'NOT FOUND')"
+else
+    echo "[entrypoint] SKIP sync — /repo or /repo/app.py not found"
 fi
 exec "$@"
 ENTRYPOINT
