@@ -530,15 +530,17 @@ function renderLocalServerTree() {
 
     if (hasHidden) {
         const totalHidden = hiddenFans.length + hiddenTemps.length + hiddenDisks.length;
+        const isHiddenExpanded = !_collapsedNodes.has('local-hidden');
+        const arrowChar = isHiddenExpanded ? '▼' : '▶';
         html += `
             <div class="mt-1 border-t border-gray-700/50 pt-1">
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent cursor-pointer"
                      onclick="toggleNodeGroup('local-hidden')">
-                    <span class="text-neon-cyan text-[10px]">▶</span>
+                    <span class="text-neon-cyan text-[10px]">${arrowChar}</span>
                     <span class="text-[10px] text-gray-500">Удалённые (${totalHidden})</span>
                     <button onclick="event.stopPropagation(); restoreAllSensors()" class="ml-auto text-[10px] text-gray-600 hover:text-neon-green px-1">↺ все</button>
                 </div>
-                <div class="node-children hidden ml-4 space-y-px" id="node-children-local-hidden">
+                <div class="node-children ml-4 space-y-px ${isHiddenExpanded ? '' : 'hidden'}" id="node-children-local-hidden">
         `;
 
         for (const [fanId, fan] of hiddenFans) {
