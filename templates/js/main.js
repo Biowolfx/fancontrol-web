@@ -294,7 +294,7 @@ function updateUI(data) {
     updateChart();
 
     // Refresh server tree
-    buildServerTree();
+    if (_dashboardLoaded) buildServerTree();
 
     // Dashboard live updates handled by startPickerLiveUpdate
 }
@@ -319,9 +319,10 @@ function showMainScreen() {
         hideCalibrationModal();
     }
     if (wasOnSetup) showView('dashboard');
-    buildServerTree();
-    loadPickerCards();
-    startPickerLiveUpdate();
+    loadPickerCards().then(() => {
+        buildServerTree();
+        startPickerLiveUpdate();
+    });
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -1453,6 +1454,7 @@ function getUnitLabel(unit) {
 let _pickerCards = null;
 let _pickerGroups = null;
 let _hiddenSensors = null;
+let _dashboardLoaded = false;
 let _dashboardSaveTimer = null;
 
 async function loadDashboardFromServer() {
@@ -1463,12 +1465,14 @@ async function loadDashboardFromServer() {
             _pickerCards = data.cards || [];
             _pickerGroups = data.groups || [];
             _hiddenSensors = data.hiddenSensors || [];
+            _dashboardLoaded = true;
             return;
         }
     } catch (e) {}
     _pickerCards = [];
     _pickerGroups = [];
     _hiddenSensors = [];
+    _dashboardLoaded = true;
 }
 
 function getPickerCards() {
