@@ -984,6 +984,10 @@ function renderSataAttributes(container, selectedIds) {
         return;
     }
 
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _smartModalCardId);
+    const smartUnits = card?.smartUnits || {};
+
     container.innerHTML = _smartAttributes.map(attr => {
         const statusColor = attr.status === 'critical' ? 'text-red-400' :
                            attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
@@ -992,6 +996,29 @@ function renderSataAttributes(container, selectedIds) {
         const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
                          attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
         const checked = selectedIds.includes(String(attr.id)) ? 'checked' : '';
+
+        let unitHtml = '';
+        if (attr.unit === 'bytes') {
+            const currentUnit = smartUnits[attr.id] || 'raw';
+            unitHtml = `
+                <select data-smart-unit="${attr.id}" onchange="onSmartUnitChange(${attr.id}, this.value)"
+                    class="text-[10px] bg-cyber-bg border border-gray-600 rounded px-1 py-0.5 text-gray-300 ml-1">
+                    <option value="raw" ${currentUnit === 'raw' ? 'selected' : ''}>Raw</option>
+                    <option value="bytes" ${currentUnit === 'bytes' ? 'selected' : ''}>Байты</option>
+                    <option value="kb" ${currentUnit === 'kb' ? 'selected' : ''}>КБ</option>
+                    <option value="mb" ${currentUnit === 'mb' ? 'selected' : ''}>МБ</option>
+                    <option value="gb" ${currentUnit === 'gb' ? 'selected' : ''}>ГБ</option>
+                    <option value="tb" ${currentUnit === 'tb' ? 'selected' : ''}>ТБ</option>
+                </select>`;
+        }
+
+        let displayValue = attr.raw;
+        if (attr.unit === 'bytes' && attr.unit_divisor) {
+            const unit = smartUnits[attr.id] || 'raw';
+            if (unit !== 'raw') {
+                displayValue = formatBytes(parseInt(attr.raw_num || attr.raw) * attr.unit_divisor, unit);
+            }
+        }
 
         return `
         <div class="flex items-center gap-3 p-2 rounded ${statusBg} hover:bg-white/5 transition-colors group"
@@ -1003,6 +1030,7 @@ function renderSataAttributes(container, selectedIds) {
                     <span class="text-xs text-gray-500 w-8">${attr.id}</span>
                     <span class="text-sm text-gray-200 truncate">${escapeHtml(attr.description)}</span>
                     ${critBadge}
+                    ${unitHtml}
                 </div>
                 <div class="text-[10px] text-gray-500 truncate">${escapeHtml(attr.tooltip)}</div>
             </div>
@@ -1010,11 +1038,33 @@ function renderSataAttributes(container, selectedIds) {
                 <div class="text-sm font-mono ${statusColor}">${attr.value}</div>
                 <div class="text-[10px] text-gray-500">worst:${attr.worst} thr:${attr.threshold}</div>
             </div>
-            <div class="text-right shrink-0 w-16">
-                <div class="text-xs text-gray-400 font-mono">${attr.raw}</div>
+            <div class="text-right shrink-0 w-20">
+                <div class="text-xs text-gray-400 font-mono">${displayValue}</div>
             </div>
         </div>`;
     }).join('');
+}
+
+function formatBytes(bytes, unit) {
+    if (isNaN(bytes) || bytes === 0) return '0';
+    const units = { 'kb': 1024, 'mb': 1024*1024, 'gb': 1024*1024*1024, 'tb': 1024*1024*1024*1024 };
+    const divisor = units[unit] || 1;
+    const result = bytes / divisor;
+    if (result >= 1000) return result.toFixed(0);
+    if (result >= 100) return result.toFixed(1);
+    return result.toFixed(2);
+}
+
+function onSmartUnitChange(attrId, unit) {
+    if (!_smartModalCardId) return;
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === _smartModalCardId);
+    if (!card) return;
+
+    if (!card.smartUnits) card.smartUnits = {};
+    card.smartUnits[attrId] = unit;
+    setPickerCards(saved);
+    renderSmartAttributes();
 }
 
 function renderNvmeAttributes(container, selectedIds) {
@@ -1065,7 +1115,15 @@ function saveSmartSelection() {
         }
     });
 
+    const unitSelects = document.querySelectorAll('#smart-attributes-container select[data-smart-unit]');
+    const units = {};
+    unitSelects.forEach(sel => {
+        const attrId = sel.dataset.smartUnit;
+        units[attrId] = sel.value;
+    });
+
     card.smartAttributes = selected;
+    card.smartUnits = units;
     setPickerCards(saved);
     updateCardDetails(_smartModalCardId);
     hideSmartModal();
@@ -1162,6 +1220,7 @@ function updateDiskCardDetails(card, detailsEl) {
     }
 
     let html = '';
+    const smartUnits = card.smartUnits || {};
 
     for (const attrKey of card.smartAttributes) {
         const attrId = parseInt(attrKey);
@@ -1172,9 +1231,16 @@ function updateDiskCardDetails(card, detailsEl) {
                 if (attr) {
                     const color = attr.status === 'critical' ? 'text-red-400' :
                                  attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
+                    let displayValue = attr.raw;
+                    if (attr.unit === 'bytes' && attr.unit_divisor) {
+                        const unit = smartUnits[attr.id] || 'raw';
+                        if (unit !== 'raw') {
+                            displayValue = formatBytes(parseInt(attr.raw_num || attr.raw) * attr.unit_divisor, unit) + ' ' + getUnitLabel(unit);
+                        }
+                    }
                     html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
                         <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
-                        <span class="${color} font-mono">${attr.raw}</span>
+                        <span class="${color} font-mono">${displayValue}</span>
                     </div>`;
                 }
             }
@@ -1195,6 +1261,11 @@ function updateDiskCardDetails(card, detailsEl) {
     }
 
     detailsEl.innerHTML = html;
+}
+
+function getUnitLabel(unit) {
+    const labels = { 'bytes': 'Б', 'kb': 'КБ', 'mb': 'МБ', 'gb': 'ГБ', 'tb': 'ТБ' };
+    return labels[unit] || '';
 }
 
 let _pickerCards = null;

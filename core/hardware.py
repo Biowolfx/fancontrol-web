@@ -253,6 +253,24 @@ SMART_ATTRIBUTE_META = {
     199: {"name": "UDMA_CRC_Error_Count", "criticality": "important", "description": "CRC ошибки интерфейса", "tooltip": "Ошибки checksum интерфейса SATA. Проверьте кабель."},
     200: {"name": "Multi_Zone_Error_Rate", "criticality": "important", "description": "Ошибки по зонам", "tooltip": "Ошибки записи в несколько зон. Рост = деградация поверхности."},
     201: {"name": "Soft_Read_Error_Rate", "criticality": "info", "description": "Программные ошибки чтения", "tooltip": "Ошибки чтения, требующие повтора. Временные."},
+    220: {"name": "Power-Off_Retract_Count", "criticality": "important", "description": "Аварийные выключения (head)", "tooltip": "Количество аварийных уборок головок."},
+    222: {"name": "Load_Cycle_Count", "criticality": "info", "description": "Циклы загрузки (head)", "tooltip": "Количество циклов загрузки/выгрузки головок."},
+    223: {"name": "Temperature_Celsius", "criticality": "important", "description": "Температура", "tooltip": "Текущая температура диска. Оптимально: 25-45°C."},
+    224: {"name": "G_Sense_Error_Rate", "criticality": "important", "description": "Ошибки от вибрации", "tooltip": "Ошибки, вызванные ударами/вибрацией."},
+    225: {"name": "Power-Off_Retract_Count", "criticality": "important", "description": "Аварийные выключения", "tooltip": "Количество аварийных отключений питания."},
+    226: {"name": "Load_Cycle_Count", "criticality": "info", "description": "Циклы загрузки", "tooltip": "Количество перемещений головок."},
+    227: {"name": "Temperature_Celsius", "criticality": "important", "description": "Температура (extended)", "tooltip": "Текущая температура диска."},
+    230: {"name": "Head_Flying_Hours", "criticality": "info", "description": "Часы работы головок", "tooltip": "Общее время полёта головок над пластинами. Нормальный износ."},
+    231: {"name": "Head_Flying_Hours", "criticality": "info", "description": "Часы работы головок", "tooltip": "Общее время полёта головок над пластинами."},
+    232: {"name": "Total_LBAs_Written", "criticality": "info", "description": "Всего записано (LBA)", "tooltip": "Общее количество записанных блоков. Для конвертации в ГБ используйте выбор единиц.", "unit": "bytes", "unit_divisor": 512},
+    233: {"name": "Total_LBAs_Read", "criticality": "info", "description": "Всего прочитано (LBA)", "tooltip": "Общее количество прочитанных блоков. Для конвертации в ГБ используйте выбор единиц.", "unit": "bytes", "unit_divisor": 512},
+    234: {"name": "Read_Error_Retry_Rate", "criticality": "important", "description": "Повторы чтения", "tooltip": "Количество повторных попыток чтения. Рост = деградация."},
+    235: {"name": "Hardware_ECC_Recovered", "criticality": "info", "description": "ECC восстановления (v2)", "tooltip": "Ошибки, исправленные аппаратным ECC."},
+    240: {"name": "Head_Flying_Hours", "criticality": "info", "description": "Часы полёта головок", "tooltip": "Общее время работы головок над пластинами в часах. Нормальный износ, ресурс 30000-50000 часов."},
+    241: {"name": "Total_LBAs_Written", "criticality": "info", "description": "Всего записано данных", "tooltip": "Общий объём записанных данных на диск. Для конвертации в ГБ используйте выбор единиц.", "unit": "bytes", "unit_divisor": 512},
+    242: {"name": "Total_LBAs_Read", "criticality": "info", "description": "Всего прочитано данных", "tooltip": "Общий объём прочитанных данных с диска. Для конвертации в ГБ используйте выбор единиц.", "unit": "bytes", "unit_divisor": 512},
+    243: {"name": "Read_Error_Retry_Rate", "criticality": "important", "description": "Повторы чтения (v2)", "tooltip": "Количество повторных попыток чтения. Рост = деградация."},
+    244: {"name": "Free_Fall_Sector_Count", "criticality": "important", "description": "Сектора при падении", "tooltip": "Количество ошибок при свободном падении. Рост = физическое повреждение."},
 }
 
 _smart_cache: Dict[str, Dict] = {}
@@ -331,6 +349,8 @@ def parse_smart_attributes(output: str) -> list:
             'description': meta.get('description', attr_name),
             'tooltip': meta.get('tooltip', f'SMART атрибут #{attr_id}'),
             'status': status,
+            'unit': meta.get('unit'),
+            'unit_divisor': meta.get('unit_divisor'),
         })
 
     return attributes
