@@ -17,7 +17,7 @@ from werkzeug.exceptions import BadRequest
 
 from core.state import state, state_lock, get_state, CONFIG_VERSION, invalidate_state_cache
 from core.config import save_config, load_config, DATA_DIR, CONFIG_PATH
-from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, refresh
+from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, refresh, read_disk_smart
 from core.calibration import test_fans
 from core.control import get_db_connection
 
@@ -110,6 +110,34 @@ def api_discover():
     except Exception as e:
         logger.error(f'Discovery failed: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@routes.route('/api/disks/<disk_id>/smart')
+def api_get_disk_smart(disk_id):
+    """Get full SMART data for a specific disk"""
+    import time as _time
+    from core.hardware import _smart_cache, _smart_cache_time, SMART_CACHE_TTL
+
+    now = _time.monotonic()
+    if disk_id in _smart_cache and (now - _smart_cache_time.get(disk_id, 0)) < SMART_CACHE_TTL:
+        return jsonify(_smart_cache[disk_id])
+
+    with state_lock:
+        disk = state.get('hdd_sensors', {}).get(disk_id)
+        if not disk:
+            return jsonify({'error': 'Disk not found'}), 404
+
+        device = disk.get('device', '')
+        if not device:
+            return jsonify({'error': 'No device path'}), 404
+
+    result = read_disk_smart(device)
+
+    if 'error' not in result:
+        _smart_cache[disk_id] = result
+        _smart_cache_time[disk_id] = now
+
+    return jsonify(result)
 
 
 @routes.route('/api/initialize', methods=['POST'])

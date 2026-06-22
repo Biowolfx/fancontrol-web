@@ -212,6 +212,239 @@ def parse_smart_temp(output: str) -> Optional[int]:
     return None
 
 
+SMART_ATTRIBUTE_META = {
+    1: {"name": "Raw_Read_Error_Rate", "criticality": "important", "description": "Частота ошибок чтения", "tooltip": "Рост указывает на деградацию поверхности диска или проблемы с головками."},
+    2: {"name": "Throughput_Performance", "criticality": "info", "description": "Производительность", "tooltip": "Общая производительность диска. Снижение может указывать на фрагментацию."},
+    3: {"name": "Spin_Up_Time", "criticality": "info", "description": "Время раскрутки", "tooltip": "Время запуска шпинделя. Рост может указывать на износ механики."},
+    4: {"name": "Start_Stop_Count", "criticality": "info", "description": "Количество запусков", "tooltip": "Сколько раз диск включался/выключался. Нормальный износ."},
+    5: {"name": "Reallocated_Sector_Ct", "criticality": "critical", "description": "Переназначенные сектора", "tooltip": "Количество переназначенных секторов. Рост означает физическую деградацию поверхности диска. Рост > 0 требует замены диска."},
+    7: {"name": "Seek_Error_Rate", "criticality": "important", "description": "Частота ошибок позиционирования", "tooltip": "Рост указывает на проблемы с блоком головок или фрагментацией."},
+    8: {"name": "Seek_Time_Performance", "criticality": "info", "description": "Время позиционирования", "tooltip": "Среднее время поиска. Снижение = механический износ."},
+    9: {"name": "Power_On_Hours", "criticality": "info", "description": "Часы работы", "tooltip": "Общее время работы диска в часах. Нормальный износ, ресурс 30000-50000 часов."},
+    10: {"name": "Spin_Retry_Count", "criticality": "critical", "description": "Повторы раскрутки", "tooltip": "Количество повторных попыток раскрутки шпинделя. Рост = механическая проблема, замена обязательна."},
+    11: {"name": "Calibration_Retry_Count", "criticality": "important", "description": "Повторы калибровки", "tooltip": "Неудачные попытки калибровки головок. Рост может привести к ошибкам чтения."},
+    12: {"name": "Power_Cycle_Count", "criticality": "info", "description": "Циклы включения", "tooltip": "Количество включений/выключений питания."},
+    13: {"name": "Read_Soft_Error_Rate", "criticality": "info", "description": "Программные ошибки чтения", "tooltip": "Ошибки, исправленные ECC. Временные ошибки, обычно не критичны."},
+    170: {"name": "Grown_Failing_Block_Ct", "criticality": "critical", "description": "Выросшие坏块", "tooltip": "Блоки, отмеченные как坏块 после изготовления. Рост = деградация поверхности."},
+    171: {"name": "Program_Fail_Count", "criticality": "important", "description": "Ошибки записи", "tooltip": "Неудачные попытки записи. Рост может указывать на проблемы с NAND (SSD)."},
+    172: {"name": "Erase_Fail_Count", "criticality": "important", "description": "Ошибки стирания", "tooltip": "Неудачные попытки стирания. Рост = проблема с ячейками памяти (SSD)."},
+    173: {"name": "Wear_Leveling_Count", "criticality": "important", "description": "Уровень износа", "tooltip": "Минимальный износ блоков. Для SSD: рост = приближение к концу ресурса."},
+    175: {"name": "Program_Fail_Count_Chip", "criticality": "important", "description": "Ошибки программы (чип)", "tooltip": "Ошибки записи на уровне чипа. Рост = проблема с ячейками."},
+    176: {"name": "Erase_Fail_Count_Chip", "criticality": "important", "description": "Ошибки стирания (чип)", "tooltip": "Ошибки стирания на уровне чипа. Рост = проблема с ячейками."},
+    177: {"name": "Wear_Leveling_Count", "criticality": "important", "description": "Износ блоков", "tooltip": "Количество перераспределенных блоков. Для SSD."},
+    178: {"name": "Used_Rsvd_Blk_Ct_Chip", "criticality": "critical", "description": "Использовано резервных блоков", "tooltip": "Резервные блоки исчерпываются. 0 резерва = замена обязательна."},
+    179: {"name": "Used_Rsvd_Blk_Ct_Tot", "criticality": "critical", "description": "Всего использовано резервных", "tooltip": "Общее число использованных резервных блоков."},
+    180: {"name": "Unused_Rsvd_Blk_Ct_Chip", "criticality": "info", "description": "Свободных резервных блоков", "tooltip": "Остаток резервных блоков. Чем меньше — тем ближе замена."},
+    181: {"name": "Program_Fail_Cnt_Total", "criticality": "important", "description": "Всего ошибок записи", "tooltip": "Суммарные ошибки записи за весь срок службы."},
+    182: {"name": "Erase_Fail_Count_Total", "criticality": "important", "description": "Всего ошибок стирания", "tooltip": "Суммарные ошибки стирания за весь срок службы."},
+    183: {"name": "Runtime_Bad_Block", "criticality": "critical", "description": "坏块 при работе", "tooltip": "坏块, обнаруженные во время работы. Рост = деградация."},
+    184: {"name": "End_Ecc_Error", "criticality": "critical", "description": "Исправленные ECC ошибки", "tooltip": "ECC-исправленные ошибки. Рост = проблема с памятью."},
+    187: {"name": "Unknown_Attribute", "criticality": "info", "description": "Неизвестный атрибут", "tooltip": "Проприетарный атрибут производителя."},
+    188: {"name": "Unknown_Attribute", "criticality": "info", "description": "Неизвестный атрибут", "tooltip": "Проприетарный атрибут производителя."},
+    190: {"name": "Airflow_Temperature_Cel", "criticality": "important", "description": "Температура воздушного потока", "tooltip": "Температура воздуха у диска. Оптимально: 25-45°C. Выше 50°C — перегрев."},
+    191: {"name": "G_Sense_Error_Rate", "criticality": "important", "description": "Ошибки от удара", "tooltip": "Ошибки, вызванные ударами/вибрацией. Рост = физическое повреждение."},
+    192: {"name": "Power-Off_Retract_Count", "criticality": "important", "description": "Аварийные выключения", "tooltip": "Количество аварийных отключений питания. Рост = риск повреждения головок."},
+    193: {"name": "Load_Cycle_Count", "criticality": "info", "description": "Циклы загрузки", "tooltip": "Количество перемещений головок. Нормальный износ."},
+    194: {"name": "Temperature_Celsius", "criticality": "important", "description": "Температура", "tooltip": "Текущая температура диска. Оптимально: 25-45°C. Выше 50°C — перегрев."},
+    195: {"name": "Hardware_ECC_Recovered", "criticality": "info", "description": "ECC восстановления", "tooltip": "Ошибки, исправленные аппаратным ECC. Временные, обычно не критичны."},
+    196: {"name": "Reallocated_Event_Count", "criticality": "critical", "description": "События переназначения", "tooltip": "Количество событий переназначения секторов. Рост = деградация."},
+    197: {"name": "Current_Pending_Sector", "criticality": "critical", "description": "Ожидающие сектора", "tooltip": "Сектора, ожидающие перераспределения. Рост может привести к потере данных."},
+    198: {"name": "Offline_Uncorrectable", "criticality": "critical", "description": "Неисправимые сектора", "tooltip": "Сектора, которые невозможно прочитать/исправить. Рост = немедленная замена диска."},
+    199: {"name": "UDMA_CRC_Error_Count", "criticality": "important", "description": "CRC ошибки интерфейса", "tooltip": "Ошибки checksum интерфейса SATA. Проверьте кабель."},
+    200: {"name": "Multi_Zone_Error_Rate", "criticality": "important", "description": "Ошибки по зонам", "tooltip": "Ошибки записи в несколько зон. Рост = деградация поверхности."},
+    201: {"name": "Soft_Read_Error_Rate", "criticality": "info", "description": "Программные ошибки чтения", "tooltip": "Ошибки чтения, требующие повтора. Временные."},
+}
+
+_smart_cache: Dict[str, Dict] = {}
+_smart_cache_time: Dict[str, float] = {}
+SMART_CACHE_TTL = 60  # seconds
+
+
+def parse_smart_attributes(output: str) -> list:
+    """Parse all SMART attributes from smartctl -A output."""
+    attributes = []
+    in_attribute_section = False
+
+    for line in output.split('\n'):
+        line = line.strip()
+
+        if 'ID# ATTRIBUTE_NAME' in line or 'ATTRIBUTE_NAME' in line:
+            in_attribute_section = True
+            continue
+
+        if not in_attribute_section:
+            continue
+
+        if not line or line.startswith('===') or line.startswith('SMART'):
+            if attributes:
+                break
+            continue
+
+        parts = line.split()
+        if len(parts) < 10:
+            continue
+
+        try:
+            attr_id = int(parts[0])
+        except ValueError:
+            continue
+
+        attr_name = parts[1]
+        try:
+            flag = int(parts[2], 16) if parts[2].startswith('0x') else int(parts[2])
+        except (ValueError, IndexError):
+            flag = 0
+
+        try:
+            value = int(parts[3])
+            worst = int(parts[4])
+            thresh = int(parts[5])
+        except (ValueError, IndexError):
+            continue
+
+        raw_value = parts[9] if len(parts) > 9 else '0'
+        try:
+            raw_num = int(re.sub(r'[^0-9]', '', raw_value) or '0')
+        except ValueError:
+            raw_num = 0
+
+        meta = SMART_ATTRIBUTE_META.get(attr_id, {})
+        criticality = meta.get('criticality', 'info')
+
+        if thresh > 0 and value <= thresh:
+            status = 'critical'
+        elif thresh > 0 and value <= thresh * 1.5:
+            status = 'warning'
+        else:
+            status = 'ok'
+
+        attributes.append({
+            'id': attr_id,
+            'name': attr_name,
+            'flag': flag,
+            'value': value,
+            'worst': worst,
+            'threshold': thresh,
+            'raw': raw_value,
+            'raw_num': raw_num,
+            'criticality': criticality,
+            'description': meta.get('description', attr_name),
+            'tooltip': meta.get('tooltip', f'SMART атрибут #{attr_id}'),
+            'status': status,
+        })
+
+    return attributes
+
+
+def parse_nvme_smart(output: str) -> dict:
+    """Parse NVMe SMART attributes from smartctl output."""
+    attributes = {}
+    patterns = {
+        'temperature': r'Temperature:\s+(\d+)\s+Celsius',
+        'available_spare': r'Available Spare:\s+(\d+)%',
+        'available_spare_threshold': r'Available Spare Threshold:\s+(\d+)%',
+        'percentage_used': r'Percentage Used:\s+(\d+)%',
+        'data_units_read': r'Data Units Read:\s+([\d,]+)',
+        'data_units_written': r'Data Units Written:\s+([\d,]+)',
+        'host_reads': r'Host Reads:\s+([\d,]+)',
+        'host_writes': r'Host Writes:\s+([\d,]+)',
+        'unsafe_shutdowns': r'Unsafe Shutdowns:\s+(\d+)',
+        'media_errors': r'Media and Data Integrity Errors:\s+(\d+)',
+        'error_log_entries': r'Error Information Log Entries:\s+(\d+)',
+        'warning_temp_time': r'Warning Comp\. Temp\. Time:\s+(\d+)',
+        'critical_comp_time': r'Critical Comp\. Time:\s+(\d+)',
+    }
+
+    nvme_meta = {
+        'temperature': {"criticality": "important", "description": "Температура", "tooltip": "Текущая температура NVMe диска. Оптимально: 25-45°C."},
+        'available_spare': {"criticality": "critical", "description": "Доступный запас", "tooltip": "Процент резервных блоков. 0% = ресурс исчерпан, замена обязательна."},
+        'percentage_used': {"criticality": "critical", "description": "Износ NAND", "tooltip": "Процент износа NAND-памяти. 100% = ресурс исчерпан."},
+        'data_units_read': {"criticality": "info", "description": "Прочитано данных", "tooltip": "Общий объём чтения. Информационный параметр."},
+        'data_units_written': {"criticality": "info", "description": "Записано данных", "tooltip": "Общий объём записи. Информационный параметр."},
+        'unsafe_shutdowns': {"criticality": "important", "description": "Аварийные выключения", "tooltip": "Количество аварийных отключений. Рост = риск повреждения данных."},
+        'media_errors': {"criticality": "critical", "description": "Ошибки носителя", "tooltip": "Ошибки целостности данных. Рост = проблема с NAND, замена обязательна."},
+        'error_log_entries': {"criticality": "important", "description": "Записи журнала ошибок", "tooltip": "Количество записей в журнале ошибок. Рост = повторяющиеся проблемы."},
+        'warning_temp_time': {"criticality": "info", "description": "Время при предупреждении о температуре", "tooltip": "Минуты работы выше предельной температуры."},
+        'critical_comp_time': {"criticality": "critical", "description": "Время критической температуры", "tooltip": "Минуты работы при критической температуре. Рост = перегрев."},
+    }
+
+    for key, pattern in patterns.items():
+        match = re.search(pattern, output)
+        if match:
+            value_str = match.group(1).replace(',', '')
+            try:
+                value = int(value_str)
+            except ValueError:
+                value = 0
+
+            meta = nvme_meta.get(key, {})
+            attributes[key] = {
+                'value': value,
+                'criticality': meta.get('criticality', 'info'),
+                'description': meta.get('description', key),
+                'tooltip': meta.get('tooltip', ''),
+            }
+
+    return attributes
+
+
+def read_disk_smart(disk_identifier: str) -> dict:
+    """
+    Read full SMART data for a disk.
+    Returns dict with device info, attributes, and metadata.
+    """
+    try:
+        clean_name = disk_identifier.replace('/dev/', '').strip()
+
+        if not is_physical_disk(clean_name):
+            return {'error': 'Not a physical disk'}
+
+        is_nvme = clean_name.startswith('nvme')
+
+        cmd = ['smartctl', '-A', '-i', f'/dev/{clean_name}']
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if result.returncode != 0:
+                cmd2 = ['smartctl', '-A', '-i', '-d', 'sat', f'/dev/{clean_name}']
+                result = subprocess.run(cmd2, capture_output=True, text=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            return {'error': 'Timeout reading SMART data'}
+
+        if result.returncode != 0 and not result.stdout:
+            return {'error': f'smartctl failed with code {result.returncode}'}
+
+        output = result.stdout
+
+        device_info = {}
+        for line in output.split('\n'):
+            if 'Device Model:' in line or 'Model Family:' in line:
+                device_info['model'] = line.split(':', 1)[1].strip()
+            if 'Serial Number:' in line:
+                device_info['serial'] = line.split(':', 1)[1].strip()
+            if 'Firmware Version:' in line:
+                device_info['firmware'] = line.split(':', 1)[1].strip()
+            if 'User Capacity:' in line:
+                device_info['capacity'] = line.split(':', 1)[1].strip()
+
+        if is_nvme:
+            attributes = parse_nvme_smart(output)
+            attr_type = 'nvme'
+        else:
+            attributes = parse_smart_attributes(output)
+            attr_type = 'sata'
+
+        return {
+            'device': f'/dev/{clean_name}',
+            'device_info': device_info,
+            'attributes': attributes,
+            'attr_type': attr_type,
+        }
+
+    except Exception as e:
+        logger.error(f'Error reading SMART for {disk_identifier}: {e}')
+        return {'error': str(e)}
+
+
 def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
     """
     Read temperature from a disk.
