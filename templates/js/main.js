@@ -915,7 +915,7 @@ function onCardResizeMove(e) {
     const dy = e.clientY - _cardResizeStartY;
     const cols = getCanvasCols();
     const colWidth = canvas.offsetWidth / cols;
-    const rowHeight = 100 + 8;
+    const rowHeight = 100;
 
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
@@ -964,9 +964,9 @@ function getGridCell(canvas, x, y) {
     const cols = getCanvasCols();
     const contentW = rect.width - padL - padR;
     const colWidth = contentW / cols;
-    const rowHeight = 100 + 8;
+    const rowStep = 100 + 8;
     const col = Math.max(1, Math.min(cols, Math.ceil((x - rect.left - padL) / colWidth)));
-    const row = Math.max(1, Math.ceil((y - rect.top - padT) / rowHeight));
+    const row = Math.max(1, Math.ceil((y - rect.top - padT) / rowStep));
     return { col, row };
 }
 
@@ -1072,7 +1072,7 @@ function onCardMouseMove(e) {
     const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
     const contentW = canvas.offsetWidth - padLeft - (parseInt(getComputedStyle(canvas).paddingRight) || 16);
     const colW = contentW / cols;
-    const rowH = 100 + 8;
+    const rowH = 100;
     const gap = 8;
     _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
     _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
@@ -1181,7 +1181,7 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
         const padR = parseFloat(cs2.paddingRight) || 16;
         const contentW = canvas.offsetWidth - padL - padR;
         const colW = contentW / cols;
-        const rowH = 100 + 8;
+        const rowH = 100;
         const gap = 8;
         const ne = col + colSpan - 1;
         const nr = row + rowSpan - 1;
@@ -1220,7 +1220,7 @@ function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
         const padR = parseFloat(cs2.paddingRight) || 16;
         const contentW = canvas.offsetWidth - padL - padR;
         const colW = contentW / cols;
-        const rowH = 100 + 8;
+        const rowH = 100;
         const gap = 8;
         for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
             const rect = gEl.getBoundingClientRect();
@@ -1942,15 +1942,16 @@ function updateCanvasMinHeight() {
         const cRect = canvas.getBoundingClientRect();
         const cs = getComputedStyle(canvas);
         const padT = parseFloat(cs.paddingTop) || 16;
-        const rowH = 100 + 8;
+        const rowH = 100;
         const gap = 8;
         const gRowEnd = Math.max(1, Math.round((rect.bottom - cRect.top - padT) / (rowH + gap)) + 1);
         if (gRowEnd > maxRow) maxRow = gRowEnd;
     }
     const minRows = Math.max(maxRow + 5, 8);
-    const rowH = 100 + 8;
+    const rowH = 100;
+    const gap = 8;
     const padY = 32;
-    canvas.style.minHeight = (minRows * rowH - 8 + padY) + 'px';
+    canvas.style.minHeight = (minRows * (rowH + gap) - gap + padY) + 'px';
 }
 
 async function prefetchSmartForCards() {
