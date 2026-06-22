@@ -462,12 +462,13 @@ def api_get_dashboard():
 
 @routes.route('/api/dashboard', methods=['POST'])
 def api_save_dashboard():
-    """Save dashboard layout (cards, groups, positions)."""
+    """Save dashboard layout (cards, groups, positions, hidden sensors)."""
     data = request.get_json(silent=True) or {}
     with state_lock:
         state['dashboard'] = {
             'groups': data.get('groups', []),
-            'cards': data.get('cards', [])
+            'cards': data.get('cards', []),
+            'hiddenSensors': data.get('hiddenSensors', state.get('dashboard', {}).get('hiddenSensors', []))
         }
     save_config()
     return jsonify({'status': 'saved'})

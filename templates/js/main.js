@@ -423,7 +423,12 @@ function buildServerTree() {
 }
 
 function getHiddenSensors() {
-    try { return JSON.parse(localStorage.getItem('fc_hidden_sensors') || '[]'); } catch { return []; }
+    return _hiddenSensors || [];
+}
+
+function setHiddenSensors(hidden) {
+    _hiddenSensors = hidden;
+    scheduleDashboardSave();
 }
 
 function hideSensor(sensorId) {
@@ -440,29 +445,26 @@ function hideSensor(sensorId) {
         setTimeout(() => {
             const hidden = getHiddenSensors();
             if (!hidden.includes(sensorId)) {
-                hidden.push(sensorId);
-                localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+                setHiddenSensors([...hidden, sensorId]);
             }
             buildServerTree();
         }, 320);
     } else {
         const hidden = getHiddenSensors();
         if (!hidden.includes(sensorId)) {
-            hidden.push(sensorId);
-            localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+            setHiddenSensors([...hidden, sensorId]);
         }
         buildServerTree();
     }
 }
 
 function restoreSensor(sensorId) {
-    const hidden = getHiddenSensors().filter(id => id !== sensorId);
-    localStorage.setItem('fc_hidden_sensors', JSON.stringify(hidden));
+    setHiddenSensors(getHiddenSensors().filter(id => id !== sensorId));
     buildServerTree();
 }
 
 function restoreAllSensors() {
-    localStorage.removeItem('fc_hidden_sensors');
+    setHiddenSensors([]);
     buildServerTree();
 }
 
@@ -1444,6 +1446,7 @@ function getUnitLabel(unit) {
 
 let _pickerCards = null;
 let _pickerGroups = null;
+let _hiddenSensors = null;
 let _dashboardSaveTimer = null;
 
 async function loadDashboardFromServer() {
@@ -1453,11 +1456,13 @@ async function loadDashboardFromServer() {
             const data = await resp.json();
             _pickerCards = data.cards || [];
             _pickerGroups = data.groups || [];
+            _hiddenSensors = data.hiddenSensors || [];
             return;
         }
     } catch (e) {}
     _pickerCards = [];
     _pickerGroups = [];
+    _hiddenSensors = [];
 }
 
 function getPickerCards() {
@@ -1488,7 +1493,7 @@ async function saveDashboardToServer() {
         await fetch('/api/dashboard', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cards: _pickerCards || [], groups: _pickerGroups || [] })
+            body: JSON.stringify({ cards: _pickerCards || [], groups: _pickerGroups || [], hiddenSensors: _hiddenSensors || [] })
         });
     } catch (e) {}
 }

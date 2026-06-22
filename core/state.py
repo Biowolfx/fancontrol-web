@@ -26,7 +26,7 @@ state: Dict[str, Any] = {
     'hardware_scanned': False,
     'config_version': CONFIG_VERSION,
     'nodes': {},  # Runtime state for connected agents
-    'dashboard': {'groups': [], 'cards': []},
+    'dashboard': {'groups': [], 'cards': [], 'hiddenSensors': []},
 }
 
 STATE_CACHE_TTL = 2.0
