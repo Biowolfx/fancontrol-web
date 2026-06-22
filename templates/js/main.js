@@ -521,7 +521,7 @@ function renderRemoteNodeTree(node) {
     return html;
 }
 
-let _collapsedNodes = new Set();
+let _collapsedNodes = new Set(JSON.parse(localStorage.getItem('fc_collapsed_nodes') || '[]'));
 
 function toggleNodeGroup(nodeId) {
     const children = document.getElementById(`node-children-${nodeId}`);
@@ -532,6 +532,7 @@ function toggleNodeGroup(nodeId) {
         } else {
             _collapsedNodes.delete(nodeId);
         }
+        localStorage.setItem('fc_collapsed_nodes', JSON.stringify([..._collapsedNodes]));
     }
 }
 
