@@ -1106,6 +1106,10 @@ function updateCardDetails(cardId) {
     const detailsEl = cardEl.querySelector('.card-details');
     if (!detailsEl) return;
 
+    if (card.type === 'disk') {
+        updateDiskCardDetails(card, detailsEl);
+        return;
+    }
     if (card.type !== 'fan') {
         detailsEl.innerHTML = '';
         return;
@@ -1133,6 +1137,54 @@ function updateCardDetails(cardId) {
     if (card.showSensors && fanData.sensors && fanData.sensors.length > 0) {
         const sensorLabels = fanData.sensors.map(s => getSensorLabel(s)).join(', ');
         html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">Sensors: ${escapeHtml(sensorLabels)}</div>`;
+    }
+
+    detailsEl.innerHTML = html;
+}
+
+function updateDiskCardDetails(card, detailsEl) {
+    if (!card.smartAttributes?.length) {
+        detailsEl.innerHTML = '';
+        return;
+    }
+
+    const diskData = currentState?.hdd_sensors?.[card.sourceId];
+    if (!diskData) {
+        detailsEl.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+
+    for (const attrKey of card.smartAttributes) {
+        const attrId = parseInt(attrKey);
+        if (!isNaN(attrId)) {
+            const cachedSmart = _smartCache?.[card.sourceId];
+            if (cachedSmart?.attributes) {
+                const attr = cachedSmart.attributes.find(a => a.id === attrId);
+                if (attr) {
+                    const color = attr.status === 'critical' ? 'text-red-400' :
+                                 attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
+                    html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
+                        <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
+                        <span class="${color} font-mono">${attr.raw}</span>
+                    </div>`;
+                }
+            }
+        } else {
+            const cachedSmart = _smartCache?.[card.sourceId];
+            if (cachedSmart?.attributes?.[attrKey]) {
+                const attr = cachedSmart.attributes[attrKey];
+                const color = attr.criticality === 'critical' ? 'text-red-400' :
+                             attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
+                const unit = attrKey === 'temperature' ? '°C' :
+                            attrKey.includes('percentage') || attrKey.includes('spare') ? '%' : '';
+                html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
+                    <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
+                    <span class="${color} font-mono">${attr.value}${unit}</span>
+                </div>`;
+            }
+        }
     }
 
     detailsEl.innerHTML = html;
@@ -1267,6 +1319,15 @@ function startPickerLiveUpdate() {
             const id = el.dataset.diskId;
             if (currentState?.hdd_sensors?.[id]) {
                 el.textContent = currentState.hdd_sensors[id].temp || '--';
+            }
+        });
+        getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
+            if (_smartCache[c.sourceId]) {
+                const cardEl = document.querySelector(`[data-card-id="${c.id}"]`);
+                if (cardEl) {
+                    const detailsEl = cardEl.querySelector('.card-details');
+                    if (detailsEl) updateDiskCardDetails(c, detailsEl);
+                }
             }
         });
     }, 2000);
