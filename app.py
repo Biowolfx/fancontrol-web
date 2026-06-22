@@ -185,7 +185,44 @@ def main():
     logger.info('=' * 60)
     logger.info(f'STARTING FanControl Web {CONFIG_VERSION} - Neon Cyberpunk Edition')
     logger.info(f'Mode: {args.mode}')
+    logger.info(f'PID: {os.getpid()}')
     logger.info('=' * 60)
+
+    # Auto-sync from /repo on startup
+    repo_dir = '/repo'
+    if os.path.isdir(repo_dir) and os.path.isfile(os.path.join(repo_dir, 'app.py')):
+        try:
+            import shutil
+            synced = 0
+            for f in os.listdir(repo_dir):
+                if f.endswith('.py') or f.endswith('.txt') or f in ('Dockerfile', 'docker-compose.yml'):
+                    src = os.path.join(repo_dir, f)
+                    dst = os.path.join('/app', f)
+                    if os.path.isfile(src):
+                        shutil.copy2(src, dst)
+                        synced += 1
+            for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
+                src = os.path.join(repo_dir, d)
+                dst = os.path.join('/app', d)
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(src, dst)
+                    synced += 1
+            if synced:
+                logger.info(f'[STARTUP] Synced {synced} items from /repo')
+                # Re-read version after sync
+                try:
+                    from core import state as _state
+                    import importlib
+                    importlib.reload(_state)
+                    logger.info(f'[STARTUP] Synced version: {_state.CONFIG_VERSION}')
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f'[STARTUP] Sync from /repo failed: {e}')
+
+    logger.info(f'Final version: {CONFIG_VERSION}')
 
     if args.mode == 'setup':
         from installer.wizard import run_wizard

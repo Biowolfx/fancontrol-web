@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sqlite3
 import subprocess
 import threading
@@ -307,9 +308,9 @@ def api_update_apply():
         repo_dir = '/repo'
         app_dir = '/app'
 
-        logger.info(f'[UPDATE] Starting update. Repo dir exists: {os.path.isdir(repo_dir)}, app.py exists: {os.path.isfile(os.path.join(repo_dir, "app.py"))}')
+        logger.info(f'[UPDATE] Starting update. Repo: {os.path.isdir(repo_dir)}, app.py: {os.path.isfile(os.path.join(repo_dir, "app.py"))}')
 
-        # Git pull (public repo, no auth needed)
+        # Git pull
         pull = subprocess.run(
             ['git', '-C', repo_dir, 'pull', '--ff-only', 'origin', 'main'],
             capture_output=True, text=True, timeout=60,
@@ -320,82 +321,62 @@ def api_update_apply():
         already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
 
         logger.info(f'[UPDATE] Git pull rc={pull.returncode}, already_up={already_up}')
-        logger.info(f'[UPDATE] Git pull output: {pull_output.strip()[:500]}')
+        logger.info(f'[UPDATE] Git: {pull_output.strip()[:300]}')
 
         if pull.returncode != 0 and not already_up:
-            logger.error(f'[UPDATE] Git pull FAILED: {pull_output}')
             return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
 
-        # Sync code from /repo to /app directly (don't rely on entrypoint)
+        # Sync code from /repo to /app
+        import shutil
+        synced = []
+        for f in os.listdir(repo_dir):
+            if f.endswith('.py') or f.endswith('.txt') or f in ('Dockerfile', 'docker-compose.yml'):
+                src = os.path.join(repo_dir, f)
+                dst = os.path.join(app_dir, f)
+                if os.path.isfile(src):
+                    shutil.copy2(src, dst)
+                    synced.append(f)
+
+        for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
+            src = os.path.join(repo_dir, d)
+            dst = os.path.join(app_dir, d)
+            if os.path.isdir(src):
+                if os.path.exists(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+                synced.append(f'{d}/')
+
+        logger.info(f'[UPDATE] Synced {len(synced)} items: {", ".join(synced[:10])}')
+
+        # Verify version after sync
         try:
-            import shutil
-            for f in os.listdir(repo_dir):
-                if f.endswith('.py') or f.endswith('.txt') or f in ('Dockerfile', 'docker-compose.yml'):
-                    src = os.path.join(repo_dir, f)
-                    dst = os.path.join(app_dir, f)
-                    if os.path.isfile(src):
-                        shutil.copy2(src, dst)
-                        logger.info(f'[UPDATE] Synced {f}')
-
-            for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
-                src = os.path.join(repo_dir, d)
-                dst = os.path.join(app_dir, d)
-                if os.path.isdir(src):
-                    if os.path.exists(dst):
-                        shutil.rmtree(dst)
-                    shutil.copytree(src, dst)
-                    logger.info(f'[UPDATE] Synced dir {d}/')
-
-            # Verify sync
-            new_version = 'unknown'
-            try:
-                with open(os.path.join(app_dir, 'core', 'state.py')) as f:
-                    for line in f:
-                        if 'CONFIG_VERSION' in line:
-                            new_version = line.strip()
-                            break
-            except Exception:
-                pass
-            logger.info(f'[UPDATE] Synced. New version: {new_version}')
+            with open(os.path.join(app_dir, 'core', 'state.py')) as f:
+                for line in f:
+                    if 'CONFIG_VERSION' in line:
+                        logger.info(f'[UPDATE] Synced version: {line.strip()}')
+                        break
         except Exception as e:
-            logger.error(f'[UPDATE] Sync error: {e}', exc_info=True)
+            logger.error(f'[UPDATE] Version check failed: {e}')
 
-        # Check if requirements changed
-        old_req = ''
-        new_req = ''
+        # Kill PID 1 directly (SIGKILL cannot be ignored)
         try:
-            with open('/app/requirements.txt', 'r') as f:
-                old_req = f.read()
-        except Exception:
-            pass
-        try:
-            with open(os.path.join(repo_dir, 'requirements.txt'), 'r') as f:
-                new_req = f.read()
-        except Exception:
-            pass
-        deps_changed = old_req != new_req
-
-        # Kill process — Docker restarts automatically
-        try:
-            subprocess.Popen(
-                ['sh', '-c', 'sleep 1 && kill -9 1'],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True
-            )
-            logger.info('[UPDATE] Kill signal scheduled in 1s')
-        except Exception as e:
-            logger.error(f'[UPDATE] Failed to schedule kill: {e}')
+            os.kill(1, signal.SIGKILL)
+            logger.info('[UPDATE] SIGKILL sent to PID 1')
+        except ProcessLookupError:
+            logger.error('[UPDATE] PID 1 not found')
+        except PermissionError:
+            logger.error('[UPDATE] No permission to kill PID 1, trying subprocess fallback')
+            subprocess.Popen(['kill', '-9', '1'], start_new_session=True)
 
         return jsonify({
             'status': 'ok',
             'already_up_to_date': already_up,
-            'deps_changed': deps_changed,
-            'message': pull_output.strip()
+            'deps_changed': False,
+            'message': f'Synced {len(synced)} items. Restarting...'
         })
 
     except Exception as e:
-        logger.error(f'[UPDATE] Update apply error: {e}', exc_info=True)
+        logger.error(f'[UPDATE] Error: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
