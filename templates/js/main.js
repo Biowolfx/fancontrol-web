@@ -1738,9 +1738,10 @@ function renderDashboardGroup(group) {
     if (!canvas) return;
 
     const el = document.createElement('div');
-    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative';
+    el.className = 'dashboard-group bg-cyber-bg border-2 border-dashed border-gray-700 rounded-xl p-3 transition-colors hover:border-neon-purple/50 relative col-span-full';
     el.setAttribute('data-group-id', group.id);
     el.setAttribute('draggable', 'true');
+    el.style.width = 'fit-content';
     if (group.minHeight) el.style.minHeight = group.minHeight;
 
     el.innerHTML = `
