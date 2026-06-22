@@ -335,33 +335,32 @@ def api_update_apply():
             pass
         deps_changed = old_req != new_req
 
-        # Schedule restart in background so response reaches browser first
+        # Schedule restart via detached subprocess (thread dies with request)
         container_name = os.getenv('CONTAINER_NAME', 'fancontrol-web')
-        def _do_restart():
-            import time as _t
-            _t.sleep(1)
-            try:
-                import socket as sock
-                s = sock.socket(sock.AF_UNIX, sock.SOCK_STREAM)
-                s.settimeout(10)
-                s.connect('/var/run/docker.sock')
-                req = f'POST /containers/{container_name}/restart?t=5 HTTP/1.0\r\nHost: localhost\r\n\r\n'
-                s.sendall(req.encode())
-                resp = s.recv(4096).decode()
-                s.close()
-                logger.info(f'Docker socket restart response: {resp.splitlines()[0]}')
-            except Exception as e:
-                logger.error(f'Docker socket restart failed: {e}')
-                try:
-                    restart = subprocess.run(
-                        ['docker', 'restart', container_name],
-                        capture_output=True, text=True, timeout=30
-                    )
-                    logger.info(f'Docker CLI restart: {restart.stdout.strip()} {restart.stderr.strip()}')
-                except Exception as e2:
-                    logger.error(f'Docker CLI restart also failed: {e2}')
-
-        threading.Thread(target=_do_restart, daemon=True).start()
+        restart_script = f'''import socket, time
+time.sleep(2)
+try:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(10)
+    s.connect('/var/run/docker.sock')
+    s.sendall(b'POST /containers/{container_name}/restart?t=5 HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n')
+    print('Docker socket restart:', s.recv(4096).decode().splitlines()[0])
+    s.close()
+except Exception as e:
+    print('Docker socket failed:', e)
+    import subprocess
+    subprocess.run(['docker', 'restart', '{container_name}'], timeout=30)
+'''
+        try:
+            subprocess.Popen(
+                ['python3', '-c', restart_script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            logger.info(f'Restart scheduled for container {container_name}')
+        except Exception as e:
+            logger.error(f'Failed to schedule restart: {e}')
 
         return jsonify({
             'status': 'ok',
