@@ -39,7 +39,13 @@ PWM_CURVE_POINTS = len(CALIBRATION_STEPS)
 @routes.route('/')
 def index():
     """Serve the main dashboard"""
-    return render_template('index.html')
+    resp = render_template('index.html')
+    from flask import make_response
+    response = make_response(resp)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @routes.route('/js/<path:filename>')
