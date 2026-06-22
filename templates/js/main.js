@@ -319,6 +319,7 @@ function showMainScreen() {
         hideCalibrationModal();
     }
     if (wasOnSetup) showView('dashboard');
+    updateCanvasColumns();
     loadPickerCards().then(() => {
         buildServerTree();
         startPickerLiveUpdate();
@@ -814,8 +815,7 @@ function renderPickerCard(card) {
             </div>
         </div>
         ${valueHtml}
-        <div class="card-details"></div>
-        <div class="card-resize-handle"></div>`;
+        <div class="card-details"></div>`;
 
     el.addEventListener('dragstart', onCardDragStart);
     el.addEventListener('dragover', onCardDragOver);
@@ -823,18 +823,10 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.alignSelf = 'flex-start';
-    const cols = getCanvasCols();
-    const span = card.colSpan || 1;
-    el.style.flex = `0 0 calc(${(100 / cols) * span}% - ${12}px)`;
-    el.style.minWidth = '0';
+    el.style.breakInside = 'avoid';
+    el.style.marginBottom = '12px';
 
     canvas.appendChild(el);
-
-    const resizeHandle = el.querySelector('.card-resize-handle');
-    if (resizeHandle) {
-        resizeHandle.addEventListener('mousedown', (e) => onCardResizeStart(e, id));
-    }
 
     if (type === 'disk') {
         el.addEventListener('click', (e) => {
@@ -881,6 +873,12 @@ function getCanvasCols() {
     if (w >= 1280) return 5;
     if (w >= 1024) return 4;
     return 2;
+}
+
+function updateCanvasColumns() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return;
+    canvas.style.columnCount = getCanvasCols();
 }
 
 function onCardResizeMove(e) {
@@ -2135,6 +2133,9 @@ function sendControl(payload) {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    updateCanvasColumns();
+    window.addEventListener('resize', updateCanvasColumns);
+
     const slider = document.getElementById('pwm-slider');
     if (!slider) return;
     
