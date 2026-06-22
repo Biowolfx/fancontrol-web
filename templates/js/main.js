@@ -894,6 +894,7 @@ function hideCardConfig() {
     _configuringCardId = null;
 }
 
+let _smartModalCardId = null;
 let _smartModalDiskId = null;
 let _smartAttributes = [];
 let _smartAttrType = 'sata';
@@ -913,9 +914,14 @@ async function fetchDiskSmart(diskId, forceRefresh = false) {
     }
 }
 
-function showSmartModal(diskId) {
-    _smartModalDiskId = diskId;
-    const disk = currentState?.hdd_sensors?.[diskId];
+function showSmartModal(cardId) {
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    _smartModalCardId = cardId;
+    _smartModalDiskId = card.sourceId;
+    const disk = currentState?.hdd_sensors?.[card.sourceId];
     const title = document.getElementById('smart-modal-title');
     if (title && disk) {
         title.textContent = `SMART — ${disk.label || disk.dev_name}`;
@@ -926,6 +932,7 @@ function showSmartModal(diskId) {
 
 function hideSmartModal() {
     document.getElementById('smart-modal')?.classList.add('hidden');
+    _smartModalCardId = null;
     _smartModalDiskId = null;
 }
 
@@ -961,7 +968,7 @@ function renderSmartAttributes() {
     if (!container) return;
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalDiskId);
+    const card = saved.find(c => c.id === _smartModalCardId);
     const selectedIds = card?.smartAttributes || [];
 
     if (_smartAttrType === 'nvme') {
@@ -1044,10 +1051,10 @@ function renderNvmeAttributes(container, selectedIds) {
 }
 
 function saveSmartSelection() {
-    if (!_smartModalDiskId) return;
+    if (!_smartModalCardId) return;
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalDiskId);
+    const card = saved.find(c => c.id === _smartModalCardId);
     if (!card) return;
 
     const checkboxes = document.querySelectorAll('#smart-attributes-container input[type="checkbox"]');
@@ -1060,7 +1067,7 @@ function saveSmartSelection() {
 
     card.smartAttributes = selected;
     setPickerCards(saved);
-    updateCardDetails(_smartModalDiskId);
+    updateCardDetails(_smartModalCardId);
     hideSmartModal();
 }
 
