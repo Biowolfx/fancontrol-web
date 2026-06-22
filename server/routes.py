@@ -211,85 +211,56 @@ def api_history():
 
 @routes.route('/api/update/check')
 def api_update_check():
-    """Check for updates via GitHub API"""
+    """Check for updates — reads CONFIG_VERSION from remote core/state.py on GitHub."""
+    import urllib.request, ssl
+
+    current_version = CONFIG_VERSION
+    repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    remote_version = ''
+    remote_hash = ''
+    commit_msg = ''
+
     try:
-        current_hash = os.getenv('FANCONTROL_GIT_HASH', '')
-        current_version = CONFIG_VERSION
-
-        # DNS resolution outside eventlet
-        import http.client, ssl
-
-        host = 'api.github.com'
-        try:
-            result = subprocess.run(
-                ['python3', '-c', f'import socket; print(socket.getaddrinfo("{host}", 443, socket.AF_INET)[0][4][0])'],
-                capture_output=True, text=True, timeout=10
-            )
-            ip = result.stdout.strip()
-            if not ip:
-                raise Exception(f'DNS failed: {result.stderr.strip()}')
-        except Exception as e:
-            logger.error(f'DNS resolution failed: {e}')
-            return jsonify({'status': 'error', 'message': str(e)}), 500
-
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-
-        repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
-        headers = {
-            'Host': host,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'fancontrol-web'
-        }
-
-        # 1. Get latest commit info
-        conn = http.client.HTTPSConnection(ip, 443, timeout=15, context=ctx)
-        conn.request('GET', f'/repos/{repo}/commits/main', headers=headers)
-        commit_data = json.loads(conn.getresponse().read())
-        conn.close()
-
-        remote_hash = commit_data['sha'][:8]
-        commit_msg = commit_data['commit']['message'].split('\n')[0]
-
-        remote_version = ''
-        # Try to extract version from commit message (e.g. "v3.3.3" or "3.3.3")
-        m_ver = re.search(r'[vV]?(\d+\.\d+\.\d+)', commit_msg)
-        if m_ver:
-            remote_version = m_ver.group(1)
-
-        # Fallback: read CONFIG_VERSION from remote core/state.py
-        if not remote_version:
-            try:
-                fetch_cmd = 'import urllib.request, ssl, re; ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE; c=urllib.request.urlopen("https://raw.githubusercontent.com/'+repo+'/main/core/state.py",timeout=10,context=ctx).read().decode(); m=re.search(r"CONFIG_VERSION\s*=\s*[\'\"](.*?)[\'\"]",c); print(m.group(1) if m else "")'
-                result = subprocess.run(['python3', '-c', fetch_cmd], capture_output=True, text=True, timeout=15)
-                remote_version = result.stdout.strip()
-                if not remote_version:
-                    logger.warning(f'Update check: could not extract remote version from state.py')
-            except Exception as e:
-                logger.error(f'Update check: failed to fetch remote version: {e}')
-        
-        # Determine if update is available
-        # If remote version extracted from commit message → compare versions
-        # Otherwise → compare hashes
-        if remote_version and current_version:
-            has_update = remote_version != current_version
-        else:
-            has_update = current_hash != remote_hash and current_hash != ''
-
-        return jsonify({
-            'status': 'ok',
-            'has_update': has_update,
-            'current_version': current_version,
-            'remote_version': remote_version or 'unknown',
-            'current_hash': current_hash or 'unknown',
-            'remote_hash': remote_hash,
-            'commit_message': commit_msg
-        })
-
+        req = urllib.request.Request(
+            f'https://api.github.com/repos/{repo}/commits/main',
+            headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'fancontrol-web'}
+        )
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            data = json.loads(resp.read())
+            remote_hash = data['sha'][:8]
+            commit_msg = data['commit']['message'].split('\n')[0]
     except Exception as e:
-        logger.error(f'Update check error: {e}', exc_info=True)
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f'Update check: failed to fetch commit info: {e}')
+
+    try:
+        req2 = urllib.request.Request(
+            f'https://raw.githubusercontent.com/{repo}/main/core/state.py',
+            headers={'User-Agent': 'fancontrol-web'}
+        )
+        with urllib.request.urlopen(req2, timeout=10, context=ctx) as resp:
+            content = resp.read().decode()
+            m = re.search(r"CONFIG_VERSION\s*=\s*['\"](.+?)['\"]", content)
+            if m:
+                remote_version = m.group(1)
+    except Exception as e:
+        logger.error(f'Update check: failed to fetch remote state.py: {e}')
+
+    has_update = bool(remote_version and current_version and remote_version != current_version)
+
+    return jsonify({
+        'status': 'ok',
+        'has_update': has_update,
+        'current_version': current_version,
+        'remote_version': remote_version or 'unknown',
+        'current_hash': 'N/A',
+        'remote_hash': remote_hash,
+        'commit_message': commit_msg
+    })
 
 
 @routes.route('/api/update/apply', methods=['POST'])
