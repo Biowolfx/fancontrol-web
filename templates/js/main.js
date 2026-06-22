@@ -753,8 +753,11 @@ function addSelectedCards() {
         if (saved.some(c => c.id === cardId)) return;
 
         const label = cb.dataset.label || cb.value;
-        renderPickerCard({ id: cardId, type, source, sourceId: cb.value, label });
-        saved.push({ id: cardId, type, source, sourceId: cb.value, label });
+        const colSpan = 3;
+        const pos = findNextPosition(saved, colSpan);
+        const cardData = { id: cardId, type, source, sourceId: cb.value, label, col: pos.col, row: pos.row, colSpan };
+        renderPickerCard(cardData);
+        saved.push(cardData);
     });
 
     setPickerCards(saved);
@@ -824,8 +827,14 @@ function renderPickerCard(card) {
     el.addEventListener('dragend', onCardDragEnd);
 
     el.style.position = 'relative';
-    el.style.gridColumn = `${card.col || 'auto'} / span ${card.colSpan || 3}`;
-    el.style.gridRow = `${card.row || 'auto'} / span ${card.rowSpan || 1}`;
+    if (!card.col || !card.row) {
+        const saved = getPickerCards().filter(c => c.id !== card.id);
+        const pos = findNextPosition(saved, card.colSpan || 3);
+        card.col = pos.col;
+        card.row = pos.row;
+    }
+    el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
+    el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.overflow = 'hidden';
     if (card.rowSpan) el.style.gridRow = `span ${card.rowSpan}`;
 
@@ -976,6 +985,32 @@ function getGridCell(canvas, x, y) {
     return { col, row };
 }
 
+function findNextPosition(savedCards, colSpan) {
+    const cols = getCanvasCols();
+    const occupied = new Set();
+    for (const c of savedCards) {
+        const cs = c.col || 1;
+        const rs = c.row || 1;
+        const sp = c.colSpan || 3;
+        const sr = c.rowSpan || 1;
+        for (let r = rs; r < rs + sr; r++) {
+            for (let c2 = cs; c2 < cs + sp; c2++) {
+                occupied.add(`${c2},${r}`);
+            }
+        }
+    }
+    for (let row = 1; row <= 20; row++) {
+        for (let col = 1; col <= cols - colSpan + 1; col++) {
+            let fits = true;
+            for (let c2 = col; c2 < col + colSpan && fits; c2++) {
+                if (occupied.has(`${c2},${row}`)) fits = false;
+            }
+            if (fits) return { col, row };
+        }
+    }
+    return { col: 1, row: 1 };
+}
+
 function onCardDragStart(e) {
     _draggedCard = this;
     _cardDragOccurred = false;
@@ -1013,7 +1048,6 @@ function onCardDrop(e) {
             _draggedCard.classList.remove('cursor-default');
         }
     }
-    saveCardOrder();
 }
 
 function onCardDragEnd() {
@@ -1676,8 +1710,10 @@ async function loadPickerCards() {
     const cards = getPickerCards();
     if (!cards.length && !groups.length) return;
 
+    let positionsChanged = false;
     cards.forEach(c => {
         if (document.querySelector(`[data-card-id="${c.id}"]`)) return;
+        if (!c.col || !c.row) positionsChanged = true;
         renderPickerCard(c);
         if (c.groupId) {
             const groupEl = document.querySelector(`[data-group-id="${c.groupId}"] .group-cards`);
@@ -1689,6 +1725,7 @@ async function loadPickerCards() {
             }
         }
     });
+    if (positionsChanged) setPickerCards(cards);
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
     prefetchSmartForCards();
