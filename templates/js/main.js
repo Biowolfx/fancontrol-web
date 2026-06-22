@@ -914,7 +914,11 @@ function onCardResizeMove(e) {
     const dx = e.clientX - _cardResizeStartX;
     const dy = e.clientY - _cardResizeStartY;
     const cols = getCanvasCols();
-    const colWidth = canvas.offsetWidth / cols;
+    const gap = 8;
+    const padL = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
+    const padR = parseInt(getComputedStyle(canvas).paddingRight) || 16;
+    const contentW = canvas.offsetWidth - padL - padR;
+    const colWidth = (contentW - (cols - 1) * gap) / cols;
     const rowHeight = 100;
 
     const newW = _cardResizeStartW + dx;
@@ -962,11 +966,13 @@ function getGridCell(canvas, x, y) {
     const padT = parseFloat(cs.paddingTop) || 16;
     const padR = parseFloat(cs.paddingRight) || 16;
     const cols = getCanvasCols();
+    const gap = 8;
     const contentW = rect.width - padL - padR;
-    const colWidth = contentW / cols;
-    const rowStep = 100 + 8;
-    const col = Math.max(1, Math.min(cols, Math.ceil((x - rect.left - padL) / colWidth)));
-    const row = Math.max(1, Math.ceil((y - rect.top - padT) / rowStep));
+    const colW = (contentW - (cols - 1) * gap) / cols;
+    const rowStep = 100 + gap;
+    const offset = x - rect.left - padL;
+    const col = Math.max(1, Math.min(cols, Math.floor(offset / (colW + gap)) + 1));
+    const row = Math.max(1, Math.floor((y - rect.top - padT) / rowStep) + 1);
     return { col, row };
 }
 
@@ -1070,10 +1076,11 @@ function onCardMouseMove(e) {
 
     const padLeft = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
     const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
-    const contentW = canvas.offsetWidth - padLeft - (parseInt(getComputedStyle(canvas).paddingRight) || 16);
-    const colW = contentW / cols;
-    const rowH = 100;
+    const padRight = parseInt(getComputedStyle(canvas).paddingRight) || 16;
+    const contentW = canvas.offsetWidth - padLeft - padRight;
     const gap = 8;
+    const colW = (contentW - (cols - 1) * gap) / cols;
+    const rowH = 100;
     _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
     _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
     _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
@@ -1180,9 +1187,9 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
         const padT = parseFloat(cs2.paddingTop) || 16;
         const padR = parseFloat(cs2.paddingRight) || 16;
         const contentW = canvas.offsetWidth - padL - padR;
-        const colW = contentW / cols;
-        const rowH = 100;
         const gap = 8;
+        const colW = (contentW - (cols - 1) * gap) / cols;
+        const rowH = 100;
         const ne = col + colSpan - 1;
         const nr = row + rowSpan - 1;
         for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
@@ -1219,9 +1226,9 @@ function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
         const padT = parseFloat(cs2.paddingTop) || 16;
         const padR = parseFloat(cs2.paddingRight) || 16;
         const contentW = canvas.offsetWidth - padL - padR;
-        const colW = contentW / cols;
-        const rowH = 100;
         const gap = 8;
+        const colW = (contentW - (cols - 1) * gap) / cols;
+        const rowH = 100;
         for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
             const rect = gEl.getBoundingClientRect();
             const cRect = canvas.getBoundingClientRect();
