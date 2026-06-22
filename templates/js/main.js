@@ -415,6 +415,11 @@ function buildServerTree() {
     }
 
     container.innerHTML = html || `<div class="text-center text-gray-500 py-4 text-xs">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
+
+    _collapsedNodes.forEach(nodeId => {
+        const children = document.getElementById(`node-children-${nodeId}`);
+        if (children) children.classList.add('hidden');
+    });
 }
 
 function renderLocalServerTree() {
@@ -516,10 +521,17 @@ function renderRemoteNodeTree(node) {
     return html;
 }
 
+let _collapsedNodes = new Set();
+
 function toggleNodeGroup(nodeId) {
     const children = document.getElementById(`node-children-${nodeId}`);
     if (children) {
         children.classList.toggle('hidden');
+        if (children.classList.contains('hidden')) {
+            _collapsedNodes.add(nodeId);
+        } else {
+            _collapsedNodes.delete(nodeId);
+        }
     }
 }
 
