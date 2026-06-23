@@ -905,6 +905,7 @@ let _cardResizeStartX = 0;
 let _cardResizeStartY = 0;
 let _cardResizeStartW = 0;
 let _cardResizeStartH = 0;
+let _cardResizeMinRowSpan = 1;
 
 function onCardResizeStart(e, cardId) {
     e.preventDefault();
@@ -915,6 +916,10 @@ function onCardResizeStart(e, cardId) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (card?.lockSize) return;
+
+    const contentEl = el.querySelector('.card-content');
+    const contentH = contentEl ? contentEl.scrollHeight : 0;
+    _cardResizeMinRowSpan = Math.max(1, Math.ceil(contentH / 100));
 
     _cardResizing = { cardId, el, col: card?.col, row: card?.row };
     _cardResizeStartX = e.clientX;
@@ -972,7 +977,7 @@ function onCardResizeMove(e) {
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
     const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
-    const newRowSpan = Math.max(1, Math.min(8, Math.round(newH / rowStep)));
+    const newRowSpan = Math.max(_cardResizeMinRowSpan, Math.min(8, Math.round(newH / rowStep)));
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
