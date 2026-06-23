@@ -800,6 +800,9 @@ function renderPickerCard(card) {
         : type === 'disk'
         ? `<button onclick="event.stopPropagation(); showSmartModal('${id}')" class="text-gray-600 hover:text-neon-purple text-xs transition-colors" title="SMART">⚙</button>`
         : '';
+    const lockIcon = card.lockSize ? '🔒' : '🔓';
+    const lockClass = card.lockSize ? 'text-neon-cyan' : 'text-gray-600';
+    const lockBtn = `<button onclick="event.stopPropagation(); toggleCardLockSize('${id}')" class="lock-size-btn ${lockClass} hover:text-neon-cyan text-xs transition-colors" title="Lock/Unlock size">${lockIcon}</button>`;
     const editBtn = `<button onclick="event.stopPropagation(); showCardEdit('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Edit name">✎</button>`;
     const removeBtn = `<button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>`;
 
@@ -814,9 +817,9 @@ function renderPickerCard(card) {
                     <span class="text-lg">${icon}</span>
                     <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
                 </div>
-                <div class="flex items-center gap-1">
-                    ${configBtn}${editBtn}${removeBtn}
-                </div>
+            <div class="flex items-center gap-1">
+                ${configBtn}${lockBtn}${editBtn}${removeBtn}
+            </div>
             </div>
             ${valueHtml}
             <div class="card-details"></div>
@@ -841,6 +844,7 @@ function renderPickerCard(card) {
     const resizeHandle = el.querySelector('.card-resize-handle');
     if (resizeHandle) {
         resizeHandle.addEventListener('mousedown', (e) => onCardResizeStart(e, id));
+        if (card.lockSize) resizeHandle.style.display = 'none';
     }
 
     if (type === 'disk') {
@@ -874,6 +878,25 @@ function snapCardToGrid(cardEl) {
 }
 
 let _cardDragOccurred = false;
+
+function toggleCardLockSize(cardId) {
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+    card.lockSize = !card.lockSize;
+    setPickerCards(saved);
+    const el = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!el) return;
+    const btn = el.querySelector('.lock-size-btn');
+    if (btn) {
+        btn.textContent = card.lockSize ? '🔒' : '🔓';
+        btn.className = card.lockSize
+            ? 'lock-size-btn text-neon-cyan hover:text-neon-cyan text-xs transition-colors'
+            : 'lock-size-btn text-gray-600 hover:text-neon-cyan text-xs transition-colors';
+    }
+    const handle = el.querySelector('.card-resize-handle');
+    if (handle) handle.style.display = card.lockSize ? 'none' : '';
+}
 let _dropTarget = null;
 
 let _cardResizing = null;
@@ -890,6 +913,7 @@ function onCardResizeStart(e, cardId) {
 
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
+    if (card?.lockSize) return;
 
     _cardResizing = { cardId, el, col: card?.col, row: card?.row };
     _cardResizeStartX = e.clientX;
@@ -944,14 +968,10 @@ function onCardResizeMove(e) {
     const rowHeight = 100;
     const rowStep = rowHeight + gap;
 
-    const contentEl = el.querySelector('.card-content');
-    const contentH = contentEl ? contentEl.scrollHeight : 0;
-    const minRowSpan = Math.max(1, Math.ceil(contentH / rowHeight));
-
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
     const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
-    const newRowSpan = Math.max(minRowSpan, Math.min(8, Math.round(newH / rowStep)));
+    const newRowSpan = Math.max(1, Math.min(8, Math.round(newH / rowStep)));
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
