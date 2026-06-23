@@ -944,10 +944,14 @@ function onCardResizeMove(e) {
     const rowHeight = 100;
     const rowStep = rowHeight + gap;
 
+    const contentEl = el.querySelector('.card-content');
+    const contentH = contentEl ? contentEl.scrollHeight : 0;
+    const minRowSpan = Math.max(1, Math.ceil(contentH / rowHeight));
+
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
     const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
-    const newRowSpan = Math.max(1, Math.min(8, Math.round(newH / rowStep)));
+    const newRowSpan = Math.max(minRowSpan, Math.min(8, Math.round(newH / rowStep)));
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
