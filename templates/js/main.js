@@ -832,8 +832,6 @@ function renderPickerCard(card) {
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
     el.style.alignSelf = 'start';
-    const rowSpan = card.rowSpan || 1;
-    el.style.maxHeight = (rowSpan * 100 + (rowSpan - 1) * 8) + 'px';
     el.style.overflow = 'hidden';
 
     canvas.appendChild(el);
@@ -961,7 +959,6 @@ function onCardResizeEnd(e) {
         card.rowSpan = rowSpan;
         el.style.gridColumn = `${card.col} / span ${colSpan}`;
         el.style.gridRow = `${card.row} / span ${rowSpan}`;
-        el.style.maxHeight = (rowSpan * 100 + (rowSpan - 1) * 8) + 'px';
         setPickerCards(saved);
     }
 
@@ -1119,7 +1116,7 @@ function onCardMouseMove(e) {
     _cardDropPreview.style.left = (snap.canvasLeft + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
     _cardDropPreview.style.top = (snap.canvasTop + snap.padT + (newRow - 1) * snap.rowStep) + 'px';
     _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
-    _cardDropPreview.style.height = snap.cardElH + 'px';
+    _cardDropPreview.style.height = (rowSpan * snap.rowStep - snap.gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
     _cardDropPreview.style.display = 'block';
