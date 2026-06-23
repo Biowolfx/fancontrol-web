@@ -1093,21 +1093,40 @@ function onCardMouseMove(e) {
     _cardDragClone.style.top = (e.clientY - _cardMouseDown.offsetY) + 'px';
 
     const canvas = document.getElementById('dashboard-canvas');
-    const cell = getGridCell(canvas, e.clientX, e.clientY);
     const card = _cardMouseDown.card;
     const colSpan = card.colSpan || 3;
     const rowSpan = card.rowSpan || 1;
     const cols = getCanvasCols();
+    const snap = _cardMouseDown.gridSnapshot;
 
     const cardCol = card.col || 1;
     const cardRow = card.row || 1;
-    const inCardArea = cell.col >= cardCol && cell.col < cardCol + colSpan
-                    && cell.row >= cardRow && cell.row < cardRow + rowSpan;
 
-    let newCol = inCardArea ? cardCol : cell.col;
-    let newRow = inCardArea ? cardRow : cell.row;
-    newCol = Math.max(1, Math.min(cols - colSpan + 1, newCol));
-    newRow = Math.max(1, newRow);
+    const cardLeft = snap.canvasLeft + snap.padL + (cardCol - 1) * (snap.colW + snap.gap);
+    const cardTop = snap.canvasTop + snap.padT + (cardRow - 1) * snap.rowStep;
+    const cardWidth = colSpan * snap.colW + (colSpan - 1) * snap.gap;
+    const cardHeight = rowSpan * snap.rowStep - snap.gap;
+    const cardCenterX = cardLeft + cardWidth / 2;
+    const cardCenterY = cardTop + cardHeight / 2;
+    const halfW = cardWidth / 2;
+    const halfH = cardHeight / 2;
+
+    const relX = e.clientX - cardCenterX;
+    const relY = e.clientY - cardCenterY;
+
+    let newCol, newRow;
+    if (Math.abs(relX) <= halfW) {
+        newCol = cardCol;
+    } else {
+        const offset = e.clientX - snap.canvasLeft - snap.padL;
+        newCol = Math.max(1, Math.min(cols - colSpan + 1, Math.floor(offset / (snap.colW + snap.gap)) + 1));
+    }
+    if (Math.abs(relY) <= halfH) {
+        newRow = cardRow;
+    } else {
+        const offset = e.clientY - snap.canvasTop - snap.padT;
+        newRow = Math.max(1, Math.floor(offset / snap.rowStep) + 1);
+    }
     const occupied = isCellOccupied(newCol, newRow, colSpan, rowSpan, card.id);
 
     if (!_cardDropPreview) {
@@ -1116,7 +1135,6 @@ function onCardMouseMove(e) {
         document.body.appendChild(_cardDropPreview);
     }
 
-    const snap = _cardMouseDown.gridSnapshot;
     _cardDropPreview.style.left = (snap.canvasLeft + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
     _cardDropPreview.style.top = (snap.canvasTop + snap.padT + (newRow - 1) * snap.rowStep) + 'px';
     _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
@@ -1127,7 +1145,7 @@ function onCardMouseMove(e) {
 
     _dropTarget = { col: newCol, row: newRow, occupied };
 
-    console.log(`[MOVE] card=${card.id} stored(col=${cardCol},row=${cardRow}) span(${colSpan}x${rowSpan}) cursor(col=${cell.col},row=${cell.row}) inArea=${inCardArea} → new(col=${newCol},row=${newRow}) occ=${occupied}`);
+    console.log(`[MOVE] card=${card.id} stored(col=${cardCol},row=${cardRow}) span(${colSpan}x${rowSpan}) relX=${Math.round(relX)},relY=${Math.round(relY)} halfW=${Math.round(halfW)},halfH=${Math.round(halfH)} → new(col=${newCol},row=${newRow}) occ=${occupied}`);
 
     const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));

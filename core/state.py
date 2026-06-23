@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.5.74"
+CONFIG_VERSION = "3.5.75"
 
 state_lock = threading.RLock()
 
