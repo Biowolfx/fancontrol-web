@@ -1101,21 +1101,19 @@ function onCardMouseMove(e) {
 
     if (!_cardDropPreview) {
         _cardDropPreview = document.createElement('div');
-        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:none;';
+        _cardDropPreview.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;border:2px dashed #06b6d4;border-radius:12px;transition:none;background:rgba(6,182,212,0.08);';
+        document.body.appendChild(_cardDropPreview);
     }
 
     const snap = _cardMouseDown.gridSnapshot;
-    _cardDropPreview.style.left = (snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
-    _cardDropPreview.style.top = (snap.padT + (newRow - 1) * (snap.rowH + snap.gap)) + 'px';
+    const canvasRect = canvas.getBoundingClientRect();
+    _cardDropPreview.style.left = (canvasRect.left + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
+    _cardDropPreview.style.top = (canvasRect.top + snap.padT + (newRow - 1) * (snap.rowH + snap.gap)) + 'px';
     _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
     _cardDropPreview.style.height = (rowSpan * (snap.rowH + snap.gap) - snap.gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
     _cardDropPreview.style.display = 'block';
-
-    if (!_cardDropPreview.parentElement) {
-        canvas.appendChild(_cardDropPreview);
-    }
 
     _dropTarget = { col: newCol, row: newRow, occupied };
 
