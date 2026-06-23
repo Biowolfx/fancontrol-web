@@ -807,7 +807,7 @@ function renderPickerCard(card) {
     const removeBtn = `<button onclick="event.stopPropagation(); removePickerCard('${id}')" class="text-gray-600 hover:text-red-400 text-xs transition-colors">×</button>`;
 
     const el = document.createElement('div');
-    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-all hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
+    el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
     el.setAttribute('data-card-id', id);
     el.innerHTML = `
         <div class="flex items-center justify-between mb-3">
