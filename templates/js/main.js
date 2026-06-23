@@ -1033,6 +1033,8 @@ function onCardMouseDown(e) {
         offsetX, offsetY, dragging: false
     };
 
+    console.log(`[DOWN] card=${cardId} pos(col=${card.col},row=${card.row}) span(col=${card.colSpan||3},row=${card.rowSpan||1}) offset(X=${Math.round(offsetX)},Y=${Math.round(offsetY)}) cardRect(left=${Math.round(rect.left)},top=${Math.round(rect.top)},w=${Math.round(rect.width)},h=${Math.round(rect.height)})`);
+
     document.addEventListener('mousemove', onCardMouseMove);
     document.addEventListener('mouseup', onCardMouseUp);
 }
@@ -1109,6 +1111,9 @@ function onCardMouseMove(e) {
 
     _dropTarget = { col: newCol, row: newRow, occupied };
 
+    const log = `[MOVE] card=${card.id} stored(col=${card.col},row=${card.row}) cursorCell(col=${cell.col},row=${cell.row}) center(col=${cardCenterCol.toFixed(1)},row=${cardCenterRow.toFixed(1)}) dist(col=${distCol.toFixed(2)},row=${distRow.toFixed(2)}) → new(col=${newCol},row=${newRow}) occ=${occupied}`;
+    console.log(log);
+
     const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));
     if (groupEl && !groupEl.contains(_cardMouseDown.cardEl)) {
@@ -1160,15 +1165,18 @@ function onCardMouseUp(e) {
             const saved = getPickerCards();
             const cardData = saved.find(c => c.id === card.id);
             if (cardData) {
+                const oldCol = cardData.col, oldRow = cardData.row;
                 let newCol = _dropTarget.col;
                 let newRow = _dropTarget.row;
                 const colSp = cardData.colSpan || 3;
                 const rowSp = cardData.rowSpan || 1;
-                if (isCellOccupied(newCol, newRow, colSp, rowSp, card.id)) {
+                const occupied = isCellOccupied(newCol, newRow, colSp, rowSp, card.id);
+                if (occupied) {
                     const free = findFreePosition(saved, colSp, rowSp, card.id);
                     newCol = free.col;
                     newRow = free.row;
                 }
+                console.log(`[DROP] card=${card.id} from(col=${oldCol},row=${oldRow}) target(col=${_dropTarget.col},row=${_dropTarget.row}) occupied=${occupied} → placed(col=${newCol},row=${newRow})`);
                 cardData.col = newCol;
                 cardData.row = newRow;
                 cardEl.style.gridColumn = `${newCol} / span ${colSp}`;
