@@ -1154,15 +1154,17 @@ function onCardMouseUp(e) {
             if (cardData) {
                 let newCol = _dropTarget.col;
                 let newRow = _dropTarget.row;
-                if (_dropTarget.occupied) {
-                    const free = findFreePosition(saved, cardData.colSpan || 3, cardData.rowSpan || 1, card.id);
+                const colSp = cardData.colSpan || 3;
+                const rowSp = cardData.rowSpan || 1;
+                if (isCellOccupied(newCol, newRow, colSp, rowSp, card.id)) {
+                    const free = findFreePosition(saved, colSp, rowSp, card.id);
                     newCol = free.col;
                     newRow = free.row;
                 }
                 cardData.col = newCol;
                 cardData.row = newRow;
-                cardEl.style.gridColumn = `${newCol} / span ${cardData.colSpan || 3}`;
-                cardEl.style.gridRow = `${newRow} / span ${cardData.rowSpan || 1}`;
+                cardEl.style.gridColumn = `${newCol} / span ${colSp}`;
+                cardEl.style.gridRow = `${newRow} / span ${rowSp}`;
                 setPickerCards(saved);
                 updateCanvasMinHeight();
             }
@@ -1922,7 +1924,7 @@ async function loadPickerCards() {
     let positionsChanged = false;
     cards.forEach(c => {
         if (document.querySelector(`[data-card-id="${c.id}"]`)) return;
-        if (!c.col || !c.row) positionsChanged = true;
+        if (!c.col || !c.row) { positionsChanged = true; }
         renderPickerCard(c);
         if (c.groupId) {
             const groupEl = document.querySelector(`[data-group-id="${c.groupId}"] .group-cards`);
@@ -1934,6 +1936,23 @@ async function loadPickerCards() {
             }
         }
     });
+
+    for (const c of cards) {
+        if (c.groupId) continue;
+        const colSp = c.colSpan || 3;
+        const rowSp = c.rowSpan || 1;
+        if (isCellOccupied(c.col, c.row, colSp, rowSp, c.id)) {
+            const free = findFreePosition(cards, colSp, rowSp, c.id);
+            c.col = free.col;
+            c.row = free.row;
+            const el = document.querySelector(`[data-card-id="${c.id}"]`);
+            if (el) {
+                el.style.gridColumn = `${c.col} / span ${colSp}`;
+                el.style.gridRow = `${c.row} / span ${rowSp}`;
+            }
+            positionsChanged = true;
+        }
+    }
     if (positionsChanged) setPickerCards(cards);
     document.getElementById('dashboard-empty')?.classList.add('hidden');
     startPickerLiveUpdate();
