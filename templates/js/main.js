@@ -1063,9 +1063,17 @@ function onCardMouseMove(e) {
     const colSpan = card.colSpan || 3;
     const rowSpan = card.rowSpan || 1;
     const cols = getCanvasCols();
-    const clampedCol = Math.max(1, Math.min(cols - colSpan + 1, cell.col));
-    const clampedRow = Math.max(1, cell.row);
-    const occupied = isCellOccupied(clampedCol, clampedRow, colSpan, rowSpan, card.id);
+
+    const cardCenterCol = (card.col || 1) + (colSpan - 1) / 2;
+    const cardCenterRow = (card.row || 1) + (rowSpan - 1) / 2;
+    const distCol = Math.abs(cell.col + 0.5 - cardCenterCol);
+    const distRow = Math.abs(cell.row + 0.5 - cardCenterRow);
+
+    let newCol = distCol < 0.6 ? (card.col || 1) : cell.col;
+    let newRow = distRow < 0.6 ? (card.row || 1) : cell.row;
+    newCol = Math.max(1, Math.min(cols - colSpan + 1, newCol));
+    newRow = Math.max(1, newRow);
+    const occupied = isCellOccupied(newCol, newRow, colSpan, rowSpan, card.id);
 
     if (!_cardDropPreview) {
         _cardDropPreview = document.createElement('div');
@@ -1079,8 +1087,8 @@ function onCardMouseMove(e) {
     const gap = 8;
     const colW = (contentW - (cols - 1) * gap) / cols;
     const rowH = 100;
-    _cardDropPreview.style.left = (padLeft + (clampedCol - 1) * (colW + gap)) + 'px';
-    _cardDropPreview.style.top = (padTop + (clampedRow - 1) * (rowH + gap)) + 'px';
+    _cardDropPreview.style.left = (padLeft + (newCol - 1) * (colW + gap)) + 'px';
+    _cardDropPreview.style.top = (padTop + (newRow - 1) * (rowH + gap)) + 'px';
     _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
     _cardDropPreview.style.height = (rowSpan * rowH + (rowSpan - 1) * gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
@@ -1091,7 +1099,7 @@ function onCardMouseMove(e) {
         canvas.appendChild(_cardDropPreview);
     }
 
-    _dropTarget = { col: clampedCol, row: clampedRow, occupied };
+    _dropTarget = { col: newCol, row: newRow, occupied };
 
     const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));
