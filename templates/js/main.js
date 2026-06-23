@@ -1055,9 +1055,11 @@ function onCardMouseMove(e) {
         _cardDragClone.style.cssText = `
             position:fixed;z-index:10000;pointer-events:none;
             width:${_cardMouseDown.cardEl.offsetWidth}px;
+            height:${_cardMouseDown.cardEl.offsetHeight}px;
             opacity:0.85;
             box-shadow:0 8px 32px rgba(0,0,0,0.4);
             transition:none;
+            overflow:hidden;
         `;
         document.body.appendChild(_cardDragClone);
     }
