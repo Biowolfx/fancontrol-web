@@ -831,7 +831,10 @@ function renderPickerCard(card) {
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
-    el.style.alignSelf = 'stretch';
+    el.style.alignSelf = 'start';
+    const rowSpan = card.rowSpan || 1;
+    el.style.maxHeight = (rowSpan * 100 + (rowSpan - 1) * 8) + 'px';
+    el.style.overflow = 'hidden';
 
     canvas.appendChild(el);
 
@@ -928,6 +931,7 @@ function onCardResizeMove(e) {
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
+    el.style.maxHeight = (newRowSpan * 100 + (newRowSpan - 1) * 8) + 'px';
     el._resizeColSpan = newColSpan;
     el._resizeRowSpan = newRowSpan;
 }
@@ -958,6 +962,7 @@ function onCardResizeEnd(e) {
         card.rowSpan = rowSpan;
         el.style.gridColumn = `${card.col} / span ${colSpan}`;
         el.style.gridRow = `${card.row} / span ${rowSpan}`;
+        el.style.maxHeight = (rowSpan * 100 + (rowSpan - 1) * 8) + 'px';
         setPickerCards(saved);
     }
 
