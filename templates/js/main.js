@@ -1052,15 +1052,15 @@ function onCardMouseMove(e) {
 
         const canvas = document.getElementById('dashboard-canvas');
         const cs = getComputedStyle(canvas);
-        _cardMouseDown.gridSnapshot = {
-            cols: getCanvasCols(),
-            padL: parseFloat(cs.paddingLeft) || 16,
-            padT: parseFloat(cs.paddingTop) || 16,
-            padR: parseFloat(cs.paddingRight) || 16,
-            canvasW: canvas.offsetWidth,
-            gap: 8,
-            rowH: 100
-        };
+        const padL = parseFloat(cs.paddingLeft) || 16;
+        const padR = parseFloat(cs.paddingRight) || 16;
+        const padT = parseFloat(cs.paddingTop) || 16;
+        const canvasW = canvas.offsetWidth;
+        const contentW = canvasW - padL - padR;
+        const cols = getCanvasCols();
+        const gap = 8;
+        const colW = (contentW - (cols - 1) * gap) / cols;
+        _cardMouseDown.gridSnapshot = { padL, padT, cols, gap, colW, rowH: 100 };
 
         _cardDragClone = _cardMouseDown.cardEl.cloneNode(true);
         _cardDragClone.classList.remove('opacity-40');
@@ -1105,11 +1105,9 @@ function onCardMouseMove(e) {
     }
 
     const snap = _cardMouseDown.gridSnapshot;
-    const contentW = snap.canvasW - snap.padL - snap.padR;
-    const colW = (contentW - (snap.cols - 1) * snap.gap) / snap.cols;
-    _cardDropPreview.style.left = (snap.padL + (newCol - 1) * (colW + snap.gap)) + 'px';
+    _cardDropPreview.style.left = (snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
     _cardDropPreview.style.top = (snap.padT + (newRow - 1) * (snap.rowH + snap.gap)) + 'px';
-    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * snap.gap) + 'px';
+    _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
     _cardDropPreview.style.height = (rowSpan * (snap.rowH + snap.gap) - snap.gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
