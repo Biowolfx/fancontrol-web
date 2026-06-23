@@ -931,7 +931,6 @@ function onCardResizeMove(e) {
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
-    el.style.maxHeight = (newRowSpan * 100 + (newRowSpan - 1) * 8) + 'px';
     el._resizeColSpan = newColSpan;
     el._resizeRowSpan = newRowSpan;
 }
@@ -1068,7 +1067,7 @@ function onCardMouseMove(e) {
         const rowH = 100;
         const rowStep = rowH + gap;
         _cardMouseDown.gridSnapshot = {
-            padL, padT, cardW, cols, gap, colW, rowH, rowStep,
+            padL, padT, cardW, cardElH: _cardMouseDown.cardEl.offsetHeight, cols, gap, colW, rowH, rowStep,
             canvasLeft: canvas.getBoundingClientRect().left,
             canvasTop: canvas.getBoundingClientRect().top
         };
@@ -1119,8 +1118,8 @@ function onCardMouseMove(e) {
     const snap = _cardMouseDown.gridSnapshot;
     _cardDropPreview.style.left = (snap.canvasLeft + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
     _cardDropPreview.style.top = (snap.canvasTop + snap.padT + (newRow - 1) * snap.rowStep) + 'px';
-    _cardDropPreview.style.width = snap.cardW + 'px';
-    _cardDropPreview.style.height = (rowSpan * snap.rowStep - snap.gap) + 'px';
+    _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
+    _cardDropPreview.style.height = snap.cardElH + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
     _cardDropPreview.style.display = 'block';
