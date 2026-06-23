@@ -1204,7 +1204,7 @@ function onCardMouseUp(e) {
 
     _cardMouseDown = null;
     _dropTarget = null;
-    setTimeout(() => { _cardDragOccurred = false; }, 50);
+    setTimeout(() => { _cardDragOccurred = false; }, 200);
 }
 
 function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
