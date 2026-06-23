@@ -323,21 +323,24 @@ def api_update_apply():
             return jsonify({'status': 'error', 'message': '/repo not ready'}), 500
 
         # Step 2: Git pull
-        logger.info('[UPDATE] Step 2: git pull...')
-        pull = subprocess.run(
-            ['git', '-C', repo_dir, 'pull', '--ff-only', 'origin', 'main'],
+        logger.info('[UPDATE] Step 2: git fetch + reset...')
+        fetch = subprocess.run(
+            ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
             capture_output=True, text=True, timeout=60,
             env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
         )
+        if fetch.returncode != 0:
+            logger.error(f'[UPDATE] Git fetch FAILED: {fetch.stderr.strip()[:300]}')
+            return jsonify({'status': 'error', 'message': fetch.stderr.strip()}), 500
 
-        pull_output = pull.stdout.strip() + '\n' + pull.stderr.strip()
-        already_up = 'Already up to date' in pull_output or 'Already up-to-date' in pull_output
-        logger.info(f'[UPDATE] Step 2 result: rc={pull.returncode}, already_up={already_up}')
-        logger.info(f'[UPDATE] Step 2 output: {pull_output.strip()[:300]}')
-
-        if pull.returncode != 0 and not already_up:
-            logger.error(f'[UPDATE] Git pull FAILED')
-            return jsonify({'status': 'error', 'message': pull_output.strip()}), 500
+        reset = subprocess.run(
+            ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+        )
+        pull_output = reset.stdout.strip() + '\n' + reset.stderr.strip()
+        already_up = 'Already up to date' in pull_output or 'HEAD is now at' in pull_output
+        logger.info(f'[UPDATE] Step 2 result: rc={reset.returncode}, output={pull_output.strip()[:300]}')
 
         # Step 3: Check what version /repo has after pull
         try:
