@@ -830,6 +830,7 @@ function renderPickerCard(card) {
     }
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
+    el.style.position = 'relative';
     el.style.alignSelf = 'start';
 
     canvas.appendChild(el);
@@ -918,11 +919,12 @@ function onCardResizeMove(e) {
     const contentW = canvas.offsetWidth - padL - padR;
     const colWidth = (contentW - (cols - 1) * gap) / cols;
     const rowHeight = 100;
+    const rowStep = rowHeight + gap;
 
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
-    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / colWidth)));
-    const newRowSpan = Math.max(1, Math.min(4, Math.round(newH / rowHeight)));
+    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
+    const newRowSpan = Math.max(1, Math.min(8, Math.round(newH / rowStep)));
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
     el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
@@ -935,10 +937,9 @@ function onCardResizeEnd(e) {
     const el = _cardResizing.el;
     const cardId = _cardResizing.cardId;
 
-    const colSpan = el._resizeColSpan || 3;
-    const rowSpan = el._resizeRowSpan || 1;
+    let colSpan = el._resizeColSpan || 3;
+    let rowSpan = el._resizeRowSpan || 1;
 
-    el.setAttribute('draggable', 'true');
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
 
@@ -948,8 +949,15 @@ function onCardResizeEnd(e) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (card) {
+        if (isCellOccupied(card.col, card.row, colSpan, rowSpan, cardId)) {
+            const free = findFreePosition(saved, colSpan, rowSpan, cardId);
+            card.col = free.col;
+            card.row = free.row;
+        }
         card.colSpan = colSpan;
         card.rowSpan = rowSpan;
+        el.style.gridColumn = `${card.col} / span ${colSpan}`;
+        el.style.gridRow = `${card.row} / span ${rowSpan}`;
         setPickerCards(saved);
     }
 
