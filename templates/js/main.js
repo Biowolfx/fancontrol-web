@@ -807,18 +807,20 @@ function renderPickerCard(card) {
     el.className = 'bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing';
     el.setAttribute('data-card-id', id);
     el.innerHTML = `
-        <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-                <span class="text-gray-600 text-xs select-none">⠿</span>
-                <span class="text-lg">${icon}</span>
-                <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
+        <div class="card-content overflow-hidden h-full">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-600 text-xs select-none">⠿</span>
+                    <span class="text-lg">${icon}</span>
+                    <span class="text-sm text-gray-300 font-medium truncate">${escapeHtml(label)}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    ${configBtn}${editBtn}${removeBtn}
+                </div>
             </div>
-            <div class="flex items-center gap-1">
-                ${configBtn}${editBtn}${removeBtn}
-            </div>
+            ${valueHtml}
+            <div class="card-details"></div>
         </div>
-        ${valueHtml}
-        <div class="card-details"></div>
         <div class="card-resize-handle"></div>`;
 
     el.addEventListener('mousedown', onCardMouseDown);
