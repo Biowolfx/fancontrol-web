@@ -855,7 +855,10 @@ function renderPickerCard(card) {
 function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
-    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
+    cardEl.style.alignSelf = 'start';
+    const contentH = cardEl.scrollHeight;
+    cardEl.style.alignSelf = 'stretch';
+    const needed = Math.max(1, Math.ceil(contentH / 100));
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
