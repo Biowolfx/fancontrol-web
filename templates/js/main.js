@@ -831,7 +831,7 @@ function renderPickerCard(card) {
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
-    el.style.alignSelf = 'start';
+    el.style.alignSelf = 'stretch';
     el.style.overflow = 'hidden';
 
     canvas.appendChild(el);
