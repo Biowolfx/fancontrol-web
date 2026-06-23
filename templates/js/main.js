@@ -782,18 +782,15 @@ function renderPickerCard(card) {
     if (type === 'fan') {
         icon = '🌀';
         colorClass = 'text-neon-cyan';
-        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</div>
-            <div class="text-xs text-gray-500 mt-1">RPM</div>`;
+        valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">RPM</span></div>`;
     } else if (type === 'temperature') {
         icon = '🌡';
         colorClass = 'text-neon-green';
-        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-temp-id="${sourceId}" data-source="${source}">--</div>
-            <div class="text-xs text-gray-500 mt-1">°C</div>`;
+        valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-temp-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
     } else if (type === 'disk') {
         icon = '💾';
         colorClass = 'text-neon-purple';
-        valueHtml = `<div class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</div>
-            <div class="text-xs text-gray-500 mt-1">°C</div>`;
+        valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
     } else {
         valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
@@ -836,7 +833,6 @@ function renderPickerCard(card) {
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
     el.style.alignSelf = 'stretch';
-    el.style.overflow = 'hidden';
 
     canvas.appendChild(el);
 
@@ -853,6 +849,22 @@ function renderPickerCard(card) {
     }
 
     updateCardDetails(id);
+    snapCardToGrid(el);
+}
+
+function snapCardToGrid(cardEl) {
+    const cardId = cardEl.dataset?.cardId;
+    if (!cardId) return;
+    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+    const current = card.rowSpan || 1;
+    if (needed !== current) {
+        card.rowSpan = needed;
+        cardEl.style.gridRow = `${card.row} / span ${needed}`;
+        setPickerCards(saved);
+    }
 }
 
 let _cardDragOccurred = false;
@@ -1734,6 +1746,8 @@ function saveSmartSelection() {
     card.smartUnits = units;
     setPickerCards(saved);
     updateCardDetails(_smartModalCardId);
+    const cardEl = document.querySelector(`[data-card-id="${_smartModalCardId}"]`);
+    if (cardEl) snapCardToGrid(cardEl);
     hideSmartModal();
     saveDashboardToServer();
 }
