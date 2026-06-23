@@ -712,8 +712,8 @@ function updatePickerElements() {
             elements = Object.entries(currentState.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
         } else if (type === 'system') {
             elements = [
-                { id: 'max_temp', label: 'Max Temperature', extra: `${currentState?.max_hdd_temp || '--'}°C` },
-                { id: 'fans_summary', label: 'Fans Summary', extra: '' },
+                { id: 'max_temp', label: t('picker.max_temp', 'Макс. температура'), extra: `${currentState?.max_hdd_temp || '--'}°C` },
+                { id: 'fans_summary', label: t('picker.fans_summary', 'Сводка по вентиляторам'), extra: '' },
             ];
         }
     } else {
@@ -737,10 +737,10 @@ function updatePickerElements() {
             return `<label class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
                 <input type="checkbox" value="${escapeHtml(el.id)}" data-label="${escapeHtml(el.label)}" class="picker-checkbox rounded" ${exists ? 'checked disabled' : ''}>
                 <span class="text-xs ${exists ? 'text-gray-500 line-through' : 'text-gray-300'}">${escapeHtml(el.label)}</span>
-                <span class="ml-auto text-xs text-gray-500">${exists ? 'added' : el.extra}</span>
+                <span class="ml-auto text-xs text-gray-500">${exists ? t('picker.added', 'добавлено') : el.extra}</span>
             </label>`;
         }).join('')
-        : '<div class="text-xs text-gray-500 text-center py-4">No elements found</div>';
+        : `<div class="text-xs text-gray-500 text-center py-4">${t('picker.no_elements', 'Элементы не найдены')}</div>`;
 }
 
 function addSelectedCards() {

@@ -224,5 +224,24 @@
   "dashboard.add_group": "Добавить группу",
   "nodes.local_server": "Мой сервер",
   "nodes.fans": "вентиляторов",
-  "nodes.disks": "дисков"
+  "nodes.disks": "дисков",
+
+  "picker.type": "Тип",
+  "picker.fan": "🌀 Вентилятор",
+  "picker.temperature": "🌡 Температура",
+  "picker.disk": "💾 Диск",
+  "picker.system": "📊 Система",
+  "picker.source": "Источник",
+  "picker.my_server": "Мой сервер (локально)",
+  "picker.element": "Элемент",
+  "picker.add": "Добавить",
+  "picker.no_elements": "Элементы не найдены",
+  "picker.added": "добавлено",
+  "picker.max_temp": "Макс. температура",
+  "picker.fans_summary": "Сводка по вентиляторам",
+  "picker.edit_card": "Редактировать карточку",
+  "picker.title": "Заголовок",
+  "picker.title_placeholder": "Название карточки",
+  "picker.card_display": "Отображение карточки",
+  "picker.close": "Закрыть"
 }

@@ -820,30 +820,30 @@
             <h3 class="text-lg font-bold text-white mb-4" data-i18n="dashboard.add_card">Add Card</h3>
             <div class="space-y-4">
                 <div>
-                    <label class="text-xs text-gray-400 block mb-1">Type</label>
+                    <label class="text-xs text-gray-400 block mb-1" data-i18n="picker.type">Тип</label>
                     <select id="picker-type" class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-white text-sm"
                             onchange="updatePickerElements()">
-                        <option value="fan">🌀 Fan</option>
-                        <option value="temperature">🌡 Temperature</option>
-                        <option value="disk">💾 Disk</option>
-                        <option value="system">📊 System</option>
+                        <option value="fan" data-i18n="picker.fan">🌀 Вентилятор</option>
+                        <option value="temperature" data-i18n="picker.temperature">🌡 Температура</option>
+                        <option value="disk" data-i18n="picker.disk">💾 Диск</option>
+                        <option value="system" data-i18n="picker.system">📊 Система</option>
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs text-gray-400 block mb-1">Source</label>
+                    <label class="text-xs text-gray-400 block mb-1" data-i18n="picker.source">Источник</label>
                     <select id="picker-source" class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-white text-sm"
                             onchange="updatePickerElements()">
-                        <option value="local">My Server (local)</option>
+                        <option value="local" data-i18n="picker.my_server">Мой сервер (локально)</option>
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs text-gray-400 block mb-1">Element</label>
+                    <label class="text-xs text-gray-400 block mb-1" data-i18n="picker.element">Элемент</label>
                     <div id="picker-elements" class="max-h-48 overflow-y-auto space-y-1 bg-cyber-bg border border-cyber-accent rounded p-2"></div>
                 </div>
             </div>
             <div class="flex gap-2 mt-6">
-                <button onclick="hideCardPicker()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Cancel</button>
-                <button onclick="addSelectedCards()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm">Add</button>
+                <button onclick="hideCardPicker()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm" data-i18n="common.cancel">Отмена</button>
+                <button onclick="addSelectedCards()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm" data-i18n="picker.add">Добавить</button>
             </div>
         </div>
     </div>
@@ -851,18 +851,18 @@
     <!-- Card Edit Modal -->
     <div id="card-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-md w-full mx-4">
-            <h3 class="text-lg font-bold text-white mb-4">Edit Card</h3>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="picker.edit_card">Редактировать карточку</h3>
             <div class="space-y-4">
                 <div>
-                    <label class="text-xs text-gray-400 block mb-1">Title</label>
-                    <input id="card-edit-label" type="text" placeholder="Card title"
+                    <label class="text-xs text-gray-400 block mb-1" data-i18n="picker.title">Заголовок</label>
+                    <input id="card-edit-label" type="text" data-i18n-placeholder="picker.title_placeholder" placeholder="Название карточки"
                            class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-white text-sm"
                            onkeydown="if(event.key==='Enter')saveCardEdit()">
                 </div>
             </div>
             <div class="flex gap-2 mt-6">
-                <button onclick="hideCardEdit()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Cancel</button>
-                <button onclick="saveCardEdit()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm">Save</button>
+                <button onclick="hideCardEdit()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm" data-i18n="common.cancel">Отмена</button>
+                <button onclick="saveCardEdit()" class="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-semibold hover:bg-cyan-400 transition-all text-sm" data-i18n="common.save">Сохранить</button>
             </div>
         </div>
     </div>
@@ -870,10 +870,10 @@
     <!-- Card Configure Modal -->
     <div id="card-config-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-sm w-full mx-4">
-            <h3 class="text-lg font-bold text-white mb-4">Card Display</h3>
+            <h3 class="text-lg font-bold text-white mb-4" data-i18n="picker.card_display">Отображение карточки</h3>
             <div id="card-config-options" class="space-y-2"></div>
             <div class="flex gap-2 mt-6">
-                <button onclick="hideCardConfig()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm">Close</button>
+                <button onclick="hideCardConfig()" class="flex-1 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm" data-i18n="picker.close">Закрыть</button>
             </div>
         </div>
     </div>
@@ -911,6 +911,6 @@
         </div>
     </div>
 
-    <script src="/js/main.js?v=3.5.77"></script>
+    <script src="/js/main.js?v=3.5.78"></script>
 </body>
 </html>

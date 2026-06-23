@@ -224,5 +224,24 @@
   "dashboard.add_group": "Add Group",
   "nodes.local_server": "My Server",
   "nodes.fans": "fans",
-  "nodes.disks": "disks"
+  "nodes.disks": "disks",
+
+  "picker.type": "Type",
+  "picker.fan": "🌀 Fan",
+  "picker.temperature": "🌡 Temperature",
+  "picker.disk": "💾 Disk",
+  "picker.system": "📊 System",
+  "picker.source": "Source",
+  "picker.my_server": "My Server (local)",
+  "picker.element": "Element",
+  "picker.add": "Add",
+  "picker.no_elements": "No elements found",
+  "picker.added": "added",
+  "picker.max_temp": "Max Temperature",
+  "picker.fans_summary": "Fans Summary",
+  "picker.edit_card": "Edit Card",
+  "picker.title": "Title",
+  "picker.title_placeholder": "Card title",
+  "picker.card_display": "Card Display",
+  "picker.close": "Close"
 }
