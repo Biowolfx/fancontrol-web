@@ -1192,6 +1192,9 @@ function onCardMouseUp(e) {
     if (!_cardMouseDown) return;
 
     const { cardEl, card, dragging } = _cardMouseDown;
+    const totalDx = Math.abs(e.clientX - _cardMouseDown.startX);
+    const totalDy = Math.abs(e.clientY - _cardMouseDown.startY);
+    if (totalDx > 2 || totalDy > 2) _cardDragOccurred = true;
     cardEl.classList.remove('opacity-40');
 
     if (dragging && _dropTarget) {
