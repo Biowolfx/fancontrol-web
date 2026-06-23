@@ -1871,11 +1871,28 @@ function updateDiskCardDetails(card, detailsEl) {
                 const attr = cachedSmart.attributes[attrKey];
                 const color = attr.criticality === 'critical' ? 'text-red-400' :
                              attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
-                const unit = attrKey === 'temperature' ? '°C' :
+                let displayValue = attr.value;
+                let suffix = attrKey === 'temperature' ? '°C' :
                             attrKey.includes('percentage') || attrKey.includes('spare') ? '%' : '';
+                if (attr.unit === 'nvme_blocks' && attr.unit_divisor) {
+                    const unit = smartUnits[attrKey] || 'raw';
+                    if (unit !== 'raw') {
+                        displayValue = formatBytes(attr.value * attr.unit_divisor, unit);
+                        suffix = ' ' + getUnitLabel(unit);
+                    }
+                } else if (attr.unit === 'hours') {
+                    const unit = smartUnits[attrKey] || 'raw';
+                    if (unit === 'days') {
+                        displayValue = (parseInt(attr.value || '0') / 24).toFixed(1);
+                        suffix = ' дн';
+                    } else if (unit === 'months') {
+                        displayValue = (parseInt(attr.value || '0') / 720).toFixed(1);
+                        suffix = ' мес';
+                    }
+                }
                 html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
                     <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
-                    <span class="${color} font-mono">${attr.value}${unit}</span>
+                    <span class="${color} font-mono">${displayValue}${suffix}</span>
                 </div>`;
             }
         }
