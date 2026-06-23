@@ -861,7 +861,7 @@ function renderPickerCard(card) {
 function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
-    if (_cardMouseDown?.cardId === cardId) return;
+    if (_cardMouseDown?.cardId === cardId || _cardResizing?.cardId === cardId) return;
     cardEl.style.alignSelf = 'start';
     const contentEl = cardEl.querySelector('.card-content');
     const contentH = contentEl ? contentEl.scrollHeight : cardEl.scrollHeight;
@@ -2117,8 +2117,6 @@ async function prefetchSmartForCards() {
             if (data && !data.error) {
                 _smartCache[card.sourceId] = data;
                 updateCardDetails(card.id);
-                const cardEl = document.querySelector(`[data-card-id="${card.id}"]`);
-                if (cardEl) snapCardToGrid(cardEl);
             }
         } catch (e) {}
     }
@@ -2142,10 +2140,7 @@ function startPickerLiveUpdate() {
             if (fan) {
                 el.textContent = fan.rpm || 0;
                 const cardEl = el.closest('[data-card-id]');
-                if (cardEl) {
-                    updateCardDetails(cardEl.dataset.cardId);
-                    snapCardToGrid(cardEl);
-                }
+                if (cardEl) updateCardDetails(cardEl.dataset.cardId);
             }
         });
         document.querySelectorAll('[data-temp-id]').forEach(el => {
@@ -2159,15 +2154,11 @@ function startPickerLiveUpdate() {
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
             if (val != null) el.textContent = val;
-            const cardEl = el.closest('[data-card-id]');
-            if (cardEl) snapCardToGrid(cardEl);
         });
         document.querySelectorAll('[data-disk-id]').forEach(el => {
             const id = el.dataset.diskId;
             if (currentState?.hdd_sensors?.[id]) {
                 el.textContent = currentState.hdd_sensors[id].temp || '--';
-                const cardEl = el.closest('[data-card-id]');
-                if (cardEl) snapCardToGrid(cardEl);
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
@@ -2176,7 +2167,6 @@ function startPickerLiveUpdate() {
                 if (cardEl) {
                     const detailsEl = cardEl.querySelector('.card-details');
                     if (detailsEl) updateDiskCardDetails(c, detailsEl);
-                    snapCardToGrid(cardEl);
                 }
             }
         });
