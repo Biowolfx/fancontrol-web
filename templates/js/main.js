@@ -858,7 +858,8 @@ function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
     cardEl.style.alignSelf = 'start';
-    const contentH = cardEl.scrollHeight;
+    const contentEl = cardEl.querySelector('.card-content');
+    const contentH = contentEl ? contentEl.scrollHeight : cardEl.scrollHeight;
     cardEl.style.alignSelf = 'stretch';
     const needed = Math.max(1, Math.ceil(contentH / 100));
     const saved = getPickerCards();
@@ -961,6 +962,12 @@ function onCardResizeEnd(e) {
 
     let colSpan = el._resizeColSpan || 3;
     let rowSpan = el._resizeRowSpan || 1;
+
+    const contentEl = el.querySelector('.card-content');
+    if (contentEl) {
+        const minRows = Math.max(1, Math.ceil(contentEl.scrollHeight / 100));
+        rowSpan = Math.max(minRows, rowSpan);
+    }
 
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
@@ -1774,6 +1781,8 @@ function toggleCardOption(cardId, option, enabled) {
 
     setPickerCards(saved);
     updateCardDetails(cardId);
+    const el = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (el) snapCardToGrid(el);
 }
 
 function getFanData(source, sourceId) {
@@ -2085,6 +2094,8 @@ async function prefetchSmartForCards() {
             if (data && !data.error) {
                 _smartCache[card.sourceId] = data;
                 updateCardDetails(card.id);
+                const cardEl = document.querySelector(`[data-card-id="${card.id}"]`);
+                if (cardEl) snapCardToGrid(cardEl);
             }
         } catch (e) {}
     }
@@ -2108,7 +2119,10 @@ function startPickerLiveUpdate() {
             if (fan) {
                 el.textContent = fan.rpm || 0;
                 const cardEl = el.closest('[data-card-id]');
-                if (cardEl) updateCardDetails(cardEl.dataset.cardId);
+                if (cardEl) {
+                    updateCardDetails(cardEl.dataset.cardId);
+                    snapCardToGrid(cardEl);
+                }
             }
         });
         document.querySelectorAll('[data-temp-id]').forEach(el => {
@@ -2122,11 +2136,15 @@ function startPickerLiveUpdate() {
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
             if (val != null) el.textContent = val;
+            const cardEl = el.closest('[data-card-id]');
+            if (cardEl) snapCardToGrid(cardEl);
         });
         document.querySelectorAll('[data-disk-id]').forEach(el => {
             const id = el.dataset.diskId;
             if (currentState?.hdd_sensors?.[id]) {
                 el.textContent = currentState.hdd_sensors[id].temp || '--';
+                const cardEl = el.closest('[data-card-id]');
+                if (cardEl) snapCardToGrid(cardEl);
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
@@ -2135,6 +2153,7 @@ function startPickerLiveUpdate() {
                 if (cardEl) {
                     const detailsEl = cardEl.querySelector('.card-details');
                     if (detailsEl) updateDiskCardDetails(c, detailsEl);
+                    snapCardToGrid(cardEl);
                 }
             }
         });
