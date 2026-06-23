@@ -1074,13 +1074,13 @@ function onCardMouseMove(e) {
     const rowSpan = card.rowSpan || 1;
     const cols = getCanvasCols();
 
-    const cardCenterCol = (card.col || 1) + (colSpan - 1) / 2;
-    const cardCenterRow = (card.row || 1) + (rowSpan - 1) / 2;
-    const distCol = Math.abs(cell.col + 0.5 - cardCenterCol);
-    const distRow = Math.abs(cell.row + 0.5 - cardCenterRow);
+    const cardCol = card.col || 1;
+    const cardRow = card.row || 1;
+    const inCardArea = cell.col >= cardCol && cell.col < cardCol + colSpan
+                    && cell.row >= cardRow && cell.row < cardRow + rowSpan;
 
-    let newCol = distCol < 0.6 ? (card.col || 1) : cell.col;
-    let newRow = distRow < 0.6 ? (card.row || 1) : cell.row;
+    let newCol = inCardArea ? cardCol : cell.col;
+    let newRow = inCardArea ? cardRow : cell.row;
     newCol = Math.max(1, Math.min(cols - colSpan + 1, newCol));
     newRow = Math.max(1, newRow);
     const occupied = isCellOccupied(newCol, newRow, colSpan, rowSpan, card.id);
@@ -1111,8 +1111,7 @@ function onCardMouseMove(e) {
 
     _dropTarget = { col: newCol, row: newRow, occupied };
 
-    const log = `[MOVE] card=${card.id} stored(col=${card.col},row=${card.row}) cursorCell(col=${cell.col},row=${cell.row}) center(col=${cardCenterCol.toFixed(1)},row=${cardCenterRow.toFixed(1)}) dist(col=${distCol.toFixed(2)},row=${distRow.toFixed(2)}) → new(col=${newCol},row=${newRow}) occ=${occupied}`;
-    console.log(log);
+    console.log(`[MOVE] card=${card.id} stored(col=${cardCol},row=${cardRow}) span(${colSpan}x${rowSpan}) cursor(col=${cell.col},row=${cell.row}) inArea=${inCardArea} → new(col=${newCol},row=${newRow}) occ=${occupied}`);
 
     const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));
