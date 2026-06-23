@@ -320,10 +320,14 @@ function showMainScreen() {
     }
     if (wasOnSetup) showView('dashboard');
     updateCanvasColumns();
-    loadPickerCards().then(() => {
-        buildServerTree();
-        startPickerLiveUpdate();
-    });
+    if (wasOnSetup) {
+        loadPickerCards().then(() => {
+            buildServerTree();
+            startPickerLiveUpdate();
+        });
+    } else {
+        if (!_pickerLiveTimer) startPickerLiveUpdate();
+    }
 }
 
 function updateFailsafeIndicator(failsafe) {
@@ -754,7 +758,7 @@ function addSelectedCards() {
 
         const label = cb.dataset.label || cb.value;
         const colSpan = 3;
-        const pos = findNextPosition(saved, colSpan);
+        const pos = findFreePosition(saved, colSpan, 1, null);
         const cardData = { id: cardId, type, source, sourceId: cb.value, label, col: pos.col, row: pos.row, colSpan };
         renderPickerCard(cardData);
         saved.push(cardData);
@@ -824,7 +828,7 @@ function renderPickerCard(card) {
 
     if (!card.col || !card.row) {
         const saved = getPickerCards().filter(c => c.id !== card.id);
-        const pos = findNextPosition(saved, card.colSpan || 3);
+        const pos = findFreePosition(saved, card.colSpan || 3, 1, card.id);
         card.col = pos.col;
         card.row = pos.row;
     }
