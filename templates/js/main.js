@@ -982,6 +982,8 @@ function onCardResizeEnd(e) {
     }
 
     _cardResizing = null;
+    _cardDragOccurred = true;
+    setTimeout(() => { _cardDragOccurred = false; }, 200);
     updateCanvasMinHeight();
 }
 
