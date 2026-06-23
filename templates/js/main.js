@@ -1050,6 +1050,18 @@ function onCardMouseMove(e) {
         _cardMouseDown.cardEl.classList.add('opacity-40');
         _cardDragOccurred = true;
 
+        const canvas = document.getElementById('dashboard-canvas');
+        const cs = getComputedStyle(canvas);
+        _cardMouseDown.gridSnapshot = {
+            cols: getCanvasCols(),
+            padL: parseFloat(cs.paddingLeft) || 16,
+            padT: parseFloat(cs.paddingTop) || 16,
+            padR: parseFloat(cs.paddingRight) || 16,
+            canvasW: canvas.offsetWidth,
+            gap: 8,
+            rowH: 100
+        };
+
         _cardDragClone = _cardMouseDown.cardEl.cloneNode(true);
         _cardDragClone.classList.remove('opacity-40');
         _cardDragClone.style.cssText = `
@@ -1089,20 +1101,16 @@ function onCardMouseMove(e) {
 
     if (!_cardDropPreview) {
         _cardDropPreview = document.createElement('div');
-        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:all 0.1s ease;';
+        _cardDropPreview.style.cssText = 'position:absolute;pointer-events:none;z-index:10;border:2px dashed;border-radius:12px;transition:none;';
     }
 
-    const padLeft = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
-    const padTop = parseInt(getComputedStyle(canvas).paddingTop) || 16;
-    const padRight = parseInt(getComputedStyle(canvas).paddingRight) || 16;
-    const contentW = canvas.offsetWidth - padLeft - padRight;
-    const gap = 8;
-    const colW = (contentW - (cols - 1) * gap) / cols;
-    const rowH = 100;
-    _cardDropPreview.style.left = (padLeft + (newCol - 1) * (colW + gap)) + 'px';
-    _cardDropPreview.style.top = (padTop + (newRow - 1) * (rowH + gap)) + 'px';
-    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
-    _cardDropPreview.style.height = (rowSpan * (rowH + gap) - gap) + 'px';
+    const snap = _cardMouseDown.gridSnapshot;
+    const contentW = snap.canvasW - snap.padL - snap.padR;
+    const colW = (contentW - (snap.cols - 1) * snap.gap) / snap.cols;
+    _cardDropPreview.style.left = (snap.padL + (newCol - 1) * (colW + snap.gap)) + 'px';
+    _cardDropPreview.style.top = (snap.padT + (newRow - 1) * (snap.rowH + snap.gap)) + 'px';
+    _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * snap.gap) + 'px';
+    _cardDropPreview.style.height = (rowSpan * (snap.rowH + snap.gap) - snap.gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
     _cardDropPreview.style.display = 'block';
