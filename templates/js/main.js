@@ -831,7 +831,7 @@ function renderPickerCard(card) {
     el.style.gridColumn = `${card.col} / span ${card.colSpan || 3}`;
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
-    el.style.alignSelf = 'start';
+    el.style.alignSelf = 'stretch';
 
     canvas.appendChild(el);
 
@@ -1100,7 +1100,7 @@ function onCardMouseMove(e) {
     _cardDropPreview.style.left = (padLeft + (newCol - 1) * (colW + gap)) + 'px';
     _cardDropPreview.style.top = (padTop + (newRow - 1) * (rowH + gap)) + 'px';
     _cardDropPreview.style.width = (colSpan * colW + (colSpan - 1) * gap) + 'px';
-    _cardDropPreview.style.height = (rowSpan * rowH + (rowSpan - 1) * gap) + 'px';
+    _cardDropPreview.style.height = (rowSpan * (rowH + gap) - gap) + 'px';
     _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
     _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
     _cardDropPreview.style.display = 'block';
