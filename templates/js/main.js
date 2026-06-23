@@ -861,6 +861,7 @@ function renderPickerCard(card) {
 function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
+    if (_cardMouseDown?.cardId === cardId) return;
     cardEl.style.alignSelf = 'start';
     const contentEl = cardEl.querySelector('.card-content');
     const contentH = contentEl ? contentEl.scrollHeight : cardEl.scrollHeight;
@@ -987,12 +988,6 @@ function onCardResizeEnd(e) {
     let colSpan = el._resizeColSpan || 3;
     let rowSpan = el._resizeRowSpan || 1;
 
-    const contentEl = el.querySelector('.card-content');
-    if (contentEl) {
-        const minRows = Math.max(1, Math.ceil(contentEl.scrollHeight / 100));
-        rowSpan = Math.max(minRows, rowSpan);
-    }
-
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
 
@@ -1085,7 +1080,11 @@ function onCardMouseDown(e) {
     _cardMouseDown = {
         cardId, cardEl, card,
         startX: e.clientX, startY: e.clientY,
-        offsetX, offsetY, dragging: false
+        offsetX, offsetY, dragging: false,
+        colSpan: card.colSpan || 3,
+        rowSpan: card.rowSpan || 1,
+        cardCol: card.col || 1,
+        cardRow: card.row || 1
     };
 
     console.log(`[DOWN] card=${cardId} pos(col=${card.col},row=${card.row}) span(col=${card.colSpan||3},row=${card.rowSpan||1}) offset(X=${Math.round(offsetX)},Y=${Math.round(offsetY)}) cardRect(left=${Math.round(rect.left)},top=${Math.round(rect.top)},w=${Math.round(rect.width)},h=${Math.round(rect.height)})`);
@@ -1144,13 +1143,13 @@ function onCardMouseMove(e) {
 
     const canvas = document.getElementById('dashboard-canvas');
     const card = _cardMouseDown.card;
-    const colSpan = card.colSpan || 3;
-    const rowSpan = card.rowSpan || 1;
+    const colSpan = _cardMouseDown.colSpan;
+    const rowSpan = _cardMouseDown.rowSpan;
     const cols = getCanvasCols();
     const snap = _cardMouseDown.gridSnapshot;
 
-    const cardCol = card.col || 1;
-    const cardRow = card.row || 1;
+    const cardCol = _cardMouseDown.cardCol;
+    const cardRow = _cardMouseDown.cardRow;
 
     const cardLeft = snap.canvasLeft + snap.padL + (cardCol - 1) * (snap.colW + snap.gap);
     const cardTop = snap.canvasTop + snap.padT + (cardRow - 1) * snap.rowStep;
