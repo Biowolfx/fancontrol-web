@@ -2280,6 +2280,11 @@ function removePickerGroup(groupId) {
     updateCanvasMinHeight();
 }
 
+function onGroupCardDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
 function onGroupDragLeave(e) {
     this.classList.remove('border-neon-purple', 'bg-purple-900/10');
 }
