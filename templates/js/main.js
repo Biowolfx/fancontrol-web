@@ -868,17 +868,66 @@ function snapCardToGrid(cardEl) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
+
     const contentEl = cardEl.querySelector('.card-content');
+
+    // --- LOG: before measurement ---
+    console.log(`[SNAP:${cardId}] current=${current}`);
+
+    // Method: set alignSelf=start so card shrinks to content
     cardEl.style.alignSelf = 'start';
-    if (contentEl) contentEl.style.height = 'auto';
+    if (contentEl) {
+        contentEl.style.height = 'auto';
+        contentEl.style.overflow = 'visible';
+    }
+    void cardEl.offsetHeight; // force reflow
+
+    const scrollH = cardEl.scrollHeight;
+    const offsetH = cardEl.offsetHeight;
+    const cs = getComputedStyle(cardEl);
+    const padTop = parseFloat(cs.paddingTop);
+    const padBot = parseFloat(cs.paddingBottom);
+    const borderTop = parseFloat(cs.borderTopWidth);
+    const borderBot = parseFloat(cs.borderBottomWidth);
+    const cardH = parseFloat(cs.height);
+
+    let contentScrollH = 0, contentOffsetH = 0, contentScrollH_noOverride = 0;
+    if (contentEl) {
+        contentScrollH = contentEl.scrollHeight;
+        contentOffsetH = contentEl.offsetHeight;
+    }
+
+    // Restore contentEl, measure WITHOUT override
+    if (contentEl) {
+        contentEl.style.height = '';
+        contentEl.style.overflow = '';
+    }
     void cardEl.offsetHeight;
-    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
+    if (contentEl) {
+        contentScrollH_noOverride = contentEl.scrollHeight;
+    }
+
     cardEl.style.alignSelf = 'stretch';
-    if (contentEl) contentEl.style.height = '';
+
+    console.log(`[SNAP:${cardId}] scrollH=${scrollH} offsetH=${offsetH} padV=${padTop}+${padBot}=${padTop+padBot} borderV=${borderTop}+${borderBot}=${borderTop+borderBot} cardH=${cardH}`);
+    console.log(`[SNAP:${cardId}] content: scrollH=${contentScrollH} offsetH=${contentOffsetH} noOverride=${contentScrollH_noOverride}`);
+
+    // Calculation methods
+    const m1 = Math.max(1, Math.ceil(scrollH / 100));
+    const m2 = Math.max(1, Math.ceil((scrollH - padTop - padBot) / 100));
+    const m3 = Math.max(1, Math.ceil((contentScrollH + padTop + padBot) / 100));
+    const m4 = Math.max(1, Math.ceil(contentScrollH_noOverride / 100));
+
+    console.log(`[SNAP:${cardId}] needed: m1(scrollH/100)=${m2} m2((scrollH-pad)/100)=${m2} m3(content+pad/100)=${m3} m4(contentNoOverride/100)=${m4}`);
+
+    const needed = m3;
     if (needed !== current) {
+        console.log(`[SNAP:${cardId}] RESIZE ${current} -> ${needed}`);
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
         setPickerCards(saved);
+    } else {
+        console.log(`[SNAP:${cardId}] no change (needed=${needed} current=${current})`);
     }
 }
 
@@ -1870,7 +1919,6 @@ function updateCardDetails(cardId) {
 
     if (card.type === 'disk') {
         updateDiskCardDetails(card, detailsEl);
-        snapCardToGrid(cardEl);
         return;
     }
     if (card.type !== 'fan') {
@@ -1898,7 +1946,6 @@ function updateCardDetails(cardId) {
     }
 
     detailsEl.innerHTML = html;
-    snapCardToGrid(cardEl);
 }
 
 function updateDiskCardDetails(card, detailsEl) {
