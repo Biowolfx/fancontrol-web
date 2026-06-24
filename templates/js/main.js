@@ -1870,6 +1870,7 @@ function updateCardDetails(cardId) {
 
     if (card.type === 'disk') {
         updateDiskCardDetails(card, detailsEl);
+        snapCardToGrid(cardEl);
         return;
     }
     if (card.type !== 'fan') {
@@ -1897,6 +1898,7 @@ function updateCardDetails(cardId) {
     }
 
     detailsEl.innerHTML = html;
+    snapCardToGrid(cardEl);
 }
 
 function updateDiskCardDetails(card, detailsEl) {
