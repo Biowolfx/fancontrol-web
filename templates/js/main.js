@@ -868,9 +868,13 @@ function snapCardToGrid(cardEl) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
+    const contentEl = cardEl.querySelector('.card-content');
     cardEl.style.alignSelf = 'start';
+    if (contentEl) contentEl.style.height = 'auto';
+    void cardEl.offsetHeight;
     const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
     cardEl.style.alignSelf = 'stretch';
+    if (contentEl) contentEl.style.height = '';
     if (needed !== current) {
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
