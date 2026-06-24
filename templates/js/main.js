@@ -2492,73 +2492,74 @@ function getStatusBadgeClass(status) {
 // ============================================================================
 
 function updateInspector(fan) {
-    // Show inspector, hide empty state
-    document.getElementById('inspector-empty').classList.add('hidden');
-    document.getElementById('inspector-fan').classList.remove('hidden');
+    document.getElementById('inspector-empty')?.classList.add('hidden');
+    document.getElementById('inspector-fan')?.classList.remove('hidden');
     
-    // Update title
-    document.getElementById('inspector-title').textContent = fan.label;
-    document.getElementById('inspector-subtitle').textContent = `ID: ${fan.id || 'unknown'}`;
+    document.getElementById('inspector-title')?.textContent = fan.label;
+    document.getElementById('inspector-subtitle')?.textContent = `ID: ${fan.id || 'unknown'}`;
     
-    // Update fan name
-    document.getElementById('fan-name').textContent = fan.label;
+    document.getElementById('fan-name')?.textContent = fan.label;
     
-    // Update status badge
     const statusBadge = document.getElementById('fan-status-badge');
-    statusBadge.textContent = t('status.' + fan.status, fan.status || 'unknown');
-    statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(fan.status)}`;
+    if (statusBadge) {
+        statusBadge.textContent = t('status.' + fan.status, fan.status || 'unknown');
+        statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${getStatusBadgeClass(fan.status)}`;
+    }
     
-    // Update inverted badge
     const invertedBadge = document.getElementById('fan-inverted-badge');
     if (invertedBadge) {
         invertedBadge.classList.toggle('hidden', !fan.inverted);
     }
     
-    // Update mode badge
     const modeBadge = document.getElementById('fan-mode-badge');
     const mode = fan.mode || 'manual';
-    modeBadge.textContent = t('mode.' + mode, mode).toUpperCase();
-    modeBadge.className = mode === 'auto' 
-        ? 'text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan'
-        : 'text-xs px-2 py-0.5 rounded-full bg-purple-900 bg-opacity-30 text-neon-purple';
-    
-    // Update RPM
-    document.getElementById('fan-rpm-display').textContent = fan.rpm || 0;
-    
-    // Update RPM color
-    const rpmDisplay = document.getElementById('fan-rpm-display');
-    rpmDisplay.classList.remove('text-neon-cyan', 'text-neon-orange', 'text-neon-red');
-    if (fan.rpm > (fan.max_rpm * 0.8 || 1500)) {
-        rpmDisplay.classList.add('text-neon-orange');
-    } else if (fan.status === 'failsafe' || fan.status === 'critical') {
-        rpmDisplay.classList.add('text-neon-red');
-    } else {
-        rpmDisplay.classList.add('text-neon-cyan');
+    if (modeBadge) {
+        modeBadge.textContent = t('mode.' + mode, mode).toUpperCase();
+        modeBadge.className = mode === 'auto' 
+            ? 'text-xs px-2 py-0.5 rounded-full bg-cyan-900 bg-opacity-30 text-neon-cyan'
+            : 'text-xs px-2 py-0.5 rounded-full bg-purple-900 bg-opacity-30 text-neon-purple';
     }
     
-    // Update slider (only if not dragging)
+    const rpmDisplay = document.getElementById('fan-rpm-display');
+    if (rpmDisplay) {
+        rpmDisplay.textContent = fan.rpm || 0;
+        rpmDisplay.classList.remove('text-neon-cyan', 'text-neon-orange', 'text-neon-red');
+        if (fan.rpm > (fan.max_rpm * 0.8 || 1500)) {
+            rpmDisplay.classList.add('text-neon-orange');
+        } else if (fan.status === 'failsafe' || fan.status === 'critical') {
+            rpmDisplay.classList.add('text-neon-red');
+        } else {
+            rpmDisplay.classList.add('text-neon-cyan');
+        }
+    }
+    
     if (!isDragging) {
         const slider = document.getElementById('pwm-slider');
         const pct = fan.current_pct != null ? fan.current_pct : (fan.manual_pct != null ? fan.manual_pct : 50);
-        slider.value = pct;
-        slider.disabled = (mode === 'auto');
-        document.getElementById('pwm-value-display').textContent = `${pct}%`;
+        if (slider) {
+            slider.value = pct;
+            slider.disabled = (mode === 'auto');
+        }
+        document.getElementById('pwm-value-display')?.textContent = `${pct}%`;
     }
     
-    // Update mode buttons
     const btnManual = document.getElementById('btn-mode-manual');
     const btnAuto = document.getElementById('btn-mode-auto');
     
-    if (mode === 'manual') {
-        btnManual.className = BTN_MANUAL_ACTIVE;
-        btnAuto.className = BTN_AUTO_INACTIVE;
-    } else {
-        btnManual.className = BTN_MANUAL_INACTIVE;
-        btnAuto.className = BTN_AUTO_ACTIVE;
+    if (btnManual && btnAuto) {
+        if (mode === 'manual') {
+            btnManual.className = BTN_MANUAL_ACTIVE;
+            btnAuto.className = BTN_AUTO_INACTIVE;
+        } else {
+            btnManual.className = BTN_MANUAL_INACTIVE;
+            btnAuto.className = BTN_AUTO_ACTIVE;
+        }
     }
     
-    // Show/hide auto settings
-    document.getElementById('auto-settings').style.display = (mode === 'auto') ? 'block' : 'none';
+    const autoSettings = document.getElementById('auto-settings');
+    if (autoSettings) {
+        autoSettings.style.display = (mode === 'auto') ? 'block' : 'none';
+    }
     
     // Render schedule grid when in auto mode
     if (mode === 'auto') {
@@ -2579,15 +2580,15 @@ function updateInspector(fan) {
     const lambdaEl = document.getElementById('cal-lambda');
     if (minPwmEl) {
         minPwmEl.value = cal.min_pwm || 0;
-        document.getElementById('cal-min-pwm-val').textContent = cal.min_pwm || 0;
+        document.getElementById('cal-min-pwm-val')?.textContent = cal.min_pwm || 0;
     }
     if (maxPwmEl) {
         maxPwmEl.value = cal.max_pwm || 255;
-        document.getElementById('cal-max-pwm-val').textContent = cal.max_pwm || 255;
+        document.getElementById('cal-max-pwm-val')?.textContent = cal.max_pwm || 255;
     }
     if (lambdaEl) {
         lambdaEl.value = (cal.lambda || 1.0) * 10;
-        document.getElementById('cal-lambda-val').textContent = (cal.lambda || 1.0).toFixed(1);
+        document.getElementById('cal-lambda-val')?.textContent = (cal.lambda || 1.0).toFixed(1);
     }
 }
 
