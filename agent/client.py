@@ -87,6 +87,8 @@ def _on_command(data):
                 state['fans'][fan_id]['manual_pct'] = value
                 state['fans'][fan_id]['mode'] = 'manual'
         invalidate_state_cache()
+        from core.hardware import set_pwm
+        set_pwm(fan_id, int(value * 255 // 100))
 
 
 def _telemetry_loop():
