@@ -864,21 +864,13 @@ function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
     if (_cardMouseDown?.cardId === cardId || _cardResizing?.cardId === cardId) return;
-    const contentEl = cardEl.querySelector('.card-content');
-    if (!contentEl) return;
-    contentEl.style.height = 'auto';
-    contentEl.style.overflow = 'visible';
-    void contentEl.offsetHeight;
-    const contentH = contentEl.scrollHeight;
-    const style = getComputedStyle(cardEl);
-    const padV = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
-    contentEl.style.height = '';
-    contentEl.style.overflow = '';
-    const needed = Math.max(1, Math.ceil((contentH + padV) / 100));
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
+    cardEl.style.alignSelf = 'start';
+    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
+    cardEl.style.alignSelf = 'stretch';
     if (needed !== current) {
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
