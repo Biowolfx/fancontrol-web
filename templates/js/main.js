@@ -865,12 +865,8 @@ function snapCardToGrid(cardEl) {
     if (!cardId) return;
     if (_cardMouseDown?.cardId === cardId || _cardResizing?.cardId === cardId) return;
     cardEl.style.alignSelf = 'start';
-    const contentEl = cardEl.querySelector('.card-content');
-    const contentH = contentEl ? contentEl.scrollHeight : cardEl.scrollHeight;
+    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
     cardEl.style.alignSelf = 'stretch';
-    const CARD_PADDING = 32;
-    const totalH = contentH + CARD_PADDING;
-    const needed = Math.max(1, Math.ceil(totalH / 100));
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
