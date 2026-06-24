@@ -302,6 +302,7 @@ function updateUI(data) {
 function showSetupScreen() {
     document.getElementById('setup-screen').classList.remove('hidden');
     document.getElementById('main-screen').classList.add('hidden');
+    stopPickerLiveUpdate();
     // Close settings panel if open
     const overlay = document.getElementById('settings-overlay');
     const panel = document.getElementById('settings-panel');
@@ -2188,6 +2189,13 @@ function startPickerLiveUpdate() {
             }
         });
     }, 2000);
+}
+
+function stopPickerLiveUpdate() {
+    if (_pickerLiveTimer) {
+        clearInterval(_pickerLiveTimer);
+        _pickerLiveTimer = null;
+    }
 }
 
 function showGroupCreator() {
