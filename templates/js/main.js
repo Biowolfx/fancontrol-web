@@ -781,7 +781,10 @@ function renderPickerCard(card) {
     let valueHtml = '';
 
     if (type === 'fan') {
-        icon = '🌀';
+        const fanData = getFanData(source, sourceId);
+        const fanStatus = fanData?.status || 'unknown';
+        const dotColor = fanStatus === 'running' ? 'green' : (fanStatus === 'failsafe' || fanStatus === 'critical') ? 'red' : 'yellow';
+        icon = `🌀 <span class="status-dot ${dotColor}"></span>`;
         colorClass = 'text-neon-cyan';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">RPM</span></div>`;
         valueHtml += renderSparkline(`fan:${source}:${sourceId}`, '#22d3ee');
@@ -2224,6 +2227,11 @@ function startPickerLiveUpdate() {
                 pushSparkline(`fan:${src}:${id}`, fan.rpm || 0);
                 const cardEl = el.closest('[data-card-id]');
                 if (cardEl) updateCardDetails(cardEl.dataset.cardId);
+                const dot = cardEl?.querySelector('.status-dot');
+                if (dot) {
+                    const s = fan.status || 'unknown';
+                    dot.className = 'status-dot ' + (s === 'running' ? 'green' : (s === 'failsafe' || s === 'critical') ? 'red' : 'yellow');
+                }
             }
         });
         document.querySelectorAll('[data-temp-id]').forEach(el => {
