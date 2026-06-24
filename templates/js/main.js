@@ -838,6 +838,7 @@ function renderPickerCard(card) {
     el.style.gridRow = `${card.row} / span ${card.rowSpan || 1}`;
     el.style.position = 'relative';
     el.style.alignSelf = 'stretch';
+    el.style.minWidth = '0';
 
     canvas.appendChild(el);
 
@@ -1165,8 +1166,8 @@ function onCardMouseMove(e) {
 
     const cardLeft = snap.canvasLeft + snap.padL + (cardCol - 1) * (snap.colW + snap.gap);
     const cardTop = snap.canvasTop + snap.padT + (cardRow - 1) * snap.rowStep;
-    const cardWidth = colSpan * snap.colW + (colSpan - 1) * snap.gap;
-    const cardHeight = rowSpan * snap.rowStep - snap.gap;
+    const cardWidth = snap.cardW || (colSpan * snap.colW + (colSpan - 1) * snap.gap);
+    const cardHeight = snap.cardElH || (rowSpan * snap.rowStep - snap.gap);
     const cardCenterX = cardLeft + cardWidth / 2;
     const cardCenterY = cardTop + cardHeight / 2;
     const halfW = cardWidth / 2;
