@@ -61,6 +61,12 @@ def api_get_state():
     return jsonify(get_state())
 
 
+@routes.route('/api/system')
+def api_get_system():
+    from core.hardware import get_system_info
+    return jsonify(get_system_info())
+
+
 @routes.route('/api/lang/<code>')
 def api_get_lang(code):
     """Serve translation file"""

@@ -718,3 +718,47 @@ def refresh():
                         state['fans'][key]['rpm'] = rpm
         except Exception:
             pass
+
+
+def get_system_info():
+    """Get system info: uptime, CPU, memory."""
+    info = {}
+
+    # Uptime
+    try:
+        with open('/proc/uptime') as f:
+            uptime_sec = float(f.read().split()[0])
+        days = int(uptime_sec // 86400)
+        hours = int((uptime_sec % 86400) // 3600)
+        mins = int((uptime_sec % 3600) // 60)
+        info['uptime'] = f"{days}d {hours}h {mins}m"
+        info['uptime_seconds'] = uptime_sec
+    except Exception:
+        info['uptime'] = '--'
+        info['uptime_seconds'] = 0
+
+    # CPU load
+    try:
+        load1, load5, load15 = os.getloadavg()
+        cpu_count = os.cpu_count() or 1
+        info['cpu_load'] = round(load1 / cpu_count * 100, 1)
+    except Exception:
+        info['cpu_load'] = 0
+
+    # Memory
+    try:
+        with open('/proc/meminfo') as f:
+            mem = {}
+            for line in f:
+                parts = line.split()
+                if parts[0] in ('MemTotal:', 'MemAvailable:'):
+                    mem[parts[0]] = int(parts[1])
+        total = mem.get('MemTotal:', 1)
+        avail = mem.get('MemAvailable:', 0)
+        info['mem_total_mb'] = round(total / 1024)
+        info['mem_used_mb'] = round((total - avail) / 1024)
+        info['mem_percent'] = round((total - avail) / total * 100, 1)
+    except Exception:
+        info['mem_percent'] = 0
+
+    return info
