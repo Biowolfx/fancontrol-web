@@ -919,7 +919,9 @@ function onCardResizeStart(e, cardId) {
     if (card?.lockSize) return;
 
     const contentEl = el.querySelector('.card-content');
+    el.style.alignSelf = 'start';
     const contentH = contentEl ? contentEl.scrollHeight : 0;
+    el.style.alignSelf = 'stretch';
     _cardResizeMinRowSpan = Math.max(1, Math.ceil(contentH / 100));
 
     _cardResizing = { cardId, el, col: card?.col, row: card?.row };
