@@ -303,6 +303,7 @@ function showSetupScreen() {
     document.getElementById('setup-screen').classList.remove('hidden');
     document.getElementById('main-screen').classList.add('hidden');
     stopPickerLiveUpdate();
+    stopSystemUpdate();
     // Close settings panel if open
     const overlay = document.getElementById('settings-overlay');
     const panel = document.getElementById('settings-panel');
@@ -325,9 +326,11 @@ function showMainScreen() {
         loadPickerCards().then(() => {
             buildServerTree();
             startPickerLiveUpdate();
+            startSystemUpdate();
         });
     } else {
         if (!_pickerLiveTimer) startPickerLiveUpdate();
+        startSystemUpdate();
     }
 }
 
@@ -798,6 +801,34 @@ function renderPickerCard(card) {
         colorClass = 'text-neon-purple';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
         valueHtml += renderSparkline(`disk:${sourceId}`, '#c084fc');
+    } else if (type === 'system') {
+        icon = '🖥';
+        colorClass = 'text-yellow-400';
+        valueHtml = `
+        <div class="space-y-2 mt-1">
+            <div class="flex justify-between text-xs">
+                <span class="text-gray-500">Uptime</span>
+                <span class="text-gray-300 font-mono" data-system-field="uptime">--</span>
+            </div>
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-500">CPU</span>
+                    <span class="text-gray-300 font-mono" data-system-field="cpu">--%</span>
+                </div>
+                <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-cyan-400 rounded-full transition-all duration-500" data-system-bar="cpu" style="width:0%"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-500">RAM</span>
+                    <span class="text-gray-300 font-mono" data-system-field="mem">--%</span>
+                </div>
+                <div class="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-purple-400 rounded-full transition-all duration-500" data-system-bar="mem" style="width:0%"></div>
+                </div>
+            </div>
+        </div>`;
     } else {
         valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
@@ -2271,6 +2302,25 @@ function stopPickerLiveUpdate() {
         clearInterval(_pickerLiveTimer);
         _pickerLiveTimer = null;
     }
+}
+
+let _systemTimer = null;
+function startSystemUpdate() {
+    if (_systemTimer) return;
+    _systemTimer = setInterval(async () => {
+        try {
+            const resp = await fetch('/api/system');
+            const data = await resp.json();
+            document.querySelectorAll('[data-system-field="uptime"]').forEach(el => el.textContent = data.uptime || '--');
+            document.querySelectorAll('[data-system-field="cpu"]').forEach(el => el.textContent = (data.cpu_load || 0) + '%');
+            document.querySelectorAll('[data-system-field="mem"]').forEach(el => el.textContent = (data.mem_percent || 0) + '%');
+            document.querySelectorAll('[data-system-bar="cpu"]').forEach(el => el.style.width = (data.cpu_load || 0) + '%');
+            document.querySelectorAll('[data-system-bar="mem"]').forEach(el => el.style.width = (data.mem_percent || 0) + '%');
+        } catch(e) {}
+    }, 5000);
+}
+function stopSystemUpdate() {
+    if (_systemTimer) { clearInterval(_systemTimer); _systemTimer = null; }
 }
 
 function showGroupCreator() {
