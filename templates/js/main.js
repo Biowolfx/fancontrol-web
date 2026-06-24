@@ -2015,6 +2015,19 @@ let _hiddenSensors = null;
 let _dashboardLoaded = false;
 let _dashboardSaveTimer = null;
 
+const _sparklineHistory = {};
+const SPARKLINE_MAX = 20;
+
+function pushSparkline(key, value) {
+    if (!_sparklineHistory[key]) _sparklineHistory[key] = [];
+    _sparklineHistory[key].push(value);
+    if (_sparklineHistory[key].length > SPARKLINE_MAX) _sparklineHistory[key].shift();
+}
+
+function getSparkline(key) {
+    return _sparklineHistory[key] || [];
+}
+
 async function loadDashboardFromServer() {
     try {
         const resp = await fetch('/api/dashboard');
@@ -2186,6 +2199,7 @@ function startPickerLiveUpdate() {
             }
             if (fan) {
                 el.textContent = fan.rpm || 0;
+                pushSparkline(`fan:${src}:${id}`, fan.rpm || 0);
                 const cardEl = el.closest('[data-card-id]');
                 if (cardEl) updateCardDetails(cardEl.dataset.cardId);
             }
@@ -2201,11 +2215,13 @@ function startPickerLiveUpdate() {
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
             if (val != null) el.textContent = val;
+            pushSparkline(`temp:${src}:${id}`, val);
         });
         document.querySelectorAll('[data-disk-id]').forEach(el => {
             const id = el.dataset.diskId;
             if (currentState?.hdd_sensors?.[id]) {
                 el.textContent = currentState.hdd_sensors[id].temp || '--';
+                pushSparkline(`disk:${id}`, currentState.hdd_sensors[id].temp || 0);
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
