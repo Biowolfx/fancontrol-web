@@ -2494,11 +2494,14 @@ function getStatusBadgeClass(status) {
 function updateInspector(fan) {
     document.getElementById('inspector-empty')?.classList.add('hidden');
     document.getElementById('inspector-fan')?.classList.remove('hidden');
-    
-    document.getElementById('inspector-title')?.textContent = fan.label;
-    document.getElementById('inspector-subtitle')?.textContent = `ID: ${fan.id || 'unknown'}`;
-    
-    document.getElementById('fan-name')?.textContent = fan.label;
+
+    const inspectorTitle = document.getElementById('inspector-title');
+    if (inspectorTitle) inspectorTitle.textContent = fan.label;
+    const inspectorSubtitle = document.getElementById('inspector-subtitle');
+    if (inspectorSubtitle) inspectorSubtitle.textContent = `ID: ${fan.id || 'unknown'}`;
+
+    const fanName = document.getElementById('fan-name');
+    if (fanName) fanName.textContent = fan.label;
     
     const statusBadge = document.getElementById('fan-status-badge');
     if (statusBadge) {
@@ -2540,7 +2543,8 @@ function updateInspector(fan) {
             slider.value = pct;
             slider.disabled = (mode === 'auto');
         }
-        document.getElementById('pwm-value-display')?.textContent = `${pct}%`;
+        const pwmValueDisplay = document.getElementById('pwm-value-display');
+        if (pwmValueDisplay) pwmValueDisplay.textContent = `${pct}%`;
     }
     
     const btnManual = document.getElementById('btn-mode-manual');
@@ -2580,15 +2584,18 @@ function updateInspector(fan) {
     const lambdaEl = document.getElementById('cal-lambda');
     if (minPwmEl) {
         minPwmEl.value = cal.min_pwm || 0;
-        document.getElementById('cal-min-pwm-val')?.textContent = cal.min_pwm || 0;
+        const calMinPwmVal = document.getElementById('cal-min-pwm-val');
+        if (calMinPwmVal) calMinPwmVal.textContent = cal.min_pwm || 0;
     }
     if (maxPwmEl) {
         maxPwmEl.value = cal.max_pwm || 255;
-        document.getElementById('cal-max-pwm-val')?.textContent = cal.max_pwm || 255;
+        const calMaxPwmVal = document.getElementById('cal-max-pwm-val');
+        if (calMaxPwmVal) calMaxPwmVal.textContent = cal.max_pwm || 255;
     }
     if (lambdaEl) {
         lambdaEl.value = (cal.lambda || 1.0) * 10;
-        document.getElementById('cal-lambda-val')?.textContent = (cal.lambda || 1.0).toFixed(1);
+        const calLambdaVal = document.getElementById('cal-lambda-val');
+        if (calLambdaVal) calLambdaVal.textContent = (cal.lambda || 1.0).toFixed(1);
     }
 }
 
