@@ -857,7 +857,6 @@ function renderPickerCard(card) {
     }
 
     updateCardDetails(id);
-    snapCardToGrid(el);
 }
 
 function snapCardToGrid(cardEl) {
@@ -873,7 +872,7 @@ function snapCardToGrid(cardEl) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
-    if (needed > current) {
+    if (needed !== current) {
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
         setPickerCards(saved);
