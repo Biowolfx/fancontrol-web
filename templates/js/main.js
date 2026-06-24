@@ -847,6 +847,7 @@ function renderPickerCard(card) {
         resizeHandle.addEventListener('mousedown', (e) => onCardResizeStart(e, id));
         if (card.lockSize) resizeHandle.style.display = 'none';
     }
+    if (card.lockSize) el.style.cursor = 'default';
 
     if (type === 'disk') {
         el.addEventListener('click', (e) => {
@@ -898,6 +899,7 @@ function toggleCardLockSize(cardId) {
     }
     const handle = el.querySelector('.card-resize-handle');
     if (handle) handle.style.display = card.lockSize ? 'none' : '';
+    el.style.cursor = card.lockSize ? 'default' : 'grab';
 }
 let _dropTarget = null;
 
@@ -1080,6 +1082,7 @@ function onCardMouseDown(e) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
+    if (card.lockSize) return;
 
     const rect = cardEl.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
