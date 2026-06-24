@@ -77,7 +77,7 @@ def register_agent_handlers(socketio):
         if server_config and control_mode == 'server':
             socketio.emit('server:config_push', {
                 'config': server_config,
-            })
+            }, room=node_id)
             logger.info(f'Pushed config to {node["name"]}')
 
             # Check for conflict on reconnect
