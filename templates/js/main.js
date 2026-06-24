@@ -871,7 +871,7 @@ function snapCardToGrid(cardEl) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
-    if (needed !== current) {
+    if (needed > current) {
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
         setPickerCards(saved);
@@ -1082,14 +1082,21 @@ function onCardMouseDown(e) {
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
 
+    const gridColMatch = cardEl.style.gridColumn?.match(/(\d+)\s*\/\s*span\s+(\d+)/);
+    const gridRowMatch = cardEl.style.gridRow?.match(/(\d+)\s*\/\s*span\s+(\d+)/);
+    const domColSpan = gridColMatch ? parseInt(gridColMatch[2]) : (card.colSpan || 3);
+    const domRowSpan = gridRowMatch ? parseInt(gridRowMatch[2]) : (card.rowSpan || 1);
+    const domCol = gridColMatch ? parseInt(gridColMatch[1]) : (card.col || 1);
+    const domRow = gridRowMatch ? parseInt(gridRowMatch[1]) : (card.row || 1);
+
     _cardMouseDown = {
         cardId, cardEl, card,
         startX: e.clientX, startY: e.clientY,
         offsetX, offsetY, dragging: false,
-        colSpan: card.colSpan || 3,
-        rowSpan: card.rowSpan || 1,
-        cardCol: card.col || 1,
-        cardRow: card.row || 1
+        colSpan: domColSpan,
+        rowSpan: domRowSpan,
+        cardCol: domCol,
+        cardRow: domRow
     };
 
     console.log(`[DOWN] card=${cardId} pos(col=${card.col},row=${card.row}) span(col=${card.colSpan||3},row=${card.rowSpan||1}) offset(X=${Math.round(offsetX)},Y=${Math.round(offsetY)}) cardRect(left=${Math.round(rect.left)},top=${Math.round(rect.top)},w=${Math.round(rect.width)},h=${Math.round(rect.height)})`);
