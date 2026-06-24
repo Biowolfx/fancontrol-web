@@ -64,11 +64,11 @@ def get_state() -> Dict[str, Any]:
 
     with state_lock:
         if _cached_state is not None and (now - _cached_state_time) < STATE_CACHE_TTL:
-            return _cached_state
+            return dict(_cached_state)
 
         _cached_state = _build_state_snapshot()
         _cached_state_time = now
-        return _cached_state
+        return dict(_cached_state)
 
 
 def invalidate_state_cache():
