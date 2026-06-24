@@ -887,7 +887,6 @@ function snapCardToGrid(cardEl) {
     const THRESHOLD = 10;
     let needed = current;
 
-    // Try to find the best rowSpan
     for (let rows = 1; rows <= 10; rows++) {
         const cap = rows * 100 - padV - 2;
         if (contentH <= cap + THRESHOLD) {
@@ -895,8 +894,6 @@ function snapCardToGrid(cardEl) {
             break;
         }
     }
-
-    console.log(`[SNAP] ${cardId}: content=${contentH} current=${current} needed=${needed}`);
 
     if (needed !== current) {
         card.rowSpan = needed;
