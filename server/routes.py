@@ -309,6 +309,12 @@ def api_update_check():
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
     """Pull latest code, sync to /app, then exit process."""
+    update_token = os.environ.get('FANCONTROL_UPDATE_TOKEN')
+    if update_token:
+        provided = request.headers.get('X-Update-Token') or request.args.get('token')
+        if provided != update_token:
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+
     try:
         repo_dir = '/repo'
         app_dir = '/app'
