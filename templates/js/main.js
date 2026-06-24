@@ -981,7 +981,7 @@ function onCardResizeMove(e) {
 
     const newW = _cardResizeStartW + dx;
     const newH = _cardResizeStartH + dy;
-    const newColSpan = Math.max(1, Math.min(cols, Math.round(newW / (colWidth + gap))));
+    const newColSpan = Math.max(2, Math.min(cols, Math.round(newW / (colWidth + gap))));
     const newRowSpan = Math.max(_cardResizeMinRowSpan, Math.min(8, Math.round(newH / rowStep)));
 
     el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
