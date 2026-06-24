@@ -868,7 +868,9 @@ function snapCardToGrid(cardEl) {
     const contentEl = cardEl.querySelector('.card-content');
     const contentH = contentEl ? contentEl.scrollHeight : cardEl.scrollHeight;
     cardEl.style.alignSelf = 'stretch';
-    const needed = Math.max(1, Math.ceil(contentH / 100));
+    const CARD_PADDING = 32;
+    const totalH = contentH + CARD_PADDING;
+    const needed = Math.max(1, Math.ceil(totalH / 100));
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
