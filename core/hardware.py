@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from pathlib import Path
@@ -289,6 +290,7 @@ SMART_ATTRIBUTE_META = {
 
 _smart_cache: Dict[str, Dict] = {}
 _smart_cache_time: Dict[str, float] = {}
+_smart_cache_lock = threading.Lock()
 SMART_CACHE_TTL = 60  # seconds
 
 

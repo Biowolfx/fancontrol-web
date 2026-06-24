@@ -123,12 +123,13 @@ def api_discover():
 def api_get_disk_smart(disk_id):
     """Get full SMART data for a specific disk"""
     import time as _time
-    from core.hardware import _smart_cache, _smart_cache_time, SMART_CACHE_TTL
+    from core.hardware import _smart_cache, _smart_cache_time, _smart_cache_lock, SMART_CACHE_TTL
 
     force_refresh = request.args.get('refresh', '0') == '1'
     now = _time.monotonic()
-    if not force_refresh and disk_id in _smart_cache and (now - _smart_cache_time.get(disk_id, 0)) < SMART_CACHE_TTL:
-        return jsonify(_smart_cache[disk_id])
+    with _smart_cache_lock:
+        if not force_refresh and disk_id in _smart_cache and (now - _smart_cache_time.get(disk_id, 0)) < SMART_CACHE_TTL:
+            return jsonify(_smart_cache[disk_id])
 
     with state_lock:
         disk = state.get('hdd_sensors', {}).get(disk_id)
@@ -142,8 +143,9 @@ def api_get_disk_smart(disk_id):
     result = read_disk_smart(device)
 
     if 'error' not in result:
-        _smart_cache[disk_id] = result
-        _smart_cache_time[disk_id] = now
+        with _smart_cache_lock:
+            _smart_cache[disk_id] = result
+            _smart_cache_time[disk_id] = now
 
     return jsonify(result)
 
