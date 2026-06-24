@@ -784,14 +784,17 @@ function renderPickerCard(card) {
         icon = '🌀';
         colorClass = 'text-neon-cyan';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">RPM</span></div>`;
+        valueHtml += renderSparkline(`fan:${source}:${sourceId}`, '#22d3ee');
     } else if (type === 'temperature') {
         icon = '🌡';
         colorClass = 'text-neon-green';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-temp-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
+        valueHtml += renderSparkline(`temp:${source}:${sourceId}`, '#4ade80');
     } else if (type === 'disk') {
         icon = '💾';
         colorClass = 'text-neon-purple';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
+        valueHtml += renderSparkline(`disk:${sourceId}`, '#c084fc');
     } else {
         valueHtml = `<div class="text-2xl font-bold font-mono text-neon-cyan">--</div>`;
     }
@@ -2026,6 +2029,25 @@ function pushSparkline(key, value) {
 
 function getSparkline(key) {
     return _sparklineHistory[key] || [];
+}
+
+function renderSparkline(key, color = '#22d3ee', width = 120, height = 30) {
+    const data = getSparkline(key);
+    if (data.length < 2) return '';
+    
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1;
+    
+    const points = data.map((v, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const y = height - ((v - min) / range) * (height - 4) - 2;
+        return `${x},${y}`;
+    }).join(' ');
+    
+    return `<svg width="${width}" height="${height}" class="mt-2 opacity-60">
+        <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
 }
 
 async function loadDashboardFromServer() {
