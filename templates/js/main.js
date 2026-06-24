@@ -870,7 +870,6 @@ function snapCardToGrid(cardEl) {
     const current = card.rowSpan || 1;
     const contentEl = cardEl.querySelector('.card-content');
 
-    // Measure true content height
     cardEl.style.alignSelf = 'start';
     if (contentEl) {
         contentEl.style.height = 'auto';
@@ -885,23 +884,19 @@ function snapCardToGrid(cardEl) {
         contentEl.style.overflow = '';
     }
 
-    // Capacity of current rowSpan
-    const capacity = current * 100 - padV - 2;
-    const overflow = contentH - capacity;
+    const THRESHOLD = 10;
+    let needed = current;
 
-    let needed;
-    if (overflow <= 0) {
-        // Content fits — maybe shrink
-        needed = Math.max(1, Math.ceil((contentH + padV) / 100));
-    } else if (overflow < 10) {
-        // Small overflow — keep current size (hidden by overflow:hidden)
-        needed = current;
-    } else {
-        // Significant overflow — expand
-        needed = Math.max(1, Math.ceil((contentH + padV) / 100));
+    // Try to find the best rowSpan
+    for (let rows = 1; rows <= 10; rows++) {
+        const cap = rows * 100 - padV - 2;
+        if (contentH <= cap + THRESHOLD) {
+            needed = rows;
+            break;
+        }
     }
 
-    console.log(`[SNAP] ${cardId}: content=${contentH} capacity=${capacity} overflow=${overflow} current=${current} needed=${needed}`);
+    console.log(`[SNAP] ${cardId}: content=${contentH} current=${current} needed=${needed}`);
 
     if (needed !== current) {
         card.rowSpan = needed;
