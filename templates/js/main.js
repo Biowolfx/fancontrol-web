@@ -3249,7 +3249,7 @@ function ruleKey(item) {
         mode: item.mode,
         target_temp: item.target_temp,
         speed_pct: item.speed_pct,
-        sensors: (item.sensors || []).sort(),
+        sensors: [...(item.sensors || [])].sort(),
         sensor_mode: item.sensor_mode
     });
 }
