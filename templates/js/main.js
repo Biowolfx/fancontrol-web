@@ -64,7 +64,7 @@ function saveSettings(partial) {
 }
 
 function formatTemp(celsius) {
-    if (celsius == null || celsius === 0) return '--';
+    if (celsius == null) return '--';
     const s = getSettings();
     if (s.tempUnit === 'fahrenheit') {
         return Math.round(celsius * 9 / 5 + 32) + '°F';
