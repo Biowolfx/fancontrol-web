@@ -932,6 +932,16 @@
         </div>
     </div>
 
+    <!-- Debug Panel -->
+    <div id="debug-panel" class="hidden fixed bottom-4 right-4 z-50 bg-black/95 border border-cyber-accent rounded-xl p-4 max-w-md max-h-96 overflow-y-auto font-mono text-xs text-gray-300 shadow-2xl">
+        <div class="flex justify-between items-center mb-3">
+            <span class="text-neon-cyan font-bold">DEBUG PANEL</span>
+            <button onclick="toggleDebugPanel()" class="text-gray-500 hover:text-white">✕</button>
+        </div>
+        <div id="debug-content"></div>
+    </div>
+    <button onclick="toggleDebugPanel()" class="fixed bottom-4 right-4 z-40 w-10 h-10 rounded-full bg-cyber-accent/30 border border-cyber-accent text-lg hover:bg-cyber-accent/50 transition-all" title="Debug">🐛</button>
+
     <script src="/js/main.js?v=3.5.110"></script>
 </body>
 </html>

@@ -4679,3 +4679,97 @@ async function pushConfigToNode(nodeId) {
 }
 
 console.log('[FanControl] main.js loaded successfully');
+
+// ============================================================================
+// DEBUG PANEL
+// ============================================================================
+
+let _debugOpen = false;
+
+function toggleDebugPanel() {
+    _debugOpen = !_debugOpen;
+    const panel = document.getElementById('debug-panel');
+    const btn = document.querySelector('[title="Debug"]');
+    if (_debugOpen) {
+        panel.classList.remove('hidden');
+        btn.classList.add('hidden');
+        renderDebugPanel();
+    } else {
+        panel.classList.add('hidden');
+        btn.classList.remove('hidden');
+    }
+}
+
+function renderDebugPanel() {
+    if (!_debugOpen) return;
+    const el = document.getElementById('debug-content');
+    if (!el) return;
+
+    const saved = getPickerCards();
+    const fans = currentState?.fans || {};
+    const temps = currentState?.temp_sensors || {};
+    const disks = currentState?.hdd_sensors || {};
+
+    let html = '';
+
+    // Connection status
+    html += `<div class="mb-3"><span class="text-neon-cyan">Socket.IO:</span> ${socket?.connected ? '✅ connected' : '❌ disconnected'}</div>`;
+
+    // Cards
+    html += `<div class="mb-3"><span class="text-neon-cyan">Cards (${saved.length}):</span></div>`;
+    for (const card of saved) {
+        const el2 = document.querySelector(`[data-card-id="${card.id}"]`);
+        const w = el2 ? el2.offsetWidth : 0;
+        const h = el2 ? el2.offsetHeight : 0;
+        html += `<div class="ml-2 mb-1">`;
+        html += `<span class="text-gray-500">${card.type}</span> `;
+        html += `<span class="text-white">${card.label || card.id.slice(-8)}</span> `;
+        html += `<span class="text-yellow-400">${card.colSpan || 3}x${card.rowSpan || 1}</span> `;
+        html += `<span class="text-gray-600">pos(${card.col},${card.row})</span> `;
+        html += `<span class="text-gray-600">${w}x${h}px</span>`;
+        if (card.lockSize) html += ` <span class="text-red-400">🔒</span>`;
+        html += `</div>`;
+    }
+
+    // Fans
+    html += `<div class="mb-3 mt-3"><span class="text-neon-cyan">Fans (${Object.keys(fans).length}):</span></div>`;
+    for (const [id, fan] of Object.entries(fans)) {
+        const spark = getSparkline(`fan:local:${id}`);
+        const last = spark.length ? spark[spark.length - 1] : '--';
+        html += `<div class="ml-2 mb-1">`;
+        html += `<span class="text-white">${fan.label || id.slice(-8)}</span> `;
+        html += `<span class="text-cyan-400">${fan.rpm || 0} RPM</span> `;
+        html += `<span class="text-gray-600">mode=${fan.mode}</span> `;
+        html += `<span class="text-gray-600">spark=${last}</span>`;
+        html += `</div>`;
+    }
+
+    // Temps
+    html += `<div class="mb-3 mt-3"><span class="text-neon-cyan">Temps (${Object.keys(temps).length}):</span></div>`;
+    for (const [id, sensor] of Object.entries(temps)) {
+        html += `<div class="ml-2 mb-1">`;
+        html += `<span class="text-white">${sensor.label || id}</span> `;
+        html += `<span class="text-green-400">${sensor.value || '--'}°C</span>`;
+        html += `</div>`;
+    }
+
+    // Disks
+    html += `<div class="mb-3 mt-3"><span class="text-neon-cyan">Disks (${Object.keys(disks).length}):</span></div>`;
+    for (const [id, disk] of Object.entries(disks)) {
+        html += `<div class="ml-2 mb-1">`;
+        html += `<span class="text-white">${disk.name || id}</span> `;
+        html += `<span class="text-purple-400">${disk.temp || '--'}°C</span>`;
+        html += `</div>`;
+    }
+
+    // Sparkline stats
+    const sparkKeys = Object.keys(_sparklineHistory);
+    html += `<div class="mb-3 mt-3"><span class="text-neon-cyan">Sparklines (${sparkKeys.length}):</span></div>`;
+    for (const key of sparkKeys.slice(0, 10)) {
+        const data = _sparklineHistory[key];
+        html += `<div class="ml-2 mb-1"><span class="text-gray-500">${key}:</span> <span class="text-gray-400">${data.length} pts, last=${data[data.length-1]}</span></div>`;
+    }
+
+    el.innerHTML = html;
+    requestAnimationFrame(() => { if (_debugOpen) renderDebugPanel(); });
+}
