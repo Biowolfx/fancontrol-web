@@ -64,6 +64,8 @@ def api_get_state():
 @routes.route('/api/lang/<code>')
 def api_get_lang(code):
     """Serve translation file"""
+    if not re.match(r'^[a-z]{2}$', code):
+        return jsonify({'error': 'Invalid language code'}), 400
     lang_file = Path(os.path.join(os.path.dirname(__file__), '..', 'static')) / 'lang' / f'{code}.json'
     if lang_file.exists():
         with open(lang_file, 'r', encoding='utf-8') as f:
