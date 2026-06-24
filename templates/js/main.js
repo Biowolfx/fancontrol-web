@@ -872,9 +872,13 @@ function snapCardToGrid(cardEl) {
     cardEl.style.alignSelf = 'start';
     if (contentEl) contentEl.style.height = 'auto';
     void cardEl.offsetHeight;
-    const needed = Math.max(1, Math.ceil(cardEl.scrollHeight / 100));
+    const cs = getComputedStyle(cardEl);
+    const padV = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const borderV = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    const contentH = cardEl.scrollHeight - padV;
     cardEl.style.alignSelf = 'stretch';
     if (contentEl) contentEl.style.height = '';
+    const needed = Math.max(1, Math.ceil(contentH / 100));
     if (needed !== current) {
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
