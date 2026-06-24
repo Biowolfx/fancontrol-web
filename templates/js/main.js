@@ -1070,6 +1070,22 @@ function findNextPosition(savedCards, colSpan) {
 
 let _cardMouseDown = null;
 let _cardDragClone = null;
+let _dragGridCache = null;
+
+function _computeGridCache() {
+    const canvas = document.getElementById('dashboard-canvas');
+    if (!canvas) return null;
+    const style = getComputedStyle(canvas);
+    const padL = parseFloat(style.paddingLeft) || 16;
+    const padT = parseFloat(style.paddingTop) || 16;
+    const padR = parseFloat(style.paddingRight) || 16;
+    const contentW = canvas.offsetWidth - padL - padR;
+    const cols = parseInt(style.gridTemplateColumns?.split(' ')?.length || 12);
+    const gap = parseFloat(style.gap) || 8;
+    const colW = (contentW - (cols - 1) * gap) / cols;
+    const rowH = 100;
+    return { cols, padL, padT, padR, gap, colW, rowH };
+}
 
 function onCardMouseDown(e) {
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.card-resize-handle')) return;
@@ -1104,6 +1120,7 @@ function onCardMouseDown(e) {
         cardCol: domCol,
         cardRow: domRow
     };
+    _dragGridCache = _computeGridCache();
 
     console.log(`[DOWN] card=${cardId} pos(col=${card.col},row=${card.row}) span(col=${card.colSpan||3},row=${card.rowSpan||1}) offset(X=${Math.round(offsetX)},Y=${Math.round(offsetY)}) cardRect(left=${Math.round(rect.left)},top=${Math.round(rect.top)},w=${Math.round(rect.width)},h=${Math.round(rect.height)})`);
 
@@ -1292,6 +1309,7 @@ function onCardMouseUp(e) {
 
     _cardMouseDown = null;
     _dropTarget = null;
+    _dragGridCache = null;
     setTimeout(() => { _cardDragOccurred = false; }, 200);
 }
 
@@ -1308,25 +1326,19 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
     }
     const canvas = document.getElementById('dashboard-canvas');
     if (canvas) {
-        const cols = getCanvasCols();
-        const cs2 = getComputedStyle(canvas);
-        const padL = parseFloat(cs2.paddingLeft) || 16;
-        const padT = parseFloat(cs2.paddingTop) || 16;
-        const padR = parseFloat(cs2.paddingRight) || 16;
-        const contentW = canvas.offsetWidth - padL - padR;
-        const gap = 8;
-        const colW = (contentW - (cols - 1) * gap) / cols;
-        const rowH = 100;
-        const ne = col + colSpan - 1;
-        const nr = row + rowSpan - 1;
-        for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
-            const rect = gEl.getBoundingClientRect();
-            const cRect = canvas.getBoundingClientRect();
-            const gColStart = Math.max(1, Math.round((rect.left - cRect.left - padL) / (colW + gap)) + 1);
-            const gColEnd = Math.max(gColStart, Math.round((rect.right - cRect.left - padL) / (colW + gap)));
-            const gRowStart = Math.max(1, Math.round((rect.top - cRect.top - padT) / (rowH + gap)) + 1);
-            const gRowEnd = Math.max(gRowStart, Math.round((rect.bottom - cRect.top - padT) / (rowH + gap)));
-            if (col <= gColEnd && ne >= gColStart && row <= gRowEnd && nr >= gRowStart) return true;
+        const g = _dragGridCache || _computeGridCache();
+        if (g) {
+            const ne = col + colSpan - 1;
+            const nr = row + rowSpan - 1;
+            for (const gEl of canvas.querySelectorAll('[data-group-id]')) {
+                const rect = gEl.getBoundingClientRect();
+                const cRect = canvas.getBoundingClientRect();
+                const gColStart = Math.max(1, Math.round((rect.left - cRect.left - g.padL) / (g.colW + g.gap)) + 1);
+                const gColEnd = Math.max(gColStart, Math.round((rect.right - cRect.left - g.padL) / (g.colW + g.gap)));
+                const gRowStart = Math.max(1, Math.round((rect.top - cRect.top - g.padT) / (g.rowH + g.gap)) + 1);
+                const gRowEnd = Math.max(gRowStart, Math.round((rect.bottom - cRect.top - g.padT) / (g.rowH + g.gap)));
+                if (col <= gColEnd && ne >= gColStart && row <= gRowEnd && nr >= gRowStart) return true;
+            }
         }
     }
     return false;
