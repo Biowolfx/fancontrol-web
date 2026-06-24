@@ -865,19 +865,16 @@ function snapCardToGrid(cardEl) {
     if (!cardId) return;
     if (_cardMouseDown?.cardId === cardId || _cardResizing?.cardId === cardId) return;
     const contentEl = cardEl.querySelector('.card-content');
-    const handleEl = cardEl.querySelector('.card-resize-handle');
     if (!contentEl) return;
     contentEl.style.height = 'auto';
     contentEl.style.overflow = 'visible';
     void contentEl.offsetHeight;
     const contentH = contentEl.scrollHeight;
-    const handleH = handleEl ? handleEl.offsetHeight : 0;
     const style = getComputedStyle(cardEl);
     const padV = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     contentEl.style.height = '';
     contentEl.style.overflow = '';
-    const totalH = contentH + padV + handleH;
-    const needed = Math.max(1, Math.ceil(totalH / 100));
+    const needed = Math.max(1, Math.ceil((contentH + padV) / 100));
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
@@ -1877,12 +1874,10 @@ function updateCardDetails(cardId) {
 
     if (card.type === 'disk') {
         updateDiskCardDetails(card, detailsEl);
-        snapCardToGrid(cardEl);
         return;
     }
     if (card.type !== 'fan') {
         detailsEl.innerHTML = '';
-        snapCardToGrid(cardEl);
         return;
     }
 
@@ -1906,7 +1901,6 @@ function updateCardDetails(cardId) {
     }
 
     detailsEl.innerHTML = html;
-    snapCardToGrid(cardEl);
 }
 
 function updateDiskCardDetails(card, detailsEl) {
