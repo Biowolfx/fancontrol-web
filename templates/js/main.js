@@ -893,7 +893,7 @@ function snapCardToGrid(cardEl) {
     if (overflow <= 0) {
         // Content fits — maybe shrink
         needed = Math.max(1, Math.ceil((contentH + padV) / 100));
-    } else if (overflow < 30) {
+    } else if (overflow < 10) {
         // Small overflow — keep current size (hidden by overflow:hidden)
         needed = current;
     } else {
