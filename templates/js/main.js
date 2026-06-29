@@ -933,8 +933,27 @@ function snapCardToGrid(cardEl) {
     }
 
     if (needed !== current) {
+        const delta = needed - current;
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
+
+        if (delta > 0) {
+            const oldBottom = card.row + current;
+            const cardColStart = card.col || 1;
+            const cardColEnd = cardColStart + (card.colSpan || 3) - 1;
+            for (const c of saved) {
+                if (c.id === card.id || !c.col || !c.row) continue;
+                const cColStart = c.col;
+                const cColEnd = cColStart + (c.colSpan || 3) - 1;
+                const cBottom = c.row + (c.rowSpan || 1) - 1;
+                if (cBottom >= oldBottom && cColStart <= cardColEnd && cColEnd >= cardColStart) {
+                    c.row += delta;
+                    const el = document.querySelector(`[data-card-id="${c.id}"]`);
+                    if (el) el.style.gridRow = `${c.row} / span ${c.rowSpan || 1}`;
+                }
+            }
+        }
+
         setPickerCards(saved);
     }
 }
