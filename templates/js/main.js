@@ -1421,77 +1421,52 @@ function resolveOverlaps(saved, cardId) {
     const cols = getCanvasCols();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
-    const cardCe = card.col + (card.colSpan || 3) - 1;
-    const cardRe = card.row + (card.rowSpan || 1) - 1;
     delete card._isDrag;
 
-    function findOverlap(excludeIds) {
-        for (const a of saved) {
-            if (!a.col || !a.row) continue;
-            const aCe = a.col + (a.colSpan || 3) - 1;
-            const aRe = a.row + (a.rowSpan || 1) - 1;
-            for (const b of saved) {
-                if (a.id === b.id || !b.col || !b.row) continue;
-                if (excludeIds.has(a.id) && excludeIds.has(b.id)) continue;
-                const bCe = b.col + (b.colSpan || 3) - 1;
-                const bRe = b.row + (b.rowSpan || 1) - 1;
-                if (a.col <= bCe && aCe >= b.col && a.row <= bRe && aRe >= b.row) {
-                    return { anchor: a, displaced: b };
-                }
-            }
-        }
-        return null;
+    function overlaps(a, b) {
+        if (!a.col || !a.row || !b.col || !b.row) return false;
+        const aCe = a.col + (a.colSpan || 3) - 1, aRe = a.row + (a.rowSpan || 1) - 1;
+        const bCe = b.col + (b.colSpan || 3) - 1, bRe = b.row + (b.rowSpan || 1) - 1;
+        return a.col <= bCe && aCe >= b.col && a.row <= bRe && aRe >= b.row;
     }
 
-    const pushed = new Set([cardId]);
-    let iter = 0;
-    let pair;
-    while ((pair = findOverlap(pushed)) && iter < 50) {
-        iter++;
-        const { anchor, displaced } = pair;
+    function pushRight(anchor, target) {
         const anchorCe = anchor.col + (anchor.colSpan || 3) - 1;
-        const anchorRe = anchor.row + (anchor.rowSpan || 1) - 1;
-        const dColSp = displaced.colSpan || 3;
-        const dRowSp = displaced.rowSpan || 1;
-
-        let placed = false;
-        for (let tryCol = anchorCe + 1; tryCol + dColSp - 1 <= cols; tryCol++) {
+        const tColSp = target.colSpan || 3;
+        const tRowSp = target.rowSpan || 1;
+        for (let tryCol = anchorCe + 1; tryCol + tColSp - 1 <= cols; tryCol++) {
             let blocked = false;
             for (const s of saved) {
-                if (s.id === displaced.id || !s.col || !s.row) continue;
-                const sCe = s.col + (s.colSpan || 3) - 1;
-                const sRe = s.row + (s.rowSpan || 1) - 1;
-                if (tryCol <= sCe && tryCol + dColSp - 1 >= s.col && displaced.row <= sRe && displaced.row + dRowSp - 1 >= s.row) {
-                    blocked = true;
-                    break;
+                if (s.id === target.id || !s.col || !s.row) continue;
+                const sCe = s.col + (s.colSpan || 3) - 1, sRe = s.row + (s.rowSpan || 1) - 1;
+                if (tryCol <= sCe && tryCol + tColSp - 1 >= s.col && target.row <= sRe && target.row + tRowSp - 1 >= s.row) {
+                    blocked = true; break;
                 }
             }
-            if (!blocked) {
-                displaced.col = tryCol;
-                placed = true;
-                break;
-            }
+            if (!blocked) { target.col = tryCol; return true; }
         }
-        if (!placed) {
-            for (let tryRow = anchorRe + 1; tryRow <= 50; tryRow++) {
-                let blocked = false;
-                for (const s of saved) {
-                    if (s.id === displaced.id || !s.col || !s.row) continue;
-                    const sCe = s.col + (s.colSpan || 3) - 1;
-                    const sRe = s.row + (s.rowSpan || 1) - 1;
-                    if (displaced.col <= sCe && displaced.col + dColSp - 1 >= s.col && tryRow <= sRe && tryRow + dRowSp - 1 >= s.row) {
-                        blocked = true;
-                        break;
+        return false;
+    }
+
+    const affected = new Set([cardId]);
+    let iter = 0;
+    let changed = true;
+    while (changed && iter < 50) {
+        changed = false;
+        iter++;
+        for (const c of saved) {
+            if (!c.col || !c.row || affected.has(c.id)) continue;
+            for (const aId of affected) {
+                const a = saved.find(x => x.id === aId);
+                if (a && overlaps(a, c)) {
+                    if (pushRight(a, c)) {
+                        affected.add(c.id);
+                        changed = true;
                     }
-                }
-                if (!blocked) {
-                    displaced.row = tryRow;
-                    placed = true;
                     break;
                 }
             }
         }
-        pushed.add(displaced.id);
     }
 }
 
