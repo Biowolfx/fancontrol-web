@@ -905,52 +905,24 @@ function snapCardToGrid(cardEl) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const current = card.rowSpan || 1;
-    const contentEl = cardEl.querySelector('.card-content');
-
-    cardEl.style.alignSelf = 'start';
-    if (contentEl) {
-        contentEl.style.height = 'auto';
-        contentEl.style.overflow = 'visible';
-    }
-    void cardEl.offsetHeight;
-    const contentH = contentEl ? contentEl.scrollHeight : 0;
-    const padV = parseFloat(getComputedStyle(cardEl).paddingTop) + parseFloat(getComputedStyle(cardEl).paddingBottom);
-    cardEl.style.alignSelf = 'stretch';
-    if (contentEl) {
-        contentEl.style.height = '';
-        contentEl.style.overflow = '';
-    }
-
-    const THRESHOLD = 10;
-    let needed = current;
-
-    for (let rows = 1; rows <= 10; rows++) {
-        const cap = rows * 100 - padV - 2;
-        if (contentH <= cap + THRESHOLD) {
-            needed = rows;
-            break;
-        }
-    }
+    const needed = computeMinRows(cardEl);
 
     if (needed !== current) {
         const delta = needed - current;
+        const oldBottom = card.row + current;
+        const cardColStart = card.col || 1;
+        const cardColEnd = cardColStart + (card.colSpan || 3) - 1;
         card.rowSpan = needed;
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
 
-        if (delta > 0) {
-            const oldBottom = card.row + current;
-            const cardColStart = card.col || 1;
-            const cardColEnd = cardColStart + (card.colSpan || 3) - 1;
-            for (const c of saved) {
-                if (c.id === card.id || !c.col || !c.row) continue;
-                const cColStart = c.col;
-                const cColEnd = cColStart + (c.colSpan || 3) - 1;
-                const cBottom = c.row + (c.rowSpan || 1) - 1;
-                if (cBottom >= oldBottom && cColStart <= cardColEnd && cColEnd >= cardColStart) {
-                    c.row += delta;
-                    const el = document.querySelector(`[data-card-id="${c.id}"]`);
-                    if (el) el.style.gridRow = `${c.row} / span ${c.rowSpan || 1}`;
-                }
+        for (const c of saved) {
+            if (c.id === card.id || !c.col || !c.row) continue;
+            const cColStart = c.col;
+            const cColEnd = cColStart + (c.colSpan || 3) - 1;
+            if (c.row >= oldBottom && cColStart <= cardColEnd && cColEnd >= cardColStart) {
+                c.row += delta;
+                const el = document.querySelector(`[data-card-id="${c.id}"]`);
+                if (el) el.style.gridRow = `${c.row} / span ${c.rowSpan || 1}`;
             }
         }
 
@@ -988,6 +960,21 @@ let _cardResizeStartW = 0;
 let _cardResizeStartH = 0;
 let _cardResizeMinRowSpan = 1;
 
+function computeMinRows(el) {
+    const contentEl = el.querySelector('.card-content');
+    el.style.alignSelf = 'start';
+    if (contentEl) { contentEl.style.height = 'auto'; contentEl.style.overflow = 'visible'; }
+    void el.offsetHeight;
+    const contentH = contentEl ? contentEl.scrollHeight : 0;
+    const padV = parseFloat(getComputedStyle(el).paddingTop) + parseFloat(getComputedStyle(el).paddingBottom);
+    el.style.alignSelf = 'stretch';
+    if (contentEl) { contentEl.style.height = ''; contentEl.style.overflow = ''; }
+    for (let r = 1; r <= 10; r++) {
+        if (contentH <= r * 100 - padV - 2 + 10) return r;
+    }
+    return 10;
+}
+
 function onCardResizeStart(e, cardId) {
     e.preventDefault();
     e.stopPropagation();
@@ -998,11 +985,7 @@ function onCardResizeStart(e, cardId) {
     const card = saved.find(c => c.id === cardId);
     if (card?.lockSize) return;
 
-    const contentEl = el.querySelector('.card-content');
-    el.style.alignSelf = 'start';
-    const contentH = contentEl ? contentEl.scrollHeight : 0;
-    el.style.alignSelf = 'stretch';
-    _cardResizeMinRowSpan = Math.max(1, Math.ceil(contentH / 100));
+    _cardResizeMinRowSpan = computeMinRows(el);
 
     _cardResizing = { cardId, el, col: card?.col, row: card?.row };
     _cardResizeStartX = e.clientX;
@@ -1085,25 +1068,7 @@ function onCardResizeEnd(e) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (card) {
-        const contentEl = el.querySelector('.card-content');
-        el.style.alignSelf = 'start';
-        if (contentEl) {
-            contentEl.style.height = 'auto';
-            contentEl.style.overflow = 'visible';
-        }
-        void el.offsetHeight;
-        const contentH = contentEl ? contentEl.scrollHeight : 0;
-        const padV = parseFloat(getComputedStyle(el).paddingTop) + parseFloat(getComputedStyle(el).paddingBottom);
-        el.style.alignSelf = 'stretch';
-        if (contentEl) {
-            contentEl.style.height = '';
-            contentEl.style.overflow = '';
-        }
-        let minRows = 1;
-        for (let r = 1; r <= 10; r++) {
-            if (contentH <= r * 100 - padV - 2 + 10) { minRows = r; break; }
-        }
-        if (rowSpan < minRows) rowSpan = minRows;
+        if (rowSpan < _cardResizeMinRowSpan) rowSpan = _cardResizeMinRowSpan;
 
         if (isCellOccupied(card.col, card.row, colSpan, rowSpan, cardId)) {
             const free = findFreePosition(saved, colSpan, rowSpan, cardId);
