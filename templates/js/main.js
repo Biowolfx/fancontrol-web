@@ -1423,39 +1423,75 @@ function resolveOverlaps(saved, cardId) {
     if (!card) return;
     const cardCe = card.col + (card.colSpan || 3) - 1;
     const cardRe = card.row + (card.rowSpan || 1) - 1;
-
-    const isDrag = card._isDrag;
-    delete card._oldColEnd;
-    delete card._oldRowEnd;
     delete card._isDrag;
 
-    const toShift = saved.filter(c => {
-        if (c.id === cardId || !c.col || !c.row) return false;
-        const cCe = c.col + (c.colSpan || 3) - 1;
-        const cRe = c.row + (c.rowSpan || 1) - 1;
-        return card.col <= cCe && cardCe >= c.col && card.row <= cRe && cardRe >= c.row;
-    }).sort((a, b) => a.col - b.col);
+    function findOverlap(excludeIds) {
+        for (const a of saved) {
+            if (!a.col || !a.row) continue;
+            const aCe = a.col + (a.colSpan || 3) - 1;
+            const aRe = a.row + (a.rowSpan || 1) - 1;
+            for (const b of saved) {
+                if (a.id === b.id || !b.col || !b.row) continue;
+                if (excludeIds.has(a.id) && excludeIds.has(b.id)) continue;
+                const bCe = b.col + (b.colSpan || 3) - 1;
+                const bRe = b.row + (b.rowSpan || 1) - 1;
+                if (a.col <= bCe && aCe >= b.col && a.row <= bRe && aRe >= b.row) {
+                    return { anchor: a, displaced: b };
+                }
+            }
+        }
+        return null;
+    }
 
-    for (const c of toShift) {
-        const cColSp = c.colSpan || 3;
-        const cRowSp = c.rowSpan || 1;
-        const minCol = cardCe + 1;
-        for (let tryCol = minCol; tryCol + cColSp - 1 <= cols; tryCol++) {
+    const pushed = new Set([cardId]);
+    let iter = 0;
+    let pair;
+    while ((pair = findOverlap(pushed)) && iter < 50) {
+        iter++;
+        const { anchor, displaced } = pair;
+        const anchorCe = anchor.col + (anchor.colSpan || 3) - 1;
+        const anchorRe = anchor.row + (anchor.rowSpan || 1) - 1;
+        const dColSp = displaced.colSpan || 3;
+        const dRowSp = displaced.rowSpan || 1;
+
+        let placed = false;
+        for (let tryCol = anchorCe + 1; tryCol + dColSp - 1 <= cols; tryCol++) {
             let blocked = false;
             for (const s of saved) {
-                if (s.id === c.id || s.id === cardId || !s.col || !s.row) continue;
+                if (s.id === displaced.id || !s.col || !s.row) continue;
                 const sCe = s.col + (s.colSpan || 3) - 1;
                 const sRe = s.row + (s.rowSpan || 1) - 1;
-                if (tryCol <= sCe && tryCol + cColSp - 1 >= s.col && c.row <= sRe && c.row + cRowSp - 1 >= s.row) {
+                if (tryCol <= sCe && tryCol + dColSp - 1 >= s.col && displaced.row <= sRe && displaced.row + dRowSp - 1 >= s.row) {
                     blocked = true;
                     break;
                 }
             }
             if (!blocked) {
-                c.col = tryCol;
+                displaced.col = tryCol;
+                placed = true;
                 break;
             }
         }
+        if (!placed) {
+            for (let tryRow = anchorRe + 1; tryRow <= 50; tryRow++) {
+                let blocked = false;
+                for (const s of saved) {
+                    if (s.id === displaced.id || !s.col || !s.row) continue;
+                    const sCe = s.col + (s.colSpan || 3) - 1;
+                    const sRe = s.row + (s.rowSpan || 1) - 1;
+                    if (displaced.col <= sCe && displaced.col + dColSp - 1 >= s.col && tryRow <= sRe && tryRow + dRowSp - 1 >= s.row) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (!blocked) {
+                    displaced.row = tryRow;
+                    placed = true;
+                    break;
+                }
+            }
+        }
+        pushed.add(displaced.id);
     }
 }
 
