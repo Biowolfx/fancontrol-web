@@ -1073,6 +1073,7 @@ function onCardResizeEnd(e) {
         if (card.col + colSpan - 1 > cols) colSpan = cols - card.col + 1;
 
         card._oldColEnd = card.col + (card.colSpan || 3) - 1;
+        card._oldRowEnd = card.row + (card.rowSpan || 1) - 1;
         card.colSpan = colSpan;
         card.rowSpan = rowSpan;
         resolveOverlaps(saved, cardId);
@@ -1364,6 +1365,7 @@ function onCardMouseUp(e) {
                     const cols = getCanvasCols();
                     if (newCol + colSp - 1 > cols) newCol = cols - colSp + 1;
                     cardData._oldColEnd = cardData.col + colSp - 1;
+                    cardData._oldRowEnd = cardData.row + rowSp - 1;
                     cardData.col = newCol;
                     cardData.row = newRow;
                     resolveOverlaps(saved, card.id);
@@ -1423,27 +1425,45 @@ function resolveOverlaps(saved, cardId) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
     const oldColEnd = card._oldColEnd;
-    if (oldColEnd == null) return;
-    const newColEnd = card.col + (card.colSpan || 3) - 1;
-    const delta = newColEnd - oldColEnd;
-    if (delta <= 0) return;
+    const oldRowEnd = card._oldRowEnd;
+    if (oldColEnd == null && oldRowEnd == null) return;
+    const cardCe = card.col + (card.colSpan || 3) - 1;
+    const cardRe = card.row + (card.rowSpan || 1) - 1;
 
-    const toShift = saved.filter(c => {
-        if (c.id === cardId || !c.col || !c.row) return false;
-        if (c.col <= oldColEnd) return false;
-        const cardRe = card.row + (card.rowSpan || 1) - 1;
-        const cRe = c.row + (c.rowSpan || 1) - 1;
-        return card.row <= cRe && cardRe >= c.row;
-    }).sort((a, b) => a.col - b.col);
-
-    for (const c of toShift) {
-        const oldCol = c.col;
-        c.col += delta;
-        const cColSp = c.colSpan || 3;
-        if (c.col + cColSp - 1 > cols) c.col = cols - cColSp + 1;
-        console.log(`[RESOLVE] ${card.id}(span=${card.colSpan}) shifted ${c.id} from col=${oldCol} to col=${c.col}`);
+    if (oldColEnd != null) {
+        const colDelta = cardCe - oldColEnd;
+        if (colDelta > 0) {
+            const toShift = saved.filter(c => {
+                if (c.id === cardId || !c.col || !c.row) return false;
+                if (c.col <= oldColEnd) return false;
+                const cRe = c.row + (c.rowSpan || 1) - 1;
+                return card.row <= cRe && cardRe >= c.row;
+            }).sort((a, b) => a.col - b.col);
+            for (const c of toShift) {
+                c.col += colDelta;
+                const cColSp = c.colSpan || 3;
+                if (c.col + cColSp - 1 > cols) c.col = cols - cColSp + 1;
+            }
+        }
     }
+
+    if (oldRowEnd != null) {
+        const rowDelta = cardRe - oldRowEnd;
+        if (rowDelta > 0) {
+            const toShift = saved.filter(c => {
+                if (c.id === cardId || !c.col || !c.row) return false;
+                if (c.row <= oldRowEnd) return false;
+                const cCe = c.col + (c.colSpan || 3) - 1;
+                return card.col <= cCe && cardCe >= c.col;
+            }).sort((a, b) => a.row - b.row);
+            for (const c of toShift) {
+                c.row += rowDelta;
+            }
+        }
+    }
+
     delete card._oldColEnd;
+    delete card._oldRowEnd;
 }
 
 function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
