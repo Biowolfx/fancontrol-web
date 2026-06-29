@@ -1418,42 +1418,64 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
 
 function resolveOverlaps(saved, cardId) {
     const cols = getCanvasCols();
-    const card = saved.find(c => c.id === cardId);
-    if (!card) return;
-    const cEnd = card.col + (card.colSpan || 3) - 1;
-    const rEnd = card.row + (card.rowSpan || 1) - 1;
-    const moved = new Set();
+    function cellsOccupied(col, row, colSp, rowSp, excludeId) {
+        for (const c of saved) {
+            if (c.id === excludeId || !c.col || !c.row) continue;
+            const cs = c.col, rs = c.row, ce = cs + (c.colSpan || 3) - 1, re = rs + (c.rowSpan || 1) - 1;
+            if (col <= ce && col + colSp - 1 >= cs && row <= re && row + rowSp - 1 >= rs) return true;
+        }
+        return false;
+    }
     let iterations = 0;
-    while (iterations < 50) {
-        let found = false;
-        for (const other of saved) {
-            if (other.id === cardId || !other.col || !other.row || moved.has(other.id)) continue;
-            const oColEnd = other.col + (other.colSpan || 3) - 1;
-            const oRowEnd = other.row + (other.rowSpan || 1) - 1;
-            const overlaps = card.col <= oColEnd && cEnd >= other.col && card.row <= oRowEnd && rEnd >= other.row;
-            if (!overlaps) continue;
-            found = true;
-            let pushed = false;
-            const tryCol = other.col + (other.colSpan || 3);
-            if (tryCol + (other.colSpan || 3) - 1 <= cols) {
-                let blocked = false;
-                for (const s of saved) {
-                    if (s.id === other.id || s.id === cardId || !s.col || !s.row) continue;
-                    const sColEnd = s.col + (s.colSpan || 3) - 1;
-                    const sRowEnd = s.row + (s.rowSpan || 1) - 1;
-                    if (tryCol <= sColEnd && tryCol + (other.colSpan || 3) - 1 >= s.col && other.row <= sRowEnd && oRowEnd >= s.row) {
-                        blocked = true; break;
+    let found = true;
+    while (found && iterations < 50) {
+        found = false;
+        iterations++;
+        for (const a of saved) {
+            if (!a.col || !a.row) continue;
+            const aColEnd = a.col + (a.colSpan || 3) - 1;
+            const aRowEnd = a.row + (a.rowSpan || 1) - 1;
+            for (const b of saved) {
+                if (a.id === b.id || !b.col || !b.row) continue;
+                const bColEnd = b.col + (b.colSpan || 3) - 1;
+                const bRowEnd = b.row + (b.rowSpan || 1) - 1;
+                if (a.col > bColEnd || aColEnd < b.col || a.row > bRowEnd || aRowEnd < b.row) continue;
+                found = true;
+                const bColSp = b.colSpan || 3;
+                const bRowSp = b.rowSpan || 1;
+                let placed = false;
+                for (let tryCol = aColEnd + 1; tryCol + bColSp - 1 <= cols; tryCol++) {
+                    if (!cellsOccupied(tryCol, b.row, bColSp, bRowSp, b.id)) {
+                        b.col = tryCol;
+                        placed = true;
+                        break;
                     }
                 }
-                if (!blocked) { other.col = tryCol; pushed = true; }
+                if (!placed) {
+                    for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
+                        if (!cellsOccupied(b.col, tryRow, bColSp, bRowSp, b.id)) {
+                            b.row = tryRow;
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+                if (!placed) {
+                    for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
+                        for (let tryCol = 1; tryCol + bColSp - 1 <= cols; tryCol++) {
+                            if (!cellsOccupied(tryCol, tryRow, bColSp, bRowSp, b.id)) {
+                                b.col = tryCol;
+                                b.row = tryRow;
+                                placed = true;
+                                break;
+                            }
+                        }
+                        if (placed) break;
+                    }
+                }
+                break;
             }
-            if (!pushed) {
-                other.row = rEnd + 1;
-            }
-            moved.add(other.id);
         }
-        if (!found) break;
-        iterations++;
     }
 }
 
