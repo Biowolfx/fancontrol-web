@@ -786,8 +786,20 @@ function renderPickerCard(card) {
     if (type === 'fan') {
         const fanData = getFanData(source, sourceId);
         const fanStatus = fanData?.status || 'unknown';
+        const rpm = fanData?.rpm || 0;
         const dotColor = fanStatus === 'running' ? 'green' : (fanStatus === 'failsafe' || fanStatus === 'critical') ? 'red' : 'yellow';
-        icon = `🌀 <span class="status-dot ${dotColor}"></span>`;
+        const fanColor = fanStatus === 'running' ? '#22d3ee' : (fanStatus === 'failsafe' || fanStatus === 'critical') ? '#ef4444' : '#facc15';
+        const animDuration = rpm > 0 ? Math.max(0.2, 2 - (rpm / 1500)) : 0;
+        const animStyle = rpm > 0 ? `animation: fan-spin ${animDuration}s linear infinite` : '';
+        icon = `<svg class="w-8 h-8 inline-block" data-fan-anim-id="${sourceId}" data-fan-source="${source}" viewBox="0 0 100 100" style="${animStyle}">
+            <g fill="${fanColor}" opacity="0.9">
+                <path d="M50 50 Q30 20 50 5 Q70 20 50 50"/>
+                <path d="M50 50 Q80 30 95 50 Q80 70 50 50"/>
+                <path d="M50 50 Q70 80 50 95 Q30 80 50 50"/>
+                <path d="M50 50 Q20 70 5 50 Q20 30 50 50"/>
+            </g>
+            <circle cx="50" cy="50" r="6" fill="${fanColor}" opacity="0.6"/>
+        </svg> <span class="status-dot ${dotColor}"></span>`;
         colorClass = 'text-neon-cyan';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-fan-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">RPM</span></div>`;
         valueHtml += renderSparkline(`fan:${source}:${sourceId}`, '#22d3ee');
@@ -2315,6 +2327,14 @@ function startPickerLiveUpdate() {
                 if (dot) {
                     const s = fan.status || 'unknown';
                     dot.className = 'status-dot ' + (s === 'running' ? 'green' : (s === 'failsafe' || s === 'critical') ? 'red' : 'yellow');
+                }
+                const animEl = document.querySelector(`[data-fan-anim-id="${id}"][data-fan-source="${src}"]`);
+                if (animEl) {
+                    const rpm = fan.rpm || 0;
+                    const dur = rpm > 0 ? Math.max(0.2, 2 - (rpm / 1500)) : 0;
+                    animEl.style.animation = rpm > 0 ? `fan-spin ${dur}s linear infinite` : 'none';
+                    const fanColor = fan.status === 'running' ? '#22d3ee' : (fan.status === 'failsafe' || fan.status === 'critical') ? '#ef4444' : '#facc15';
+                    animEl.querySelectorAll('path, circle').forEach(p => p.setAttribute('fill', fanColor));
                 }
             }
         });

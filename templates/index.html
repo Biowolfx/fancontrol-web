@@ -62,11 +62,11 @@
         ::-webkit-scrollbar-thumb:hover { background: #b347ea; }
         
         /* Fan animation */
-        @keyframes fanSpin {
+        @keyframes fan-spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        .fan-spinning { animation: fanSpin var(--fan-duration, 1s) linear infinite; }
+        .fan-spinning { animation: fan-spin var(--fan-duration, 1s) linear infinite; }
         
         /* Glow text */
         .glow-cyan { text-shadow: 0 0 10px rgba(0, 240, 255, 0.5); }
@@ -942,6 +942,6 @@
     </div>
     <button onclick="toggleDebugPanel()" class="fixed bottom-4 right-4 z-40 w-10 h-10 rounded-full bg-cyber-accent/30 border border-cyber-accent text-lg hover:bg-cyber-accent/50 transition-all" title="Debug">🐛</button>
 
-    <script src="/js/main.js?v=3.5.126"></script>
+    <script src="/js/main.js?v=3.5.127"></script>
 </body>
 </html>
