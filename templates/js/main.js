@@ -1069,14 +1069,21 @@ function onCardResizeEnd(e) {
     const card = saved.find(c => c.id === cardId);
     if (card) {
         if (rowSpan < _cardResizeMinRowSpan) rowSpan = _cardResizeMinRowSpan;
+        const cols = getCanvasCols();
+        if (card.col + colSpan - 1 > cols) colSpan = cols - card.col + 1;
 
-        if (isCellOccupied(card.col, card.row, colSpan, rowSpan, cardId)) {
-            const free = findFreePosition(saved, colSpan, rowSpan, cardId);
-            card.col = free.col;
-            card.row = free.row;
-        }
         card.colSpan = colSpan;
         card.rowSpan = rowSpan;
+        resolveOverlaps(saved, cardId);
+
+        for (const c of saved) {
+            if (c.id === cardId) continue;
+            const el2 = document.querySelector(`[data-card-id="${c.id}"]`);
+            if (el2) {
+                el2.style.gridColumn = `${c.col} / span ${c.colSpan || 3}`;
+                el2.style.gridRow = `${c.row} / span ${c.rowSpan || 1}`;
+            }
+        }
         el.style.gridColumn = `${card.col} / span ${colSpan}`;
         el.style.gridRow = `${card.row} / span ${rowSpan}`;
         setPickerCards(saved);
@@ -1353,17 +1360,19 @@ function onCardMouseUp(e) {
                 let newRow = _dropTarget.row;
                 const colSp = cardData.colSpan || 3;
                 const rowSp = cardData.rowSpan || 1;
-                const occupied = isCellOccupied(newCol, newRow, colSp, rowSp, card.id);
-                if (occupied) {
-                    const free = findFreePosition(saved, colSp, rowSp, card.id);
-                    newCol = free.col;
-                    newRow = free.row;
-                }
-                console.log(`[DROP] card=${card.id} from(col=${oldCol},row=${oldRow}) target(col=${_dropTarget.col},row=${_dropTarget.row}) occupied=${occupied} → placed(col=${newCol},row=${newRow})`);
+                const cols = getCanvasCols();
+                if (newCol + colSp - 1 > cols) newCol = cols - colSp + 1;
                 cardData.col = newCol;
                 cardData.row = newRow;
-                cardEl.style.gridColumn = `${newCol} / span ${colSp}`;
-                cardEl.style.gridRow = `${newRow} / span ${rowSp}`;
+                resolveOverlaps(saved, card.id);
+                console.log(`[DROP] card=${card.id} from(col=${oldCol},row=${oldRow}) target(col=${newCol},row=${newRow})`);
+                for (const c of saved) {
+                    const el2 = document.querySelector(`[data-card-id="${c.id}"]`);
+                    if (el2) {
+                        el2.style.gridColumn = `${c.col} / span ${c.colSpan || 3}`;
+                        el2.style.gridRow = `${c.row} / span ${c.rowSpan || 1}`;
+                    }
+                }
                 setPickerCards(saved);
                 updateCanvasMinHeight();
             }
@@ -1405,6 +1414,47 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
         }
     }
     return false;
+}
+
+function resolveOverlaps(saved, cardId) {
+    const cols = getCanvasCols();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+    const cEnd = card.col + (card.colSpan || 3) - 1;
+    const rEnd = card.row + (card.rowSpan || 1) - 1;
+    const moved = new Set();
+    let iterations = 0;
+    while (iterations < 50) {
+        let found = false;
+        for (const other of saved) {
+            if (other.id === cardId || !other.col || !other.row || moved.has(other.id)) continue;
+            const oColEnd = other.col + (other.colSpan || 3) - 1;
+            const oRowEnd = other.row + (other.rowSpan || 1) - 1;
+            const overlaps = card.col <= oColEnd && cEnd >= other.col && card.row <= oRowEnd && rEnd >= other.row;
+            if (!overlaps) continue;
+            found = true;
+            let pushed = false;
+            const tryCol = other.col + (other.colSpan || 3);
+            if (tryCol + (other.colSpan || 3) - 1 <= cols) {
+                let blocked = false;
+                for (const s of saved) {
+                    if (s.id === other.id || s.id === cardId || !s.col || !s.row) continue;
+                    const sColEnd = s.col + (s.colSpan || 3) - 1;
+                    const sRowEnd = s.row + (s.rowSpan || 1) - 1;
+                    if (tryCol <= sColEnd && tryCol + (other.colSpan || 3) - 1 >= s.col && other.row <= sRowEnd && oRowEnd >= s.row) {
+                        blocked = true; break;
+                    }
+                }
+                if (!blocked) { other.col = tryCol; pushed = true; }
+            }
+            if (!pushed) {
+                other.row = rEnd + 1;
+            }
+            moved.add(other.id);
+        }
+        if (!found) break;
+        iterations++;
+    }
 }
 
 function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
