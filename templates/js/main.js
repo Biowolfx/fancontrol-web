@@ -1430,7 +1430,10 @@ function resolveOverlaps(saved, cardId) {
 
     const toShift = saved.filter(c => {
         if (c.id === cardId || !c.col || !c.row) return false;
-        return c.col > oldColEnd;
+        if (c.col <= oldColEnd) return false;
+        const cardRe = card.row + (card.rowSpan || 1) - 1;
+        const cRe = c.row + (c.rowSpan || 1) - 1;
+        return card.row <= cRe && cardRe >= c.row;
     }).sort((a, b) => a.col - b.col);
 
     for (const c of toShift) {
