@@ -1418,19 +1418,6 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
 
 function resolveOverlaps(saved, cardId) {
     const cols = getCanvasCols();
-    const card = saved.find(c => c.id === cardId);
-    if (!card) return;
-    const cardColSp = card.colSpan || 3;
-    const cardRowSp = card.rowSpan || 1;
-    const cardCe = card.col + cardColSp - 1;
-    const cardRe = card.row + cardRowSp - 1;
-
-    const toShift = saved.filter(c => {
-        if (c.id === cardId || !c.col || !c.row) return false;
-        const cCe = c.col + (c.colSpan || 3) - 1;
-        const cRe = c.row + (c.rowSpan || 1) - 1;
-        return card.col <= cCe && cardCe >= c.col && card.row <= cRe && cardRe >= c.row;
-    }).sort((a, b) => a.col - b.col);
 
     function isBlocked(col, row, colSp, rowSp, excludeId) {
         for (const c of saved) {
@@ -1441,17 +1428,54 @@ function resolveOverlaps(saved, cardId) {
         return false;
     }
 
-    for (const c of toShift) {
-        const cColSp = c.colSpan || 3;
-        const cRowSp = c.rowSpan || 1;
-        const minCol = cardCe + 1;
-        if (c.col < minCol) {
-            for (let tryCol = minCol; tryCol + cColSp - 1 <= cols; tryCol++) {
-                if (!isBlocked(tryCol, c.row, cColSp, cRowSp, c.id)) {
-                    console.log(`[RESOLVE] ${card.id}(col=${card.col},span=${cardColSp}) shifted ${c.id} from col=${c.col} to col=${tryCol}`);
-                    c.col = tryCol;
-                    break;
+    function anyOverlap(excludeId) {
+        const list = saved.filter(c => c.col && c.row && c.id !== excludeId);
+        for (let i = 0; i < list.length; i++) {
+            for (let j = i + 1; j < list.length; j++) {
+                const a = list[i], b = list[j];
+                const aCe = a.col + (a.colSpan || 3) - 1, aRe = a.row + (a.rowSpan || 1) - 1;
+                const bCe = b.col + (b.colSpan || 3) - 1, bRe = b.row + (b.rowSpan || 1) - 1;
+                if (a.col <= bCe && aCe >= b.col && a.row <= bRe && aRe >= b.row) return { a, b };
+            }
+        }
+        return null;
+    }
+
+    const card = saved.find(c => c.id === cardId);
+    if (card) {
+        const cardCe = card.col + (card.colSpan || 3) - 1;
+        const cardRe = card.row + (card.rowSpan || 1) - 1;
+        for (const c of saved) {
+            if (c.id === cardId || !c.col || !c.row) continue;
+            const cCe = c.col + (c.colSpan || 3) - 1;
+            const cRe = c.row + (c.rowSpan || 1) - 1;
+            if (card.col <= cCe && cardCe >= c.col && card.row <= cRe && cardRe >= c.row) {
+                const cColSp = c.colSpan || 3;
+                const cRowSp = c.rowSpan || 1;
+                for (let tryCol = cardCe + 1; tryCol + cColSp - 1 <= cols; tryCol++) {
+                    if (!isBlocked(tryCol, c.row, cColSp, cRowSp, c.id)) {
+                        console.log(`[RESOLVE] ${card.id}(col=${card.col},span=${card.colSpan}) shifted ${c.id} from col=${c.col} to col=${tryCol}`);
+                        c.col = tryCol;
+                        break;
+                    }
                 }
+            }
+        }
+    }
+
+    let iter = 0;
+    let overlap;
+    while ((overlap = anyOverlap(cardId)) && iter < 50) {
+        iter++;
+        const { a, b } = overlap;
+        const bColSp = b.colSpan || 3;
+        const bRowSp = b.rowSpan || 1;
+        const aCe = a.col + (a.colSpan || 3) - 1;
+        for (let tryCol = aCe + 1; tryCol + bColSp - 1 <= cols; tryCol++) {
+            if (!isBlocked(tryCol, b.row, bColSp, bRowSp, b.id)) {
+                console.log(`[RESOLVE CASCADE] ${a.id} pushed ${b.id} from col=${b.col} to col=${tryCol}`);
+                b.col = tryCol;
+                break;
             }
         }
     }
