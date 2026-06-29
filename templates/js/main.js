@@ -938,13 +938,6 @@ function snapCardToGrid(cardEl) {
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
 
         if (delta > 0) {
-            card.lockSize = true;
-            const handle = cardEl.querySelector('.card-resize-handle');
-            if (handle) handle.style.display = 'none';
-            cardEl.style.cursor = 'default';
-            const btn = cardEl.querySelector('.lock-size-btn');
-            if (btn) btn.textContent = '🔒';
-
             const oldBottom = card.row + current;
             const cardColStart = card.col || 1;
             const cardColEnd = cardColStart + (card.colSpan || 3) - 1;
@@ -1092,6 +1085,26 @@ function onCardResizeEnd(e) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (card) {
+        const contentEl = el.querySelector('.card-content');
+        el.style.alignSelf = 'start';
+        if (contentEl) {
+            contentEl.style.height = 'auto';
+            contentEl.style.overflow = 'visible';
+        }
+        void el.offsetHeight;
+        const contentH = contentEl ? contentEl.scrollHeight : 0;
+        const padV = parseFloat(getComputedStyle(el).paddingTop) + parseFloat(getComputedStyle(el).paddingBottom);
+        el.style.alignSelf = 'stretch';
+        if (contentEl) {
+            contentEl.style.height = '';
+            contentEl.style.overflow = '';
+        }
+        let minRows = 1;
+        for (let r = 1; r <= 10; r++) {
+            if (contentH <= r * 100 - padV - 2 + 10) { minRows = r; break; }
+        }
+        if (rowSpan < minRows) rowSpan = minRows;
+
         if (isCellOccupied(card.col, card.row, colSpan, rowSpan, cardId)) {
             const free = findFreePosition(saved, colSpan, rowSpan, cardId);
             card.col = free.col;
