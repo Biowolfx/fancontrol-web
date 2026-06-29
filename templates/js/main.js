@@ -1432,20 +1432,7 @@ function resolveOverlaps(saved, cardId) {
 
     function pushRight(anchor, target) {
         const anchorCe = anchor.col + (anchor.colSpan || 3) - 1;
-        const tColSp = target.colSpan || 3;
-        const tRowSp = target.rowSpan || 1;
-        for (let tryCol = anchorCe + 1; tryCol + tColSp - 1 <= cols; tryCol++) {
-            let blocked = false;
-            for (const s of saved) {
-                if (s.id === target.id || !s.col || !s.row) continue;
-                const sCe = s.col + (s.colSpan || 3) - 1, sRe = s.row + (s.rowSpan || 1) - 1;
-                if (tryCol <= sCe && tryCol + tColSp - 1 >= s.col && target.row <= sRe && target.row + tRowSp - 1 >= s.row) {
-                    blocked = true; break;
-                }
-            }
-            if (!blocked) { target.col = tryCol; return true; }
-        }
-        return false;
+        target.col = anchorCe + 1;
     }
 
     const affected = new Set([cardId]);
@@ -1459,10 +1446,9 @@ function resolveOverlaps(saved, cardId) {
             for (const aId of affected) {
                 const a = saved.find(x => x.id === aId);
                 if (a && overlaps(a, c)) {
-                    if (pushRight(a, c)) {
-                        affected.add(c.id);
-                        changed = true;
-                    }
+                    pushRight(a, c);
+                    affected.add(c.id);
+                    changed = true;
                     break;
                 }
             }
