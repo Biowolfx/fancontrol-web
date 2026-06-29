@@ -1072,6 +1072,7 @@ function onCardResizeEnd(e) {
         const cols = getCanvasCols();
         if (card.col + colSpan - 1 > cols) colSpan = cols - card.col + 1;
 
+        card._oldColEnd = card.col + (card.colSpan || 3) - 1;
         card.colSpan = colSpan;
         card.rowSpan = rowSpan;
         resolveOverlaps(saved, cardId);
@@ -1354,17 +1355,18 @@ function onCardMouseUp(e) {
         } else {
             const saved = getPickerCards();
             const cardData = saved.find(c => c.id === card.id);
-            if (cardData) {
-                const oldCol = cardData.col, oldRow = cardData.row;
-                let newCol = _dropTarget.col;
-                let newRow = _dropTarget.row;
-                const colSp = cardData.colSpan || 3;
-                const rowSp = cardData.rowSpan || 1;
-                const cols = getCanvasCols();
-                if (newCol + colSp - 1 > cols) newCol = cols - colSp + 1;
-                cardData.col = newCol;
-                cardData.row = newRow;
-                resolveOverlaps(saved, card.id);
+                if (cardData) {
+                    const oldCol = cardData.col, oldRow = cardData.row;
+                    let newCol = _dropTarget.col;
+                    let newRow = _dropTarget.row;
+                    const colSp = cardData.colSpan || 3;
+                    const rowSp = cardData.rowSpan || 1;
+                    const cols = getCanvasCols();
+                    if (newCol + colSp - 1 > cols) newCol = cols - colSp + 1;
+                    cardData._oldColEnd = cardData.col + colSp - 1;
+                    cardData.col = newCol;
+                    cardData.row = newRow;
+                    resolveOverlaps(saved, card.id);
                 console.log(`[DROP] card=${card.id} from(col=${oldCol},row=${oldRow}) target(col=${newCol},row=${newRow})`);
                 for (const c of saved) {
                     const el2 = document.querySelector(`[data-card-id="${c.id}"]`);
@@ -1418,67 +1420,27 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
 
 function resolveOverlaps(saved, cardId) {
     const cols = getCanvasCols();
-
-    function isBlocked(col, row, colSp, rowSp, excludeId) {
-        for (const c of saved) {
-            if (c.id === excludeId || !c.col || !c.row) continue;
-            const cs = c.col, rs = c.row, ce = cs + (c.colSpan || 3) - 1, re = rs + (c.rowSpan || 1) - 1;
-            if (col <= ce && col + colSp - 1 >= cs && row <= re && row + rowSp - 1 >= rs) return true;
-        }
-        return false;
-    }
-
-    function anyOverlap(excludeId) {
-        const list = saved.filter(c => c.col && c.row && c.id !== excludeId);
-        for (let i = 0; i < list.length; i++) {
-            for (let j = i + 1; j < list.length; j++) {
-                const a = list[i], b = list[j];
-                const aCe = a.col + (a.colSpan || 3) - 1, aRe = a.row + (a.rowSpan || 1) - 1;
-                const bCe = b.col + (b.colSpan || 3) - 1, bRe = b.row + (b.rowSpan || 1) - 1;
-                if (a.col <= bCe && aCe >= b.col && a.row <= bRe && aRe >= b.row) return { a, b };
-            }
-        }
-        return null;
-    }
-
     const card = saved.find(c => c.id === cardId);
-    if (card) {
-        const cardCe = card.col + (card.colSpan || 3) - 1;
-        const cardRe = card.row + (card.rowSpan || 1) - 1;
-        for (const c of saved) {
-            if (c.id === cardId || !c.col || !c.row) continue;
-            const cCe = c.col + (c.colSpan || 3) - 1;
-            const cRe = c.row + (c.rowSpan || 1) - 1;
-            if (card.col <= cCe && cardCe >= c.col && card.row <= cRe && cardRe >= c.row) {
-                const cColSp = c.colSpan || 3;
-                const cRowSp = c.rowSpan || 1;
-                for (let tryCol = cardCe + 1; tryCol + cColSp - 1 <= cols; tryCol++) {
-                    if (!isBlocked(tryCol, c.row, cColSp, cRowSp, c.id)) {
-                        console.log(`[RESOLVE] ${card.id}(col=${card.col},span=${card.colSpan}) shifted ${c.id} from col=${c.col} to col=${tryCol}`);
-                        c.col = tryCol;
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    if (!card) return;
+    const oldColEnd = card._oldColEnd;
+    if (oldColEnd == null) return;
+    const newColEnd = card.col + (card.colSpan || 3) - 1;
+    const delta = newColEnd - oldColEnd;
+    if (delta <= 0) return;
 
-    let iter = 0;
-    let overlap;
-    while ((overlap = anyOverlap(cardId)) && iter < 50) {
-        iter++;
-        const { a, b } = overlap;
-        const bColSp = b.colSpan || 3;
-        const bRowSp = b.rowSpan || 1;
-        const aCe = a.col + (a.colSpan || 3) - 1;
-        for (let tryCol = aCe + 1; tryCol + bColSp - 1 <= cols; tryCol++) {
-            if (!isBlocked(tryCol, b.row, bColSp, bRowSp, b.id)) {
-                console.log(`[RESOLVE CASCADE] ${a.id} pushed ${b.id} from col=${b.col} to col=${tryCol}`);
-                b.col = tryCol;
-                break;
-            }
-        }
+    const toShift = saved.filter(c => {
+        if (c.id === cardId || !c.col || !c.row) return false;
+        return c.col > oldColEnd;
+    }).sort((a, b) => a.col - b.col);
+
+    for (const c of toShift) {
+        const oldCol = c.col;
+        c.col += delta;
+        const cColSp = c.colSpan || 3;
+        if (c.col + cColSp - 1 > cols) c.col = cols - cColSp + 1;
+        console.log(`[RESOLVE] ${card.id}(span=${card.colSpan}) shifted ${c.id} from col=${oldCol} to col=${c.col}`);
     }
+    delete card._oldColEnd;
 }
 
 function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
