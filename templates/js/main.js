@@ -938,6 +938,13 @@ function snapCardToGrid(cardEl) {
         cardEl.style.gridRow = `${card.row} / span ${needed}`;
 
         if (delta > 0) {
+            card.lockSize = true;
+            const handle = cardEl.querySelector('.card-resize-handle');
+            if (handle) handle.style.display = 'none';
+            cardEl.style.cursor = 'default';
+            const btn = cardEl.querySelector('.lock-size-btn');
+            if (btn) btn.textContent = '🔒';
+
             const oldBottom = card.row + current;
             const cardColStart = card.col || 1;
             const cardColEnd = cardColStart + (card.colSpan || 3) - 1;
