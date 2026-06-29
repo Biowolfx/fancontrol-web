@@ -1446,6 +1446,7 @@ function resolveOverlaps(saved, cardId) {
                 let placed = false;
                 for (let tryCol = aColEnd + 1; tryCol + bColSp - 1 <= cols; tryCol++) {
                     if (!cellsOccupied(tryCol, b.row, bColSp, bRowSp, b.id)) {
+                        console.log(`[RESOLVE] ${a.id}(col=${a.col},span=${a.colSpan}) pushed ${b.id} from col=${b.col} to col=${tryCol}`);
                         b.col = tryCol;
                         placed = true;
                         break;
@@ -1454,6 +1455,7 @@ function resolveOverlaps(saved, cardId) {
                 if (!placed) {
                     for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
                         if (!cellsOccupied(b.col, tryRow, bColSp, bRowSp, b.id)) {
+                            console.log(`[RESOLVE] ${a.id} pushed ${b.id} from row=${b.row} to row=${tryRow}`);
                             b.row = tryRow;
                             placed = true;
                             break;
@@ -1464,6 +1466,7 @@ function resolveOverlaps(saved, cardId) {
                     for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
                         for (let tryCol = 1; tryCol + bColSp - 1 <= cols; tryCol++) {
                             if (!cellsOccupied(tryCol, tryRow, bColSp, bRowSp, b.id)) {
+                                console.log(`[RESOLVE] ${a.id} pushed ${b.id} to col=${tryCol},row=${tryRow}`);
                                 b.col = tryCol;
                                 b.row = tryRow;
                                 placed = true;
@@ -1477,6 +1480,7 @@ function resolveOverlaps(saved, cardId) {
             }
         }
     }
+    console.log(`[RESOLVE] done. cards:`, saved.filter(c => c.col).map(c => `${c.id}(col=${c.col},span=${c.colSpan})`).join(', '));
 }
 
 function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
