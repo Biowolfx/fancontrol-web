@@ -1418,7 +1418,21 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
 
 function resolveOverlaps(saved, cardId) {
     const cols = getCanvasCols();
-    function cellsOccupied(col, row, colSp, rowSp, excludeId) {
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+    const cardColSp = card.colSpan || 3;
+    const cardRowSp = card.rowSpan || 1;
+    const cardCe = card.col + cardColSp - 1;
+    const cardRe = card.row + cardRowSp - 1;
+
+    const toShift = saved.filter(c => {
+        if (c.id === cardId || !c.col || !c.row) return false;
+        const cCe = c.col + (c.colSpan || 3) - 1;
+        const cRe = c.row + (c.rowSpan || 1) - 1;
+        return card.col <= cCe && cardCe >= c.col && card.row <= cRe && cardRe >= c.row;
+    }).sort((a, b) => a.col - b.col);
+
+    function isBlocked(col, row, colSp, rowSp, excludeId) {
         for (const c of saved) {
             if (c.id === excludeId || !c.col || !c.row) continue;
             const cs = c.col, rs = c.row, ce = cs + (c.colSpan || 3) - 1, re = rs + (c.rowSpan || 1) - 1;
@@ -1426,61 +1440,21 @@ function resolveOverlaps(saved, cardId) {
         }
         return false;
     }
-    let iterations = 0;
-    let found = true;
-    while (found && iterations < 50) {
-        found = false;
-        iterations++;
-        for (const a of saved) {
-            if (!a.col || !a.row) continue;
-            const aColEnd = a.col + (a.colSpan || 3) - 1;
-            const aRowEnd = a.row + (a.rowSpan || 1) - 1;
-            for (const b of saved) {
-                if (a.id === b.id || !b.col || !b.row) continue;
-                const bColEnd = b.col + (b.colSpan || 3) - 1;
-                const bRowEnd = b.row + (b.rowSpan || 1) - 1;
-                if (a.col > bColEnd || aColEnd < b.col || a.row > bRowEnd || aRowEnd < b.row) continue;
-                found = true;
-                const bColSp = b.colSpan || 3;
-                const bRowSp = b.rowSpan || 1;
-                let placed = false;
-                for (let tryCol = aColEnd + 1; tryCol + bColSp - 1 <= cols; tryCol++) {
-                    if (!cellsOccupied(tryCol, b.row, bColSp, bRowSp, b.id)) {
-                        console.log(`[RESOLVE] ${a.id}(col=${a.col},span=${a.colSpan}) pushed ${b.id} from col=${b.col} to col=${tryCol}`);
-                        b.col = tryCol;
-                        placed = true;
-                        break;
-                    }
+
+    for (const c of toShift) {
+        const cColSp = c.colSpan || 3;
+        const cRowSp = c.rowSpan || 1;
+        const minCol = cardCe + 1;
+        if (c.col < minCol) {
+            for (let tryCol = minCol; tryCol + cColSp - 1 <= cols; tryCol++) {
+                if (!isBlocked(tryCol, c.row, cColSp, cRowSp, c.id)) {
+                    console.log(`[RESOLVE] ${card.id}(col=${card.col},span=${cardColSp}) shifted ${c.id} from col=${c.col} to col=${tryCol}`);
+                    c.col = tryCol;
+                    break;
                 }
-                if (!placed) {
-                    for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
-                        if (!cellsOccupied(b.col, tryRow, bColSp, bRowSp, b.id)) {
-                            console.log(`[RESOLVE] ${a.id} pushed ${b.id} from row=${b.row} to row=${tryRow}`);
-                            b.row = tryRow;
-                            placed = true;
-                            break;
-                        }
-                    }
-                }
-                if (!placed) {
-                    for (let tryRow = aRowEnd + 1; tryRow <= 50; tryRow++) {
-                        for (let tryCol = 1; tryCol + bColSp - 1 <= cols; tryCol++) {
-                            if (!cellsOccupied(tryCol, tryRow, bColSp, bRowSp, b.id)) {
-                                console.log(`[RESOLVE] ${a.id} pushed ${b.id} to col=${tryCol},row=${tryRow}`);
-                                b.col = tryCol;
-                                b.row = tryRow;
-                                placed = true;
-                                break;
-                            }
-                        }
-                        if (placed) break;
-                    }
-                }
-                break;
             }
         }
     }
-    console.log(`[RESOLVE] done. cards:`, saved.filter(c => c.col).map(c => `${c.id}(col=${c.col},span=${c.colSpan})`).join(', '));
 }
 
 function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
