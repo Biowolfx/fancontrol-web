@@ -85,7 +85,6 @@ socketio = SocketIO(
 )
 
 app.register_blueprint(routes)
-register_handlers(socketio)
 
 from agent.routes import agent_routes
 app.register_blueprint(agent_routes)
@@ -278,8 +277,17 @@ def main():
         init_hardware()
         _init_complete.set()
         _ensure_control_loop()
+        # Register basic Socket.IO handlers for agent web UI (no SSDP/heartbeat)
+        @socketio.on('connect')
+        def _agent_socket_connect():
+            _init_complete.wait(timeout=15)
+            socketio.emit('update', get_state())
+        @socketio.on('get_state')
+        def _agent_socket_get_state():
+            socketio.emit('update', get_state())
         start_client()
     else:
+        register_handlers(socketio)
         init_database()
         init_hardware()
         _init_complete.set()
