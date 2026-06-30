@@ -168,14 +168,18 @@ def _auto_init():
 def is_setup_needed():
     """Check if setup wizard should be shown."""
     if not CONFIG_PATH.exists():
+        logger.info(f'[setup] Config not found at {CONFIG_PATH}')
         return True
     try:
         import json
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
-        # Consider setup done if mode is set (even if initialized flag is missing/wrong)
-        return not (cfg.get('initialized') or cfg.get('mode'))
-    except Exception:
+        has_mode = bool(cfg.get('mode'))
+        has_init = bool(cfg.get('initialized'))
+        logger.info(f'[setup] Config found: mode={cfg.get("mode")}, initialized={cfg.get("initialized")}, keys={list(cfg.keys())}')
+        return not (has_init or has_mode)
+    except Exception as e:
+        logger.warning(f'[setup] Config read error: {e}')
         return True
 
 
@@ -235,6 +239,7 @@ def main():
 
     if args.mode == 'setup':
         if is_setup_needed():
+            logger.info('[setup] Setup needed — launching wizard')
             from installer.wizard import run_wizard
             run_wizard()
             return
@@ -245,8 +250,9 @@ def main():
                 with open(CONFIG_PATH) as f:
                     saved = json.load(f)
                 args.mode = saved.get('mode', 'server')
-                logger.info(f'Setup already complete, switching to mode: {args.mode}')
-            except Exception:
+                logger.info(f'[setup] Setup complete — switching to mode: {args.mode}')
+            except Exception as e:
+                logger.warning(f'[setup] Failed to read config: {e}')
                 args.mode = 'server'
 
     if args.mode == 'agent':
