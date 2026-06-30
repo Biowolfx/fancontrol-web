@@ -173,7 +173,8 @@ def is_setup_needed():
         import json
         with open(CONFIG_PATH) as f:
             cfg = json.load(f)
-        return not cfg.get('initialized', False)
+        # Consider setup done if mode is set (even if initialized flag is missing/wrong)
+        return not (cfg.get('initialized') or cfg.get('mode'))
     except Exception:
         return True
 
