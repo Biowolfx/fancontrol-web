@@ -3266,16 +3266,31 @@ function renderDiscoveredHardware(data) {
     
     container.innerHTML = html || `<p class="text-gray-500">${t('setup.no_hardware', 'No hardware detected')}</p>`;
     
-    // Show action button — calibrate if fans found, skip otherwise
+    // Determine fan control method and show appropriate action
     const actionDiv = document.getElementById('setup-step-action');
-    if (data.fans && Object.keys(data.fans).length > 0) {
+    const dsmSection = document.getElementById('dsm-speed-section');
+    const hasDsmFans = data.fans && Object.values(data.fans).some(f => f.control_method === 'dsm_scemd');
+    const hasHwmonFans = data.fans && Object.values(data.fans).some(f => f.control_method !== 'dsm_scemd' && Object.keys(data.fans).length > 0);
+
+    if (hasDsmFans) {
+        // DSM mode: show speed slider instead of calibration
+        document.getElementById('calibrate-btn').classList.add('hidden');
+        document.getElementById('skip-calibrate-btn').classList.add('hidden');
+        dsmSection.classList.remove('hidden');
+        document.getElementById('calibrate-hint').textContent = t('setup.dsm_hint', 'Fan speed is controlled via DSM. Set the desired speed percentage below.');
+        actionDiv.classList.remove('hidden');
+    } else if (hasHwmonFans) {
+        // HWMon mode: show calibration button
         document.getElementById('calibrate-btn').classList.remove('hidden');
         document.getElementById('skip-calibrate-btn').classList.add('hidden');
+        dsmSection.classList.add('hidden');
         document.getElementById('calibrate-hint').textContent = t('setup.calibrate_hint', 'To complete setup, fans must be calibrated. This takes about 1-2 minutes.');
         actionDiv.classList.remove('hidden');
     } else {
+        // No fans: show skip button
         document.getElementById('calibrate-btn').classList.add('hidden');
         document.getElementById('skip-calibrate-btn').classList.remove('hidden');
+        dsmSection.classList.add('hidden');
         document.getElementById('calibrate-hint').textContent = t('setup.no_fans_hint', 'No controllable fans detected. You can continue in monitoring-only mode.');
         actionDiv.classList.remove('hidden');
     }
@@ -3289,6 +3304,32 @@ function skipCalibration() {
     wizardStep = 'done';
     currentState = { ...currentState, initialized: true, tested: true };
     showMainScreen();
+}
+
+function applyDsmFanSpeed() {
+    const speed = parseInt(document.getElementById('dsm-speed-slider').value);
+    console.log(`[FanControl] Setting DSM fan speed to ${speed}%`);
+    
+    fetch('/api/dsm/fan-speed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            fetch('/api/skip-calibration', { method: 'POST' }).catch(() => {});
+            wizardStep = 'done';
+            currentState = { ...currentState, initialized: true, tested: true };
+            showMainScreen();
+        } else {
+            alert('Error: ' + (data.message || 'Failed to set fan speed'));
+        }
+    })
+    .catch(err => {
+        console.error('DSM fan speed error:', err);
+        alert('Failed to set fan speed');
+    });
 }
 
 function runCalibration() {

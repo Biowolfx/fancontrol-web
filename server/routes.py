@@ -209,6 +209,29 @@ def api_skip_calibration():
     return jsonify({'status': 'ok'})
 
 
+@routes.route('/api/dsm/fan-speed', methods=['POST'])
+def api_set_dsm_fan_speed():
+    """Set DSM fan speed via scemd.xml."""
+    from core.dsm_fan import is_dsm_fan_available, set_dsm_fan_speed
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available (scemd.xml not found)'}), 400
+
+    data = request.get_json(silent=True) or {}
+    speed = data.get('speed', 50)
+    speed = max(0, min(100, int(speed)))
+
+    if set_dsm_fan_speed(speed):
+        with state_lock:
+            for fan_id, fan in state['fans'].items():
+                if fan.get('control_method') == 'dsm_scemd':
+                    fan['manual_pct'] = speed
+                    fan['pwm_value'] = int(speed * 255 / 100)
+        save_config()
+        return jsonify({'status': 'ok', 'speed': speed})
+    else:
+        return jsonify({'status': 'error', 'message': 'Failed to set fan speed'}), 500
+
+
 @routes.route('/api/test/start', methods=['POST'])
 def api_test_start():
     """Start individual fan test"""

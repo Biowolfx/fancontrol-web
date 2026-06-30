@@ -299,6 +299,16 @@
                                    transition-all duration-300">
                         ⏭️ Continue Without Calibration
                     </button>
+                    <div id="dsm-speed-section" class="hidden mt-4">
+                        <label class="text-gray-400 text-sm">Fan Speed: <span id="dsm-speed-value">50</span>%</label>
+                        <input id="dsm-speed-slider" type="range" min="0" max="100" value="50"
+                               class="w-full mt-2 accent-cyan-500"
+                               oninput="document.getElementById('dsm-speed-value').textContent = this.value">
+                        <button onclick="applyDsmFanSpeed()"
+                                class="mt-3 bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-2 px-6 rounded-lg transition-all">
+                            ✅ Apply & Continue
+                        </button>
+                    </div>
                     <div id="calibrate-loader" class="hidden mt-4 text-neon-cyan animate-pulse">
                         Calibrating: determining PWM/RPM curves...
                     </div>
