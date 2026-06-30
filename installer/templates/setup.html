@@ -127,11 +127,29 @@
       </div>
       <!-- Agent fields -->
       <div id="fields_agent" class="hidden">
-        <div>
-          <label id="lbl_server_url" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_server_url" type="text" placeholder="192.168.1.100"
-                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
-          <p id="desc_server_url" class="field-desc"></p>
+        <!-- Auto-discovery section -->
+        <div class="mb-4 p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span id="lbl_autodiscover" class="text-gray-300 text-sm font-medium"></span>
+            <button onclick="discoverServers()" id="discover_btn"
+                    class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+            </button>
+          </div>
+          <div id="discovered_list" class="space-y-1"></div>
+          <p id="desc_autodiscover" class="field-desc mt-1"></p>
+        </div>
+        <!-- Manual IP + Port -->
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <label id="lbl_server_url" class="block text-gray-300 text-sm mb-1"></label>
+            <input id="input_server_url" type="text" placeholder="192.168.1.100"
+                   class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          </div>
+          <div class="w-24">
+            <label id="lbl_server_port" class="block text-gray-300 text-sm mb-1"></label>
+            <input id="input_server_port" type="number" value="5059" min="1" max="65535"
+                   class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          </div>
         </div>
         <div class="mt-4">
           <label id="lbl_node_name" class="block text-gray-300 text-sm mb-1"></label>
@@ -216,11 +234,18 @@ const translations = {
     ssdp_enabled: 'Enable LAN Discovery',
     ssdp_desc: 'Allow agents to discover this server on LAN',
     server_url: 'Server IP',
-    server_url_desc: 'IP address of the server (e.g. 192.168.1.100)',
+    server_url_desc: 'IP address of the server',
+    server_port: 'Port',
     node_name: 'Node Name',
     node_name_desc: 'Display name for this agent (auto-detected if empty)',
     agent_data_path: 'Data Path',
     agent_data_path_desc: 'Container path for config and data',
+    autodiscover: 'Auto-discover servers',
+    autodiscover_desc: 'Scan network for FanControl servers',
+    discover_btn: 'Scan',
+    discover_scanning: 'Scanning...',
+    discover_none: 'No servers found. Enter IP manually.',
+    select_server: 'Select',
     test_connection: 'Test Connection',
     test_ok: 'Connection successful!',
     test_fail: 'Connection failed',
@@ -257,11 +282,18 @@ const translations = {
     ssdp_enabled: 'Включить обнаружение в LAN',
     ssdp_desc: 'Разрешить агентам находить этот сервер в локальной сети',
     server_url: 'IP сервера',
-    server_url_desc: 'IP адрес сервера (например 192.168.1.100)',
+    server_url_desc: 'IP адрес сервера',
+    server_port: 'Порт',
     node_name: 'Имя узла',
     node_name_desc: 'Отображаемое имя агента (автоопределение)',
     agent_data_path: 'Путь к данным',
     agent_data_path_desc: 'Контейнерный путь для конфига и данных',
+    autodiscover: 'Автообнаружение серверов',
+    autodiscover_desc: 'Поиск серверов FanControl в сети',
+    discover_btn: 'Найти',
+    discover_scanning: 'Поиск...',
+    discover_none: 'Серверы не найдены. Введите IP вручную.',
+    select_server: 'Выбрать',
     test_connection: 'Проверить соединение',
     test_ok: 'Соединение успешно!',
     test_fail: 'Ошибка соединения',
@@ -307,11 +339,14 @@ function updateTexts() {
   document.getElementById('lbl_ssdp_enabled').textContent = t('ssdp_enabled');
   document.getElementById('desc_ssdp_enabled').textContent = t('ssdp_desc');
   document.getElementById('lbl_server_url').textContent = t('server_url');
-  document.getElementById('desc_server_url').textContent = t('server_url_desc');
+  document.getElementById('lbl_server_port').textContent = t('server_port');
   document.getElementById('lbl_node_name').textContent = t('node_name');
   document.getElementById('desc_node_name').textContent = t('node_name_desc');
   document.getElementById('lbl_agent_data_path').textContent = t('agent_data_path');
   document.getElementById('desc_agent_data_path').textContent = t('agent_data_path_desc');
+  document.getElementById('lbl_autodiscover').textContent = t('autodiscover');
+  document.getElementById('desc_autodiscover').textContent = t('autodiscover_desc');
+  document.getElementById('discover_btn').textContent = t('discover_btn');
   document.getElementById('test_conn_btn').textContent = t('test_connection');
   document.getElementById('install_btn').textContent = t('install_btn');
 }
@@ -341,14 +376,16 @@ function selectMode(m) {
   document.getElementById('fields_server').classList.toggle('hidden', m !== 'server');
   document.getElementById('fields_agent').classList.toggle('hidden', m !== 'agent');
   setStep(3);
+  if (m === 'agent') { setTimeout(discoverServers, 300); }
 }
 
 function testConnection() {
   const btn = document.getElementById('test_conn_btn');
   const result = document.getElementById('test_conn_result');
-  const url = document.getElementById('input_server_url').value.trim();
+  const ip = document.getElementById('input_server_url').value.trim();
+  const port = document.getElementById('input_server_port').value.trim() || '5059';
 
-  if (!url) {
+  if (!ip) {
     result.textContent = t('test_fail');
     result.className = 'ml-3 text-sm text-red-400';
     return;
@@ -362,7 +399,7 @@ function testConnection() {
   fetch('/api/validate-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ server_url: 'ws://' + url + ':5059' })
+    body: JSON.stringify({ server_url: 'ws://' + ip + ':' + port })
   })
   .then(r => r.json())
   .then(data => {
@@ -408,7 +445,8 @@ function startInstall() {
     config.ssdp_enabled = document.getElementById('input_ssdp_enabled').checked;
   } else {
     const rawIp = document.getElementById('input_server_url').value.trim();
-    config.server_url = 'ws://' + rawIp + ':5059';
+    const port = document.getElementById('input_server_port').value.trim() || '5059';
+    config.server_url = 'ws://' + rawIp + ':' + port;
     config.node_name = document.getElementById('input_node_name').value.trim() || rawIp;
     config.data_path = document.getElementById('input_agent_data_path').value.trim() || '/data';
   }
@@ -474,6 +512,53 @@ function startRedirectCountdown() {
       restartMsg.textContent = t('redirecting').replace('{seconds}', seconds);
     }
   }, 1000);
+}
+
+function discoverServers() {
+  const btn = document.getElementById('discover_btn');
+  const list = document.getElementById('discovered_list');
+
+  btn.disabled = true;
+  btn.textContent = t('discover_scanning');
+  list.innerHTML = '';
+
+  fetch('/api/discover-servers')
+    .then(r => r.json())
+    .then(data => {
+      if (data.servers && data.servers.length > 0) {
+        data.servers.forEach(s => {
+          const div = document.createElement('div');
+          div.className = 'flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2 cursor-pointer hover:border hover:border-cyan-600 transition-colors';
+          div.innerHTML = '<div><span class="text-white text-sm">' + escapeHtml(s.name) + '</span><span class="text-gray-400 text-xs ml-2">' + escapeHtml(s.ip) + ':' + s.port + '</span></div>';
+          const selBtn = document.createElement('button');
+          selBtn.className = 'bg-cyan-700 hover:bg-cyan-600 text-white text-xs px-3 py-1 rounded transition-colors';
+          selBtn.textContent = t('select_server');
+          selBtn.onclick = function() { selectServer(s.ip, s.port); };
+          div.appendChild(selBtn);
+          list.appendChild(div);
+        });
+      } else {
+        list.innerHTML = '<p class="text-gray-500 text-xs">' + t('discover_none') + '</p>';
+      }
+    })
+    .catch(() => {
+      list.innerHTML = '<p class="text-gray-500 text-xs">' + t('discover_none') + '</p>';
+    })
+    .finally(() => {
+      btn.disabled = false;
+      btn.textContent = t('discover_btn');
+    });
+}
+
+function selectServer(ip, port) {
+  document.getElementById('input_server_url').value = ip;
+  document.getElementById('input_server_port').value = port;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 updateTexts();

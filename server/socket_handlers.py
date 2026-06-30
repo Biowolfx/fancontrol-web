@@ -61,6 +61,15 @@ def register_handlers(socketio):
     on_agent_discovered(on_new_agent)
     start_discovery_listener()
 
+    # Start SSDP server announcer (so agents can discover this server)
+    from core.state import state as _state
+    if _state.get('ssdp_enabled', True):
+        from server.announcer import start_announcer as _start_server_announcer
+        _start_server_announcer(
+            _state.get('server_name', 'FanControl Server'),
+            _state.get('port', 5059),
+        )
+
     @socketio.on('connect')
     def handle_socket_connect():
         """Send initial state on client connection.

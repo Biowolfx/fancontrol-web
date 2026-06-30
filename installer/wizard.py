@@ -110,6 +110,64 @@ def validate_token():
         return jsonify({'valid': False, 'message': f'Cannot reach server: {e}'})
 
 
+@app.route('/api/discover-servers', methods=['GET'])
+def discover_servers():
+    """Scan LAN for FanControl servers via SSDP."""
+    SSDP_ADDR = '239.255.255.250'
+    SSDP_PORT = 1900
+
+    servers = []
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.settimeout(3)
+
+        msearch = (
+            'M-SEARCH * HTTP/1.1\r\n'
+            'HOST: 239.255.255.250:1900\r\n'
+            'MAN: "ssdp:discover"\r\n'
+            'ST: urn:fancontrol-web:server\r\n'
+            'MX: 3\r\n'
+            '\r\n'
+        )
+        sock.sendto(msearch.encode(), (SSDP_ADDR, SSDP_PORT))
+
+        start = time.time()
+        seen = set()
+        while time.time() - start < 3:
+            try:
+                data, addr = sock.recvfrom(1024)
+                headers = {}
+                for line in data.decode(errors='ignore').split('\r\n'):
+                    if ':' in line:
+                        key, _, value = line.partition(':')
+                        headers[key.strip().upper()] = value.strip()
+
+                usn = headers.get('USN', '')
+                if 'urn:fancontrol-web:server:' not in usn:
+                    continue
+
+                ip = addr[0]
+                if ip in seen:
+                    continue
+                seen.add(ip)
+
+                name = headers.get('X-FANCONTROL-NAME', 'FanControl Server')
+                port = int(headers.get('X-FANCONTROL-PORT', '5059'))
+                servers.append({
+                    'ip': ip,
+                    'port': port,
+                    'name': name,
+                })
+            except socket.timeout:
+                break
+        sock.close()
+    except Exception as e:
+        return jsonify({'servers': [], 'error': str(e)})
+
+    return jsonify({'servers': servers})
+
+
 def run_wizard():
     print('=' * 60)
     print('FanControl Web — Setup Wizard')
