@@ -144,6 +144,47 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
             continue
     
     logger.info(f'  Found: {len(fans)} fans, {len(temps)} temp sensors')
+
+    # Fallback: DSM scemd.xml fan control (official kernel xpenology)
+    if not fans:
+        from core.dsm_fan import is_dsm_fan_available, get_dsm_fan_info
+        if is_dsm_fan_available():
+            logger.info('  No hwmon fans found, trying DSM scemd.xml...')
+            dsm_info = get_dsm_fan_info()
+            if dsm_info:
+                fan_id = generate_stable_id('dsm-fan-0')
+                fans[fan_id] = {
+                    'id': fan_id,
+                    'label': f'DSM Fan ({dsm_info.get("hw_version", "unknown")})',
+                    'hw_path': 'dsm-scemd',
+                    'pwm_path': '',
+                    'fan_path': '',
+                    'rpm': 0,
+                    'pwm_value': 0,
+                    'writable': True,
+                    'inverted': False,
+                    'min_rpm': 0,
+                    'max_rpm': 0,
+                    'manual_pct': 50,
+                    'sensors': [],
+                    'sensor_mode': 'max',
+                    'target_temp': 31,
+                    'mode': 'manual',
+                    'status': 'not_tested',
+                    'target_pwm': 50,
+                    'current_pct': 50,
+                    'raw_pwm': 128,
+                    'last_update': 0.0,
+                    'schedule': [],
+                    'curve': [],
+                    'calibration': {},
+                    'control_method': 'dsm_scemd',
+                }
+                current_speed = dsm_info.get('modes', [{}])[0].get('fan_speed', 0)
+                logger.info(f'  DSM fan detected: {fan_id}, current speed: {current_speed}%')
+            else:
+                logger.info('  DSM scemd.xml found but could not parse fan info')
+
     return fans, temps
 
 
@@ -655,33 +696,59 @@ def set_pwm(key: str, raw_pwm: int, raw: bool = False):
     """
     with state_lock:
         fan = state['fans'].get(key)
-        if not fan or not fan.get('pwm_path', '').startswith('/sys/class/hwmon/'):
+        if not fan:
             return
-        
-        val = max(0, min(255, int(raw_pwm)))
-        
+
+        # Check if fan has hwmon path (standard Linux PWM)
+        pwm_path = fan.get('pwm_path', '')
+        if pwm_path.startswith('/sys/class/hwmon/'):
+            _set_pwm_hwmon(fan, raw_pwm, raw, key)
+        elif fan.get('control_method') == 'dsm_scemd':
+            _set_pwm_dsm(fan, raw_pwm, raw)
+        else:
+            return
+
+
+def _set_pwm_hwmon(fan, raw_pwm, raw, key):
+    """Set PWM via standard Linux hwmon sysfs."""
+    val = max(0, min(255, int(raw_pwm)))
+
+    if not raw:
+        fan['raw_pwm'] = val
+
+    physical_pwm = (255 - val) if (not raw and fan.get('inverted')) else val
+
+    try:
+        Path(fan['pwm_path']).write_text(str(physical_pwm))
+        fan['pwm_value'] = val
+
         if not raw:
-            fan['raw_pwm'] = val
-        
-        physical_pwm = (255 - val) if (not raw and fan.get('inverted')) else val
-        
-        try:
-            Path(fan['pwm_path']).write_text(str(physical_pwm))
-            fan['pwm_value'] = val
-            
-            if not raw:
-                try:
-                    rpm_raw = Path(fan['fan_path']).read_text().strip()
-                    rpm_val = int(rpm_raw) if rpm_raw.isdigit() else 0
-                    if rpm_val > 0:
-                        fan['rpm'] = rpm_val
-                except Exception:
-                    pass
-                
-                fan['last_update'] = time.monotonic()
-            
-        except Exception as e:
-            logger.error(f'PWM write error {key}: {e}')
+            try:
+                rpm_raw = Path(fan['fan_path']).read_text().strip()
+                rpm_val = int(rpm_raw) if rpm_raw.isdigit() else 0
+                if rpm_val > 0:
+                    fan['rpm'] = rpm_val
+            except Exception:
+                pass
+
+            fan['last_update'] = time.monotonic()
+
+    except Exception as e:
+        logger.error(f'PWM write error {key}: {e}')
+
+
+def _set_pwm_dsm(fan, raw_pwm, raw):
+    """Set fan speed via DSM scemd.xml (0-255 maps to 0-100%)."""
+    from core.dsm_fan import set_dsm_fan_speed
+
+    val = max(0, min(255, int(raw_pwm)))
+    if not raw:
+        fan['raw_pwm'] = val
+
+    percent = int(val * 100 / 255)
+    set_dsm_fan_speed(percent)
+    fan['pwm_value'] = val
+    fan['last_update'] = time.monotonic()
 
 
 def refresh():

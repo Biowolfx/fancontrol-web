@@ -13,6 +13,7 @@ services:
       - /dev:/dev:rw
       - ./data-agent:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/syno/etc.defaults/scemd.xml:/usr/syno/etc.defaults/scemd.xml:rw
     environment:
       - SERVER_URL=ws://192.168.1.100:5059
       - API_TOKEN=your-token-here
