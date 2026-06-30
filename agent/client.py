@@ -218,6 +218,39 @@ def _apply_config(config):
                         state['fans'][fan_id][key] = fan_cfg[key]
 
 
+def _on_token_push(data):
+    """Server pushes new token after registration."""
+    global API_TOKEN
+    new_token = data.get('token')
+    if not new_token:
+        return
+
+    API_TOKEN = new_token
+    state['api_token'] = new_token
+
+    # Save to config
+    import json
+    from pathlib import Path
+    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+    config = {}
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+        except Exception:
+            pass
+
+    config['api_token'] = new_token
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+
+    logger.info(f'Received new token from server, reconnecting...')
+
+    # Reconnect with new token
+    if _sio and _sio.connected:
+        _sio.disconnect()
+
+
 def start_client():
     """Start the WebSocket client connection to server."""
     global _sio, _telemetry_thread
@@ -241,6 +274,7 @@ def start_client():
     _sio.on('server:config_push', _on_config_push)
     _sio.on('server:set_control_mode', _on_set_control_mode)
     _sio.on('server:command', _on_command)
+    _sio.on('server:token_push', _on_token_push)
 
     try:
         _sio.connect(SERVER_URL)

@@ -62,6 +62,11 @@ def register_agent_handlers(socketio):
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
 
+        # Push token to agent
+        socketio.emit('server:token_push', {
+            'token': node['api_token'],
+        }, room=node_id)
+
         with state_lock:
             state['nodes'][node_id] = {
                 'node_id': node_id,
