@@ -180,7 +180,8 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                     'calibration': {},
                     'control_method': 'dsm_scemd',
                 }
-                current_speed = dsm_info.get('modes', [{}])[0].get('fan_speed', 0)
+                modes = dsm_info.get('modes', [])
+                current_speed = modes[0].get('fan_speed', 0) if modes else 0
                 logger.info(f'  DSM fan detected: {fan_id}, current speed: {current_speed}%')
             else:
                 logger.info('  DSM scemd.xml found but could not parse fan info')
