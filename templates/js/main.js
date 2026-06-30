@@ -4654,6 +4654,48 @@ socket.on('node:mode_changed', (data) => {
     }
 });
 
+function showToast(message, type = 'info', actions = []) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    let html = `<span>${escapeHtml(message)}</span>`;
+    actions.forEach(action => {
+        html += `<button class="toast-btn ${action.secondary ? 'toast-btn-secondary' : ''}" onclick="${action.onclick}">${escapeHtml(action.label)}</button>`;
+    });
+
+    toast.innerHTML = html;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 8000);
+}
+
+socket.on('node:discovered', (data) => {
+    const msg = `Новый агент: ${data.name} (${data.ip})`;
+    showToast(msg, 'warning', [
+        { label: 'Добавить', onclick: `acceptDiscoveredAgent('${data.node_id}')` },
+        { label: 'Игнорировать', onclick: 'this.closest(".toast").remove()', secondary: true },
+    ]);
+});
+
+async function acceptDiscoveredAgent(nodeId) {
+    try {
+        const resp = await fetch(`/api/discovered/${nodeId}/accept`, { method: 'POST' });
+        if (resp.ok) {
+            showToast('Агент добавлен! Переподключение...', 'success');
+            loadNodes();
+        }
+    } catch (e) {
+        showToast('Ошибка добавления агента', 'error');
+    }
+}
+
 function showConflictModal(data) {
     const modal = document.getElementById('conflict-modal');
     if (!modal) return;
