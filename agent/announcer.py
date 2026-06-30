@@ -13,7 +13,7 @@ SSDP_PORT = 1900
 SSDP_INTERVAL = 60
 
 
-def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059) -> str:
+def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059, api_token: str = '') -> str:
     ip = _get_local_ip()
     return (
         'HTTP/1.1 200 OK\r\n'
@@ -25,6 +25,7 @@ def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059) -> str:
         'ST: urn:fancontrol-web:agent\r\n'
         f'X-FanControl-Name: {node_name}\r\n'
         f'X-FanControl-Id: {node_id}\r\n'
+        f'X-FanControl-Token: {api_token}\r\n'
         '\r\n'
     )
 
@@ -40,12 +41,12 @@ def _get_local_ip() -> str:
         return '127.0.0.1'
 
 
-def start_announcer(node_id: str, node_name: str, port: int = 5059) -> Optional[threading.Thread]:
+def start_announcer(node_id: str, node_name: str, port: int = 5059, api_token: str = '') -> Optional[threading.Thread]:
     def _announce_loop():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-            response = _build_ssdp_response(node_id, node_name, port)
+            response = _build_ssdp_response(node_id, node_name, port, api_token)
 
             logger.info(f'SSDP announcer started for {node_name}')
 

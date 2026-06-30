@@ -18,12 +18,62 @@ NODE_ID = os.environ.get('NODE_ID', 'agent-1')
 NODE_NAME = os.environ.get('NODE_NAME', 'Agent 1')
 TELEMETRY_INTERVAL = int(os.environ.get('TELEMETRY_INTERVAL', '5'))
 
+
+def _init_token():
+    """Generate or load API token for this agent."""
+    import json
+    from pathlib import Path
+
+    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+
+    # If token provided via env, use it
+    if API_TOKEN:
+        return API_TOKEN
+
+    # Try to load from config
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+                if config.get('api_token'):
+                    return config['api_token']
+        except Exception:
+            pass
+
+    # Generate new token
+    import uuid
+    new_token = uuid.uuid4().hex
+
+    # Save to config (best-effort)
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config = {}
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    config = json.load(f)
+            except Exception:
+                pass
+
+        config['api_token'] = new_token
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        logger.warning(f'Could not persist api_token to config: {e}')
+
+    logger.info(f'Generated new API token: {new_token[:8]}...')
+    return new_token
+
+
+API_TOKEN = _init_token()
+
 # Agent-specific state fields
 state['control_mode'] = 'server'  # 'server' or 'manual'
 state['server_connected'] = False
 state['server_url'] = SERVER_URL
 state['node_id'] = NODE_ID
 state['node_name'] = NODE_NAME
+state['api_token'] = API_TOKEN
 state['agent_config_snapshot'] = None
 
 _sio: Optional[socketio.Client] = None
@@ -173,7 +223,7 @@ def start_client():
     global _sio, _telemetry_thread
 
     from agent.announcer import start_announcer
-    start_announcer(NODE_ID, NODE_NAME)
+    start_announcer(NODE_ID, NODE_NAME, api_token=API_TOKEN)
 
     if not SERVER_URL:
         logger.info('No SERVER_URL set — running standalone')
