@@ -72,7 +72,7 @@ except Exception:
 
 # Flask & SocketIO
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-CORS_ORIGINS = os.getenv('FANCONTROL_CORS_ORIGINS', 'http://localhost:5059,http://127.0.0.1:5059').split(',')
+CORS_ORIGINS = os.getenv('FANCONTROL_CORS_ORIGINS', '*').split(',')
 
 socketio = SocketIO(
     app,
