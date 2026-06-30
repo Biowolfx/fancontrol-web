@@ -167,7 +167,15 @@ def _auto_init():
 
 def is_setup_needed():
     """Check if setup wizard should be shown."""
-    return not CONFIG_PATH.exists()
+    if not CONFIG_PATH.exists():
+        return True
+    try:
+        import json
+        with open(CONFIG_PATH) as f:
+            cfg = json.load(f)
+        return not cfg.get('initialized', False)
+    except Exception:
+        return True
 
 
 def main():
@@ -225,11 +233,38 @@ def main():
     logger.info('=' * 60)
 
     if args.mode == 'setup':
-        from installer.wizard import run_wizard
-        run_wizard()
-        return
+        if is_setup_needed():
+            from installer.wizard import run_wizard
+            run_wizard()
+            return
+        else:
+            # Setup already done — read mode from saved config
+            try:
+                import json
+                with open(CONFIG_PATH) as f:
+                    saved = json.load(f)
+                args.mode = saved.get('mode', 'server')
+                logger.info(f'Setup already complete, switching to mode: {args.mode}')
+            except Exception:
+                args.mode = 'server'
 
     if args.mode == 'agent':
+        # If no SERVER_URL set, try to load from config.json
+        if not os.environ.get('SERVER_URL'):
+            try:
+                import json as _json
+                with open(CONFIG_PATH) as f:
+                    _cfg = _json.load(f)
+                if _cfg.get('server_url'):
+                    os.environ['SERVER_URL'] = _cfg['server_url']
+                if _cfg.get('node_name'):
+                    os.environ.setdefault('NODE_NAME', _cfg['node_name'])
+                if _cfg.get('api_token'):
+                    os.environ.setdefault('API_TOKEN', _cfg['api_token'])
+                logger.info(f'Agent loaded config from {CONFIG_PATH}')
+            except Exception as e:
+                logger.warning(f'Could not load agent config: {e}')
+
         from agent.client import start_client
         init_database()
         init_hardware()
