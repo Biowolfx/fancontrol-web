@@ -250,22 +250,23 @@ def main():
                 args.mode = 'server'
 
     if args.mode == 'agent':
-        # If no SERVER_URL set, try to load from config.json
+        # Load config BEFORE importing agent client (module reads env vars at import time)
         if not os.environ.get('SERVER_URL'):
             try:
                 import json as _json
                 with open(CONFIG_PATH) as f:
                     _cfg = _json.load(f)
+                logger.info(f'Agent config loaded: server_url={_cfg.get("server_url", "MISSING")}, node_name={_cfg.get("node_name", "MISSING")}')
                 if _cfg.get('server_url'):
                     os.environ['SERVER_URL'] = _cfg['server_url']
                 if _cfg.get('node_name'):
                     os.environ.setdefault('NODE_NAME', _cfg['node_name'])
                 if _cfg.get('api_token'):
                     os.environ.setdefault('API_TOKEN', _cfg['api_token'])
-                logger.info(f'Agent loaded config from {CONFIG_PATH}')
             except Exception as e:
                 logger.warning(f'Could not load agent config: {e}')
 
+        logger.info(f'Agent SERVER_URL={os.environ.get("SERVER_URL", "EMPTY")}')
         from agent.client import start_client
         init_database()
         init_hardware()

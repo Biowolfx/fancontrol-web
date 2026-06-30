@@ -35,6 +35,8 @@ def _init_agent_config():
         except Exception:
             pass
 
+    logger.info(f'[agent-config] config_path={config_path}, exists={config_path.exists()}, server_url_in_file={config.get("server_url", "NONE")}')
+
     if not SERVER_URL and config.get('server_url'):
         SERVER_URL = config['server_url']
     if NODE_ID == 'agent-1' and config.get('node_id'):
@@ -53,6 +55,8 @@ def _init_agent_config():
                 json.dump(config, f, indent=2)
         except Exception:
             pass
+
+    logger.info(f'[agent-config] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}, NODE_NAME={NODE_NAME}')
 
 
 _init_agent_config()
@@ -293,6 +297,8 @@ def _on_token_push(data):
 def start_client():
     """Start the WebSocket client connection to server."""
     global _sio, _telemetry_thread
+
+    logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
 
     from agent.announcer import start_announcer
     start_announcer(NODE_ID, NODE_NAME, api_token=API_TOKEN)
