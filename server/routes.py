@@ -61,6 +61,13 @@ def api_get_state():
     return jsonify(get_state())
 
 
+@routes.route('/api/kernel')
+def api_get_kernel():
+    """Detect kernel type and capabilities for fan control."""
+    from core.kernel_detect import get_kernel_info
+    return jsonify(get_kernel_info())
+
+
 @routes.route('/api/system')
 def api_get_system():
     from core.hardware import get_system_info
@@ -106,21 +113,26 @@ def api_discover():
         fans, temps = discover_fans_and_sensors()
         disks = discover_disks()
         
+        from core.kernel_detect import get_kernel_info
+        kernel_info = get_kernel_info()
+        
         with state_lock:
             state['fans'] = fans
             state['temp_sensors'] = temps
             state['hdd_sensors'] = disks
             state['hardware_scanned'] = True
+            state['kernel_type'] = kernel_info.get('type', 'unknown')
         
         from app import socketio
         socketio.emit('hardware_discovered', {
             'fans': fans,
             'temps': temps,
-            'disks': disks
+            'disks': disks,
+            'kernel_info': kernel_info,
         })
         
-        logger.info(f"Discovery complete: {len(fans)} fans, {len(temps)} sensors, {len(disks)} disks")
-        return jsonify({'status': 'ok', 'fans': fans, 'temps': temps, 'disks': disks})
+        logger.info(f"Discovery complete: {len(fans)} fans, {len(temps)} sensors, {len(disks)} disks, kernel={kernel_info.get('type')}")
+        return jsonify({'status': 'ok', 'fans': fans, 'temps': temps, 'disks': disks, 'kernel_info': kernel_info})
         
     except Exception as e:
         logger.error(f'Discovery failed: {e}', exc_info=True)

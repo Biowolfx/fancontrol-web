@@ -3200,6 +3200,26 @@ function renderDiscoveredHardware(data) {
     
     let html = '';
     
+    // Kernel info banner
+    if (data.kernel_info) {
+        const ki = data.kernel_info;
+        const isCustom = ki.type === 'custom';
+        const kernelColor = isCustom ? 'text-neon-green' : 'text-neon-orange';
+        const kernelLabel = isCustom ? 'Custom ARC' : ki.type === 'official' ? 'Official Synology' : 'Unknown';
+        const fanMethod = ki.has_hwmon_pwm ? 'hwmon (PWM)' : ki.has_scemd ? 'scemd.xml (DSM API)' : 'none';
+        html += `<div class="bg-cyber-accent rounded-lg p-3 mb-4 text-xs">
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-400">Kernel:</span>
+                <span class="${kernelColor} font-semibold">${kernelLabel}</span>
+            </div>
+            <div class="flex justify-between mb-1">
+                <span class="text-gray-400">Fan control:</span>
+                <span class="text-white">${fanMethod}</span>
+            </div>
+            ${ki.version ? `<div class="text-gray-500 mt-1 truncate" title="${escapeHtml(ki.version)}">${escapeHtml(ki.version)}</div>` : ''}
+        </div>`;
+    }
+    
     // Fans section
     if (data.fans && Object.keys(data.fans).length > 0) {
         html += '<h4 class="text-sm font-semibold text-neon-cyan mb-2">🌀 Fans</h4>';
