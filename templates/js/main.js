@@ -858,7 +858,7 @@ function renderPickerCard(card) {
 
     const el = document.createElement('div');
     const gradientClass = `card-gradient-${type}`;
-    el.className = `bg-cyber-card border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow,background] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${gradientClass}`;
+    el.className = `border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow,background-image] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${gradientClass}`;
     el.setAttribute('data-card-id', id);
     el.innerHTML = `
         <div class="card-content overflow-hidden h-full">

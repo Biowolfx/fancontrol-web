@@ -173,28 +173,32 @@
         .status-dot.red { background: #f87171; animation: pulse-red 2s infinite; }
         .status-dot.yellow { background: #facc15; animation: pulse-yellow 2s infinite; }
         .card-gradient-fan {
-            background: linear-gradient(135deg, rgba(34,211,238,0.08), rgba(34,211,238,0.02));
+            background-color: #131820;
+            background-image: linear-gradient(135deg, rgba(34,211,238,0.1), rgba(34,211,238,0.02));
         }
         .card-gradient-fan:hover {
-            background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(34,211,238,0.04));
+            background-image: linear-gradient(135deg, rgba(34,211,238,0.18), rgba(34,211,238,0.05));
         }
         .card-gradient-temperature {
-            background: linear-gradient(135deg, rgba(74,222,128,0.08), rgba(74,222,128,0.02));
+            background-color: #131820;
+            background-image: linear-gradient(135deg, rgba(74,222,128,0.1), rgba(74,222,128,0.02));
         }
         .card-gradient-temperature:hover {
-            background: linear-gradient(135deg, rgba(74,222,128,0.12), rgba(74,222,128,0.04));
+            background-image: linear-gradient(135deg, rgba(74,222,128,0.18), rgba(74,222,128,0.05));
         }
         .card-gradient-disk {
-            background: linear-gradient(135deg, rgba(192,132,252,0.08), rgba(192,132,252,0.02));
+            background-color: #131820;
+            background-image: linear-gradient(135deg, rgba(192,132,252,0.1), rgba(192,132,252,0.02));
         }
         .card-gradient-disk:hover {
-            background: linear-gradient(135deg, rgba(192,132,252,0.12), rgba(192,132,252,0.04));
+            background-image: linear-gradient(135deg, rgba(192,132,252,0.18), rgba(192,132,252,0.05));
         }
         .card-gradient-system {
-            background: linear-gradient(135deg, rgba(250,204,21,0.08), rgba(250,204,21,0.02));
+            background-color: #131820;
+            background-image: linear-gradient(135deg, rgba(250,204,21,0.1), rgba(250,204,21,0.02));
         }
         .card-gradient-system:hover {
-            background: linear-gradient(135deg, rgba(250,204,21,0.12), rgba(250,204,21,0.04));
+            background-image: linear-gradient(135deg, rgba(250,204,21,0.18), rgba(250,204,21,0.05));
         }
     </style>
 </head>
@@ -966,6 +970,6 @@
     </div>
     <button onclick="toggleDebugPanel()" class="fixed bottom-4 right-4 z-40 w-10 h-10 rounded-full bg-cyber-accent/30 border border-cyber-accent text-lg hover:bg-cyber-accent/50 transition-all" title="Debug">🐛</button>
 
-    <script src="/js/main.js?v=3.5.127"></script>
+    <script src="/js/main.js?v=3.5.128"></script>
 </body>
 </html>
