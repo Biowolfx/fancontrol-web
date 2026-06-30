@@ -206,6 +206,11 @@ socket.on('update', (data) => {
             updateUI(data);
         }
     }
+    // Show update button in sidebar for agent mode
+    const agentUpdateSection = document.getElementById('agent-update-section');
+    if (agentUpdateSection) {
+        agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
+    }
 });
 
 socket.on('hardware_discovered', (data) => {

@@ -54,6 +54,7 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'config_version': CONFIG_VERSION,
         'language': state.get('language', 'en'),
         'nodes': dict(state.get('nodes', {})),
+        'agent_mode': state.get('server_url') is not None,
     }
 
 

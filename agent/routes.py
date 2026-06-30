@@ -1,5 +1,6 @@
 """Agent-specific routes — mode switch, status, config revert."""
 
+import os
 from flask import Blueprint, jsonify, request
 
 from core.state import state, state_lock, get_state, invalidate_state_cache
