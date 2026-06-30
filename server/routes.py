@@ -691,3 +691,32 @@ def api_discover_nodes():
     from server.discovery import scan_for_agents
     nodes = scan_for_agents(timeout=5)
     return jsonify(nodes)
+
+
+# ============================================================================
+# DISCOVERED AGENTS API
+# ============================================================================
+
+@routes.route('/api/discovered')
+def api_list_discovered():
+    """List discovered but unregistered agents."""
+    from server.discovery import _discovered_nodes, _lock
+    with _lock:
+        return jsonify(list(_discovered_nodes.values()))
+
+
+@routes.route('/api/discovered/<node_id>/accept', methods=['POST'])
+def api_accept_discovered(node_id):
+    """Accept a discovered agent and register it."""
+    from server.discovery import _discovered_nodes, _lock
+    from server.node_registry import add_node
+
+    with _lock:
+        agent = _discovered_nodes.get(node_id)
+        if not agent:
+            return jsonify({'error': 'Agent not found'}), 404
+
+        node = add_node(agent['name'], api_token=agent['api_token'])
+        del _discovered_nodes[node_id]
+
+    return jsonify(node), 201

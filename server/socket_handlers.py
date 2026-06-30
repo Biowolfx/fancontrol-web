@@ -52,6 +52,15 @@ def _start_heartbeat_checker(socketio):
 def register_handlers(socketio):
     """Register Socket.IO event handlers."""
 
+    # Start SSDP discovery listener
+    from server.discovery import start_discovery_listener, on_agent_discovered
+
+    def on_new_agent(agent_info):
+        socketio.emit('node:discovered', agent_info)
+
+    on_agent_discovered(on_new_agent)
+    start_discovery_listener()
+
     @socketio.on('connect')
     def handle_socket_connect():
         """Send initial state on client connection.
