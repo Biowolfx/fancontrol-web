@@ -3246,10 +3246,29 @@ function renderDiscoveredHardware(data) {
     
     container.innerHTML = html || `<p class="text-gray-500">${t('setup.no_hardware', 'No hardware detected')}</p>`;
     
-    // Show calibrate button if fans found
+    // Show action button — calibrate if fans found, skip otherwise
+    const actionDiv = document.getElementById('setup-step-action');
     if (data.fans && Object.keys(data.fans).length > 0) {
-        document.getElementById('setup-step-action').classList.remove('hidden');
+        document.getElementById('calibrate-btn').classList.remove('hidden');
+        document.getElementById('skip-calibrate-btn').classList.add('hidden');
+        document.getElementById('calibrate-hint').textContent = t('setup.calibrate_hint', 'To complete setup, fans must be calibrated. This takes about 1-2 minutes.');
+        actionDiv.classList.remove('hidden');
+    } else {
+        document.getElementById('calibrate-btn').classList.add('hidden');
+        document.getElementById('skip-calibrate-btn').classList.remove('hidden');
+        document.getElementById('calibrate-hint').textContent = t('setup.no_fans_hint', 'No controllable fans detected. You can continue in monitoring-only mode.');
+        actionDiv.classList.remove('hidden');
     }
+}
+
+function skipCalibration() {
+    console.log('[FanControl] Skipping calibration — monitoring-only mode');
+    fetch('/api/skip-calibration', { method: 'POST' })
+        .then(() => {})
+        .catch(() => {});
+    wizardStep = 'done';
+    currentState = { ...currentState, initialized: true, tested: true };
+    showMainScreen();
 }
 
 function runCalibration() {

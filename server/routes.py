@@ -187,6 +187,16 @@ def api_initialize():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@routes.route('/api/skip-calibration', methods=['POST'])
+def api_skip_calibration():
+    """Mark setup complete without calibration (monitoring-only mode)."""
+    with state_lock:
+        state['initialized'] = True
+        state['tested'] = True
+    save_config()
+    return jsonify({'status': 'ok'})
+
+
 @routes.route('/api/test/start', methods=['POST'])
 def api_test_start():
     """Start individual fan test"""

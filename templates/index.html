@@ -288,11 +288,16 @@
                 <h3 class="text-xl font-bold text-neon-green mb-4" data-i18n="setup.results_title">✅ Hardware Detected</h3>
                 <div id="discovered-devices" class="max-h-96 overflow-y-auto space-y-3 mb-6"></div>
                 <div id="setup-step-action" class="hidden text-center">
-                    <p class="text-gray-400 mb-4" data-i18n="setup.calibrate_hint">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
+                    <p id="calibrate-hint" class="text-gray-400 mb-4" data-i18n="setup.calibrate_hint">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
                     <button id="calibrate-btn" onclick="runCalibration()"
                             class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg 
                                    transition-all duration-300 hover:shadow-neon-cyan disabled:opacity-50 disabled:cursor-not-allowed">
                         🎯 Start Fan Calibration
+                    </button>
+                    <button id="skip-calibrate-btn" onclick="skipCalibration()"
+                            class="hidden bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg 
+                                   transition-all duration-300">
+                        ⏭️ Continue Without Calibration
                     </button>
                     <div id="calibrate-loader" class="hidden mt-4 text-neon-cyan animate-pulse">
                         Calibrating: determining PWM/RPM curves...
