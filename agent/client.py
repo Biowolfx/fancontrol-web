@@ -19,6 +19,45 @@ NODE_NAME = os.environ.get('NODE_NAME', 'Agent 1')
 TELEMETRY_INTERVAL = int(os.environ.get('TELEMETRY_INTERVAL', '5'))
 
 
+def _init_agent_config():
+    """Load agent config from config.json if not set via env vars.
+    Auto-generates node_id if missing."""
+    global SERVER_URL, NODE_ID, NODE_NAME
+    import json
+    from pathlib import Path
+
+    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+    config = {}
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+        except Exception:
+            pass
+
+    if not SERVER_URL and config.get('server_url'):
+        SERVER_URL = config['server_url']
+    if NODE_ID == 'agent-1' and config.get('node_id'):
+        NODE_ID = config['node_id']
+    if NODE_NAME == 'Agent 1' and config.get('node_name'):
+        NODE_NAME = config['node_name']
+
+    # Auto-generate stable node_id if still default
+    if NODE_ID == 'agent-1' and not config.get('node_id'):
+        import uuid
+        NODE_ID = f'agent-{uuid.uuid4().hex[:12]}'
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config['node_id'] = NODE_ID
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception:
+            pass
+
+
+_init_agent_config()
+
+
 def _init_token():
     """Generate or load API token for this agent."""
     import json

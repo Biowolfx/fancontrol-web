@@ -129,27 +129,16 @@
       <div id="fields_agent" class="hidden">
         <div>
           <label id="lbl_server_url" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_server_url" type="text" placeholder="ws://192.168.1.100:5059"
+          <input id="input_server_url" type="text" placeholder="192.168.1.100"
                  class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
           <p id="desc_server_url" class="field-desc"></p>
         </div>
         <div class="mt-4">
-          <label id="lbl_api_token" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_api_token" type="text" placeholder=""
-                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
-          <p id="desc_api_token" class="field-desc"></p>
-        </div>
-        <div class="mt-4">
           <label id="lbl_node_name" class="block text-gray-300 text-sm mb-1"></label>
-          <input id="input_node_name" type="text" value="Agent 1"
-                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white">
+          <input id="input_node_name" type="text" value=""
+                 class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white"
+                 placeholder="">
           <p id="desc_node_name" class="field-desc"></p>
-        </div>
-        <div class="mt-4">
-          <label id="lbl_agent_description" class="block text-gray-300 text-sm mb-1"></label>
-          <textarea id="input_agent_description" rows="2"
-                    class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2.5 text-white resize-none"></textarea>
-          <p id="desc_agent_description" class="field-desc"></p>
         </div>
         <div class="mt-4">
           <label id="lbl_agent_data_path" class="block text-gray-300 text-sm mb-1"></label>
@@ -226,14 +215,10 @@ const translations = {
     admin_password_desc: 'Protect web interface (empty = no auth)',
     ssdp_enabled: 'Enable LAN Discovery',
     ssdp_desc: 'Allow agents to discover this server on LAN',
-    server_url: 'Server URL',
-    server_url_desc: 'WebSocket URL of the server (ws://ip:port)',
-    api_token: 'API Token',
-    api_token_desc: 'Token from the server for authentication',
+    server_url: 'Server IP',
+    server_url_desc: 'IP address of the server (e.g. 192.168.1.100)',
     node_name: 'Node Name',
-    node_name_desc: 'Display name for this agent',
-    agent_description: 'Description',
-    agent_description_desc: 'Optional description',
+    node_name_desc: 'Display name for this agent (auto-detected if empty)',
     agent_data_path: 'Data Path',
     agent_data_path_desc: 'Container path for config and data',
     test_connection: 'Test Connection',
@@ -271,14 +256,10 @@ const translations = {
     admin_password_desc: 'Защита веб-интерфейса (пусто = без пароля)',
     ssdp_enabled: 'Включить обнаружение в LAN',
     ssdp_desc: 'Разрешить агентам находить этот сервер в локальной сети',
-    server_url: 'URL сервера',
-    server_url_desc: 'WebSocket URL сервера (ws://ip:port)',
-    api_token: 'API токен',
-    api_token_desc: 'Токен сервера для аутентификации',
+    server_url: 'IP сервера',
+    server_url_desc: 'IP адрес сервера (например 192.168.1.100)',
     node_name: 'Имя узла',
-    node_name_desc: 'Отображаемое имя агента',
-    agent_description: 'Описание',
-    agent_description_desc: 'Описание (необязательно)',
+    node_name_desc: 'Отображаемое имя агента (автоопределение)',
     agent_data_path: 'Путь к данным',
     agent_data_path_desc: 'Контейнерный путь для конфига и данных',
     test_connection: 'Проверить соединение',
@@ -327,12 +308,8 @@ function updateTexts() {
   document.getElementById('desc_ssdp_enabled').textContent = t('ssdp_desc');
   document.getElementById('lbl_server_url').textContent = t('server_url');
   document.getElementById('desc_server_url').textContent = t('server_url_desc');
-  document.getElementById('lbl_api_token').textContent = t('api_token');
-  document.getElementById('desc_api_token').textContent = t('api_token_desc');
   document.getElementById('lbl_node_name').textContent = t('node_name');
   document.getElementById('desc_node_name').textContent = t('node_name_desc');
-  document.getElementById('lbl_agent_description').textContent = t('agent_description');
-  document.getElementById('desc_agent_description').textContent = t('agent_description_desc');
   document.getElementById('lbl_agent_data_path').textContent = t('agent_data_path');
   document.getElementById('desc_agent_data_path').textContent = t('agent_data_path_desc');
   document.getElementById('test_conn_btn').textContent = t('test_connection');
@@ -370,9 +347,8 @@ function testConnection() {
   const btn = document.getElementById('test_conn_btn');
   const result = document.getElementById('test_conn_result');
   const url = document.getElementById('input_server_url').value.trim();
-  const token = document.getElementById('input_api_token').value.trim();
 
-  if (!url || !token) {
+  if (!url) {
     result.textContent = t('test_fail');
     result.className = 'ml-3 text-sm text-red-400';
     return;
@@ -386,7 +362,7 @@ function testConnection() {
   fetch('/api/validate-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ server_url: url, api_token: token })
+    body: JSON.stringify({ server_url: 'ws://' + url + ':5059' })
   })
   .then(r => r.json())
   .then(data => {
@@ -414,10 +390,9 @@ function startInstall() {
 
   if (mode === 'agent') {
     const url = document.getElementById('input_server_url').value.trim();
-    const token = document.getElementById('input_api_token').value.trim();
     const name = document.getElementById('input_node_name').value.trim();
-    if (!url || !token || !name) {
-      errEl.textContent = lang === 'ru' ? 'Заполните все обязательные поля' : 'All required fields must be filled';
+    if (!url) {
+      errEl.textContent = lang === 'ru' ? 'Введите IP адрес сервера' : 'Enter server IP address';
       errEl.classList.remove('hidden');
       return;
     }
@@ -432,10 +407,9 @@ function startInstall() {
     config.admin_password = document.getElementById('input_admin_password').value;
     config.ssdp_enabled = document.getElementById('input_ssdp_enabled').checked;
   } else {
-    config.server_url = document.getElementById('input_server_url').value.trim();
-    config.api_token = document.getElementById('input_api_token').value.trim();
-    config.node_name = document.getElementById('input_node_name').value.trim();
-    config.description = document.getElementById('input_agent_description').value.trim();
+    const rawIp = document.getElementById('input_server_url').value.trim();
+    config.server_url = 'ws://' + rawIp + ':5059';
+    config.node_name = document.getElementById('input_node_name').value.trim() || rawIp;
     config.data_path = document.getElementById('input_agent_data_path').value.trim() || '/data';
   }
 
@@ -503,6 +477,8 @@ function startRedirectCountdown() {
 }
 
 updateTexts();
+// Auto-generate node name placeholder from hostname
+try { document.getElementById('input_node_name').placeholder = location.hostname || 'Agent'; } catch(e) {}
 </script>
 </body>
 </html>
