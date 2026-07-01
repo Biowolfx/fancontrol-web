@@ -634,8 +634,8 @@ function renderRemoteNodeTree(node) {
                 <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
                 <span class="text-sm font-semibold text-white truncate flex-1">🖥 ${escapeHtml(node.name)}</span>
                 <span class="text-xs ${statusColor} flex-shrink-0">${node.status}</span>
-                <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename">&#9998;</button>
+                <button onclick="event.stopPropagation(); showNodeSettings('${escapeHtml(node.node_id)}')"
+                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Settings">&#9881;</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
                         class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">X</button>
             </div>
@@ -4905,18 +4905,42 @@ async function deleteNode(nodeId) {
     }
 }
 
-async function renameNode(nodeId, currentName) {
-    const newName = prompt(t('nodes.rename_prompt', 'Enter new name:'), currentName);
-    if (!newName || newName.trim() === currentName) return;
+function showNodeSettings(nodeId) {
+    const node = nodesData.find(n => n.node_id === nodeId);
+    if (!node) return;
+    document.getElementById('node-settings-id').value = nodeId;
+    document.getElementById('node-settings-name').value = node.name || '';
+    document.getElementById('node-settings-ip').value = node.ip || '';
+    document.getElementById('node-settings-port').value = node.port || 5059;
+    document.getElementById('node-settings-modal').classList.remove('hidden');
+}
+
+function hideNodeSettings() {
+    document.getElementById('node-settings-modal').classList.add('hidden');
+}
+
+async function saveNodeSettings() {
+    const nodeId = document.getElementById('node-settings-id').value;
+    const name = document.getElementById('node-settings-name').value.trim();
+    const ip = document.getElementById('node-settings-ip').value.trim();
+    const port = parseInt(document.getElementById('node-settings-port').value) || 5059;
+    if (!name) { showToast('Name required', 'error'); return; }
+
     try {
-        await fetch(`/api/nodes/${nodeId}`, {
+        const resp = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newName.trim() })
+            body: JSON.stringify({ name, ip, port })
         });
-        loadNodes();
+        if (resp.ok) {
+            hideNodeSettings();
+            loadNodes();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Save failed', 'error');
+        }
     } catch (e) {
-        console.error('[FanControl] Failed to rename node:', e);
+        showToast('Save failed: ' + e.message, 'error');
     }
 }
 

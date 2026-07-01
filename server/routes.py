@@ -779,7 +779,7 @@ def api_get_node(node_id):
 
 @routes.route('/api/nodes/<node_id>', methods=['PUT'])
 def api_update_node(node_id):
-    """Update a node (rename)."""
+    """Update a node (name, ip, port)."""
     from server.node_registry import get_node, update_node
     node = get_node(node_id)
     if not node:
@@ -787,11 +787,11 @@ def api_update_node(node_id):
 
     data = request.get_json(silent=True) or {}
     name = data.get('name', '').strip()
-    if not name:
-        return jsonify({'error': 'Name required'}), 400
+    ip = data.get('ip', '').strip()
+    port = data.get('port')
 
-    if update_node(node_id, name=name):
-        return jsonify({'status': 'ok', 'name': name})
+    if update_node(node_id, name=name or None, ip=ip if ip is not None else None, port=port):
+        return jsonify({'status': 'ok'})
     return jsonify({'error': 'Update failed'}), 500
 
 

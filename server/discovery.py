@@ -245,7 +245,8 @@ def probe_known_agents(timeout: int = 2) -> List[Dict]:
         ip = node.get('ip', '')
         if not ip:
             continue
-        info = probe_agent(ip, timeout=timeout)
+        port = node.get('port', 5059)
+        info = probe_agent(ip, port=port, timeout=timeout)
         if info:
             results.append({
                 'node_id': node['node_id'],

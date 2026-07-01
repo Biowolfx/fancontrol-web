@@ -46,6 +46,7 @@ def init_nodes_table():
                     name TEXT NOT NULL,
                     api_token TEXT UNIQUE NOT NULL,
                     ip TEXT DEFAULT '',
+                    port INTEGER DEFAULT 5059,
                     config TEXT DEFAULT '{}',
                     telemetry TEXT DEFAULT '{}',
                     control_mode TEXT DEFAULT 'server',
@@ -59,12 +60,14 @@ def init_nodes_table():
             cols = [r[1] for r in conn.execute('PRAGMA table_info(nodes)').fetchall()]
             if 'ip' not in cols:
                 conn.execute("ALTER TABLE nodes ADD COLUMN ip TEXT DEFAULT ''")
+            if 'port' not in cols:
+                conn.execute("ALTER TABLE nodes ADD COLUMN port INTEGER DEFAULT 5059")
             conn.commit()
         finally:
             conn.close()
 
 
-def add_node(name: str, api_token: Optional[str] = None, ip: str = '') -> Dict:
+def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int = 5059) -> Dict:
     if not api_token:
         api_token = uuid.uuid4().hex
     node_id = name.lower().replace(' ', '-')
@@ -72,8 +75,8 @@ def add_node(name: str, api_token: Optional[str] = None, ip: str = '') -> Dict:
         conn = _get_conn()
         try:
             conn.execute(
-                'INSERT INTO nodes (node_id, name, api_token, ip) VALUES (?, ?, ?, ?)',
-                (node_id, name, api_token, ip)
+                'INSERT INTO nodes (node_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?)',
+                (node_id, name, api_token, ip, port)
             )
             conn.commit()
             row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
@@ -123,7 +126,7 @@ def delete_node(node_id: str) -> bool:
             conn.close()
 
 
-def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = None) -> bool:
+def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = None, port: Optional[int] = None) -> bool:
     with _lock:
         conn = _get_conn()
         try:
@@ -135,6 +138,9 @@ def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = No
             if ip is not None:
                 updates.append('ip = ?')
                 params.append(ip)
+            if port is not None:
+                updates.append('port = ?')
+                params.append(port)
             if not updates:
                 return False
             params.append(node_id)
