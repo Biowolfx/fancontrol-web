@@ -224,6 +224,16 @@ socket.on('update', (data) => {
     if (agentUpdateSection) {
         agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
     }
+    // Show agent token in sidebar
+    const agentTokenSection = document.getElementById('agent-token-section');
+    if (agentTokenSection) {
+        if (data.agent_mode && data.api_token) {
+            agentTokenSection.classList.remove('hidden');
+            document.getElementById('agent-token-value').textContent = data.api_token;
+        } else {
+            agentTokenSection.classList.add('hidden');
+        }
+    }
     // Show DSM nav button if DSM fans detected
     const dsmBtn = document.getElementById('nav-dsm-btn');
     if (dsmBtn) {
@@ -4455,6 +4465,13 @@ async function checkForUpdates() {
 }
 
 let _updateChecked = false;
+
+function copyAgentToken() {
+    const token = document.getElementById('agent-token-value').textContent;
+    if (token && navigator.clipboard) {
+        navigator.clipboard.writeText(token).then(() => showToast('Token copied!', 'success'));
+    }
+}
 
 function openUpdateModal() {
     const modal = document.getElementById('update-modal');

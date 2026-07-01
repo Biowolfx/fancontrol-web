@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.9.9"
+CONFIG_VERSION = "3.10.0"
 
 state_lock = threading.RLock()
 
@@ -55,6 +55,7 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'language': state.get('language', 'en'),
         'nodes': dict(state.get('nodes', {})),
         'agent_mode': state.get('server_url') is not None,
+        'api_token': state.get('api_token', ''),
     }
 
 

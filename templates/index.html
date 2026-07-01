@@ -400,6 +400,15 @@
                     <span id="agent-update-badge" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-neon-green rounded-full"></span>
                 </button>
             </div>
+
+            <!-- Agent Token (shown in agent mode) -->
+            <div id="agent-token-section" class="hidden border-t border-cyber-accent p-2">
+                <div class="text-[10px] text-gray-500 mb-1">API Token (paste on server)</div>
+                <div class="flex items-center gap-1">
+                    <code id="agent-token-value" class="flex-1 text-[10px] text-neon-cyan bg-cyber-bg rounded px-2 py-1 truncate select-all cursor-pointer" title="Click to select"></code>
+                    <button onclick="copyAgentToken()" class="text-gray-400 hover:text-neon-cyan text-[10px] px-1 flex-shrink-0" title="Copy">&#128203;</button>
+                </div>
+            </div>
         </div>
         
         <!-- ======================================================================== -->
