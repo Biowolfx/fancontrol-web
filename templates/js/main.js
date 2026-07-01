@@ -4670,9 +4670,9 @@ function renderNodeSidebar() {
                     <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
                 </div>
                 <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="hidden group-hover:block text-gray-500 hover:text-neon-cyan text-xs px-1" title="Rename">✎</button>
+                        class="text-gray-600 hover:text-neon-cyan text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5" title="Rename">✎</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="hidden group-hover:block text-gray-500 hover:text-red-400 text-xs px-1" title="Delete">&times;</button>
+                        class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5" title="Delete">×</button>
             </div>
         `;
     }
@@ -4914,17 +4914,22 @@ async function scanForAgents() {
     btn.disabled = true;
     btn.textContent = '...';
     list.classList.remove('hidden');
-    list.innerHTML = '<div class="text-gray-500 text-xs py-1">Scanning...</div>';
+    list.innerHTML = '<div class="text-gray-500 text-xs py-1">Scanning network...</div>';
 
     try {
-        const resp = await fetch('/api/nodes/discover');
-        const data = await resp.json();
+        const [discoverResp, discoveredResp] = await Promise.all([
+            fetch('/api/nodes/discover'),
+            fetch('/api/discovered')
+        ]);
 
-        if (!data || data.length === 0) {
-            list.innerHTML = '<div class="text-gray-500 text-xs py-1">No agents found on network</div>';
-        } else {
-            let html = '';
-            for (const agent of data) {
+        const scanResults = await discoverResp.json();
+        const pendingAgents = await discoveredResp.json();
+
+        let html = '';
+
+        // Show scan results
+        if (scanResults && scanResults.length > 0) {
+            for (const agent of scanResults) {
                 html += `
                     <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
                         <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)}</span>
@@ -4933,10 +4938,38 @@ async function scanForAgents() {
                     </div>
                 `;
             }
-            list.innerHTML = html;
         }
+
+        // Also show pending discovered agents
+        if (pendingAgents && pendingAgents.length > 0) {
+            for (const agent of pendingAgents) {
+                if (!scanResults || !scanResults.find(a => a.node_id === agent.node_id)) {
+                    html += `
+                        <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
+                            <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)}</span>
+                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')"
+                                    class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        if (!html) {
+            // Show diagnostic info
+            const existingNodes = nodesData.map(n => n.name).join(', ');
+            html = '<div class="text-gray-500 text-xs py-1">';
+            html += 'No agents found on network';
+            if (existingNodes) {
+                html += `<br><span class="text-gray-600">Existing nodes: ${escapeHtml(existingNodes)}</span>`;
+            }
+            html += '<br><span class="text-gray-600">Agent must be running in --mode agent on same network</span>';
+            html += '</div>';
+        }
+
+        list.innerHTML = html;
     } catch (e) {
-        list.innerHTML = '<div class="text-red-400 text-xs py-1">Scan failed</div>';
+        list.innerHTML = `<div class="text-red-400 text-xs py-1">Scan failed: ${e.message}</div>`;
     }
 
     btn.disabled = false;

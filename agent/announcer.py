@@ -68,16 +68,22 @@ def _handle_msearch(node_id: str, node_name: str, port: int = 5059, api_token: s
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except (AttributeError, OSError):
+            pass
         sock.bind(('', SSDP_PORT))
 
         mreq = socket.inet_aton(SSDP_ADDR) + socket.inet_aton('0.0.0.0')
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
         response = _build_ssdp_response(node_id, node_name, port, api_token=api_token)
+        logger.info(f'M-SEARCH responder started on port {SSDP_PORT} for {node_name}')
 
         while True:
             data, addr = sock.recvfrom(1024)
             if b'M-SEARCH' in data:
+                logger.debug(f'Received M-SEARCH from {addr[0]}, responding')
                 sock.sendto(response.encode(), addr)
     except Exception as e:
-        logger.error(f'SSDP listener error: {e}')
+        logger.error(f'M-SEARCH responder error: {e}')

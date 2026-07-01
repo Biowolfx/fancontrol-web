@@ -95,7 +95,8 @@ _listener_running = False
 
 def on_agent_discovered(callback: Callable):
     """Register callback for when new agent is discovered."""
-    _discovery_callbacks.append(callback)
+    if callback not in _discovery_callbacks:
+        _discovery_callbacks.append(callback)
 
 
 def start_discovery_listener():
