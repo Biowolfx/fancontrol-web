@@ -17,6 +17,7 @@ def agent_status():
         'server_connected': state.get('server_connected', False),
         'server_url': state.get('server_url', ''),
         'node_id': state.get('node_id', ''),
+        'api_token': state.get('api_token', ''),
         'has_agent_snapshot': state.get('agent_config_snapshot') is not None,
     })
 

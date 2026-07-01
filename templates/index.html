@@ -418,6 +418,19 @@
             
             <!-- Dashboard Canvas (full screen) -->
             <div id="dashboard-canvas-container" class="flex-1 overflow-auto relative">
+                <!-- Agent mode: show token prominently when dashboard is empty -->
+                <div id="agent-token-banner" class="hidden m-4 p-4 bg-cyber-card border border-neon-purple/30 rounded-xl">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-neon-purple text-lg">🔑</span>
+                        <span class="text-white font-semibold text-sm">Agent Token</span>
+                        <span class="text-gray-500 text-xs">— paste this in server node settings</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <code id="agent-token-banner-value" class="flex-1 text-sm text-neon-cyan bg-cyber-bg rounded px-3 py-2 font-mono select-all cursor-pointer break-all"></code>
+                        <button onclick="copyAgentToken()" class="px-3 py-2 bg-cyber-accent hover:bg-gray-700 text-gray-300 hover:text-white rounded text-xs transition-all flex-shrink-0">Copy</button>
+                    </div>
+                    <div class="text-xs text-gray-600 mt-2">Also visible in left sidebar ⬅</div>
+                </div>
                 <div id="dashboard-empty" class="flex flex-col items-center justify-center text-gray-500 py-20">
                     <div class="text-4xl mb-4">📊</div>
                     <p class="text-sm" data-i18n="dashboard.empty">Dashboard is empty</p>

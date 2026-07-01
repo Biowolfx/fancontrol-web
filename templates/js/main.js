@@ -226,13 +226,19 @@ socket.on('update', (data) => {
     }
     // Show agent token in sidebar
     const agentTokenSection = document.getElementById('agent-token-section');
-    if (agentTokenSection) {
-        if (data.agent_mode && data.api_token) {
+    const agentTokenBanner = document.getElementById('agent-token-banner');
+    if (data.agent_mode && data.api_token) {
+        if (agentTokenSection) {
             agentTokenSection.classList.remove('hidden');
             document.getElementById('agent-token-value').textContent = data.api_token;
-        } else {
-            agentTokenSection.classList.add('hidden');
         }
+        if (agentTokenBanner) {
+            agentTokenBanner.classList.remove('hidden');
+            document.getElementById('agent-token-banner-value').textContent = data.api_token;
+        }
+    } else {
+        if (agentTokenSection) agentTokenSection.classList.add('hidden');
+        if (agentTokenBanner) agentTokenBanner.classList.add('hidden');
     }
     // Show DSM nav button if DSM fans detected
     const dsmBtn = document.getElementById('nav-dsm-btn');
