@@ -4931,7 +4931,6 @@ function showNodeSettings(nodeId) {
     document.getElementById('node-settings-name').value = node.name || '';
     document.getElementById('node-settings-ip').value = node.ip || '';
     document.getElementById('node-settings-port').value = node.port || 5059;
-    document.getElementById('node-settings-token').value = node.api_token || '';
     document.getElementById('node-settings-modal').classList.remove('hidden');
 }
 
@@ -4944,14 +4943,13 @@ async function saveNodeSettings() {
     const name = document.getElementById('node-settings-name').value.trim();
     const ip = document.getElementById('node-settings-ip').value.trim();
     const port = parseInt(document.getElementById('node-settings-port').value) || 5059;
-    const api_token = document.getElementById('node-settings-token').value.trim();
     if (!name) { showToast('Name required', 'error'); return; }
 
     try {
         const resp = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, ip, port, api_token })
+            body: JSON.stringify({ name, ip, port })
         });
         if (resp.ok) {
             hideNodeSettings();

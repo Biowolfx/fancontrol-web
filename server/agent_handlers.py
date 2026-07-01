@@ -49,19 +49,30 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         api_token = data.get('api_token')
         control_mode = data.get('control_mode', 'server')
         agent_config = data.get('config', {})
+        agent_ip = flask_request.remote_addr if flask_request else ''
 
         if not api_token:
             logger.warning('agent:connect rejected — no api_token')
             return {'status': 'error', 'message': 'Missing api_token'}
 
         node = get_node_by_token(api_token)
+
+        # Auto-register unknown agent — no manual setup needed
         if not node:
-            logger.warning(f'agent:connect rejected — invalid token')
-            return {'status': 'error', 'message': 'Invalid token'}
+            from server.node_registry import add_node
+            node = add_node(node_name or node_id or 'Agent', api_token=api_token,
+                            ip=agent_ip if agent_ip != '127.0.0.1' else '')
+            logger.info(f'Auto-registered new agent: {node_name} ({agent_ip}) token={api_token[:8]}...')
+            # Notify browser
+            socketio.emit('node:discovered', {
+                'node_id': node['node_id'],
+                'name': node['name'],
+                'ip': agent_ip,
+                'auto_registered': True,
+            })
 
         node_id = node['node_id']
-        # Store agent IP from WebSocket connection
-        agent_ip = flask_request.remote_addr if flask_request else ''
+        # Update IP from WebSocket connection
         if agent_ip and agent_ip != '127.0.0.1':
             from server.node_registry import update_node
             update_node(node_id, ip=agent_ip)
