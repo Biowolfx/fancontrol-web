@@ -1,6 +1,7 @@
 services:
   fancontrol-agent:
-    image: fancontrol-web
+    build:
+      context: .
     container_name: fancontrol-agent
     restart: unless-stopped
     network_mode: host
@@ -14,4 +15,4 @@ services:
       - ./data-agent:/data
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/syno/etc.defaults/scemd.xml:/usr/syno/etc.defaults/scemd.xml:rw
-      - /volume1/docker/fancontrol-web:/repo
+      - .:/repo
