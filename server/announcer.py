@@ -1,4 +1,4 @@
-"""SSDP announcer — broadcasts server presence on LAN for agent auto-discovery."""
+"""SSDP announcer — broadcasts server presence on LAN + responds to M-SEARCH."""
 
 import logging
 import socket
@@ -61,4 +61,45 @@ def start_announcer(server_name: str, port: int = 5059) -> Optional[threading.Th
 
     thread = threading.Thread(target=_announce_loop, daemon=True)
     thread.start()
+
+    # Also start M-SEARCH responder so wizard/agents can actively discover this server
+    _start_msearch_responder(server_name, port)
+
     return thread
+
+
+def _start_msearch_responder(server_name: str, port: int = 5059):
+    """Listen for M-SEARCH queries and respond with server info."""
+    def _respond_loop():
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except (AttributeError, OSError):
+                pass
+            sock.bind(('', SSDP_PORT))
+
+            mreq = socket.inet_aton(SSDP_ADDR) + socket.inet_aton('0.0.0.0')
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+            sock.settimeout(1)
+
+            response = _build_ssdp_response(server_name, port)
+            logger.info('SSDP M-SEARCH responder started for server')
+
+            while True:
+                try:
+                    data, addr = sock.recvfrom(1024)
+                    decoded = data.decode(errors='ignore')
+                    if 'M-SEARCH' in decoded:
+                        # Check if the search is for our type
+                        if 'urn:fancontrol-web:server' in decoded:
+                            logger.debug(f'M-SEARCH from {addr[0]} — responding')
+                            sock.sendto(response.encode(), addr)
+                except socket.timeout:
+                    continue
+        except Exception as e:
+            logger.error(f'SSDP M-SEARCH responder error: {e}')
+
+    thread = threading.Thread(target=_respond_loop, daemon=True)
+    thread.start()
