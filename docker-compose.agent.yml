@@ -15,8 +15,3 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/syno/etc.defaults/scemd.xml:/usr/syno/etc.defaults/scemd.xml:rw
       - /volume1/docker/fancontrol-web:/repo
-    environment:
-      - MODE=agent
-      - SERVER_URL=ws://YOUR_SERVER_IP:5059
-      - NODE_NAME=NAS Agent
-      - CONTAINER_NAME=fancontrol-agent
