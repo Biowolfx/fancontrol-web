@@ -14,6 +14,7 @@ services:
       - ./data-agent:/data
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/syno/etc.defaults/scemd.xml:/usr/syno/etc.defaults/scemd.xml:rw
+      - /volume1/docker/fancontrol-web:/repo
     environment:
       - MODE=agent
       - SERVER_URL=ws://192.168.1.100:5059
