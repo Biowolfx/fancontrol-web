@@ -193,6 +193,19 @@ function hideServerUnavailable() {
 let lastUIUpdate = 0;
 socket.on('update', (data) => {
     currentState = data;
+    // Sync node data from server state
+    if (data.nodes) {
+        const nodeEntries = Object.entries(data.nodes);
+        for (const [nid, ndata] of nodeEntries) {
+            const idx = nodesData.findIndex(n => n.node_id === nid);
+            if (idx >= 0) {
+                Object.assign(nodesData[idx], ndata);
+            } else {
+                nodesData.push(ndata);
+            }
+        }
+        buildServerTree();
+    }
     if (data.test_progress && data.testing) {
         updateCalibrationModal(data.test_progress);
     }
@@ -616,11 +629,15 @@ function renderRemoteNodeTree(node) {
 
     let html = `
         <div class="node-group" data-node="${escapeHtml(node.node_id)}">
-            <div class="flex items-center gap-2 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
+            <div class="flex items-center gap-1 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header group"
                  onclick="toggleNodeGroup('${escapeHtml(node.node_id)}')">
-                <span class="w-2 h-2 ${statusDot} rounded-full"></span>
-                <span class="text-sm font-semibold text-white">🖥 ${escapeHtml(node.name)}</span>
-                <span class="ml-auto text-xs ${statusColor}">${node.status}</span>
+                <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
+                <span class="text-sm font-semibold text-white truncate flex-1">🖥 ${escapeHtml(node.name)}</span>
+                <span class="text-xs ${statusColor} flex-shrink-0">${node.status}</span>
+                <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
+                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename">&#9998;</button>
+                <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
+                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">X</button>
             </div>
             <div class="node-children ml-4 space-y-0.5 hidden" id="node-children-${escapeHtml(node.node_id)}">
     `;
@@ -644,6 +661,10 @@ function renderRemoteNodeTree(node) {
                 <span class="ml-auto text-xs font-mono text-neon-green">${sensor.value || 0}°C</span>
             </div>
         `;
+    }
+
+    if (fanCount === 0 && Object.keys(temps).length === 0) {
+        html += `<div class="text-xs text-gray-600 p-1.5">No telemetry</div>`;
     }
 
     html += `</div></div>`;
@@ -4644,45 +4665,14 @@ async function loadNodes() {
     try {
         const resp = await fetch('/api/nodes');
         nodesData = await resp.json();
-        renderNodeSidebar();
+        buildServerTree();
         renderNodesOverview();
     } catch (e) {
         console.error('[FanControl] Failed to load nodes:', e);
     }
 }
 
-function renderNodeSidebar() {
-    const container = document.getElementById('server-tree');
-    if (!container) return;
-    
-    let html = '';
-    for (const node of nodesData) {
-        const statusDot = node.status === 'online' ? 'bg-green-400' : 'bg-gray-500';
-        const modeIcon = node.control_mode === 'manual' ? ' <span class="text-yellow-400" title="Manual mode">&#9888;</span>' : '';
-        const isActive = selectedNodeId === node.node_id;
-        
-        html += `
-            <div class="flex items-center gap-1 p-1.5 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
-                 onclick="selectNode('${escapeHtml(node.node_id)}')">
-                <div class="w-2 h-2 rounded-full ${statusDot} flex-shrink-0"></div>
-                <div class="flex-1 min-w-0 overflow-hidden">
-                    <div class="text-white text-xs truncate">${escapeHtml(node.name)}${modeIcon}</div>
-                    <div class="text-gray-500 text-[10px] truncate">${node.status}${node.ip ? ' · ' + escapeHtml(node.ip) : ''}</div>
-                </div>
-                <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0" title="Rename">&#9998;</button>
-                <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0" title="Delete">X</button>
-            </div>
-        `;
-    }
-    
-    if (nodesData.length === 0) {
-        html = `<div class="text-gray-500 text-sm text-center py-4">${t('nodes.no_nodes', 'No nodes connected')}</div>`;
-    }
-    
-    container.innerHTML = html;
-}
+// renderNodeSidebar removed — nodes are rendered via buildServerTree/renderRemoteNodeTree
 
 function renderNodesOverview() {
     const container = document.getElementById('nodes-grid-inner');
@@ -5007,7 +4997,7 @@ socket.on('node:update', (data) => {
         if (data.ip) nodesData[idx].ip = data.ip;
         if (data.control_mode) nodesData[idx].control_mode = data.control_mode;
     }
-    renderNodeSidebar();
+    buildServerTree();
     renderNodesOverview();
 });
 
@@ -5015,8 +5005,12 @@ socket.on('node:telemetry', (data) => {
     const idx = nodesData.findIndex(n => n.node_id === data.node_id);
     if (idx >= 0) {
         nodesData[idx].telemetry = data.telemetry;
+    } else {
+        // Node not yet in nodesData — fetch fresh list
+        loadNodes();
+        return;
     }
-    renderNodeSidebar();
+    buildServerTree();
     renderNodesOverview();
     if (selectedNodeId === data.node_id && currentView === 'node-detail') {
         loadNodeDetail(data.node_id);
@@ -5036,7 +5030,7 @@ socket.on('node:conflict', (data) => {
     if (idx >= 0) {
         nodesData[idx].control_mode = 'manual';
     }
-    renderNodeSidebar();
+    buildServerTree();
     showConflictModal(data);
 });
 
@@ -5045,7 +5039,7 @@ socket.on('node:mode_changed', (data) => {
     if (idx >= 0) {
         nodesData[idx].control_mode = data.mode;
     }
-    renderNodeSidebar();
+    buildServerTree();
     renderNodesOverview();
     if (data.mode === 'manual') {
         showManualModeWarning(data.node_id);

@@ -127,7 +127,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 state['nodes'][node_id]['telemetry'] = telemetry
         invalidate_state_cache()
 
-        socketio.emit('node_telemetry', {'node_id': node_id, 'telemetry': telemetry})
+        socketio.emit('node:telemetry', {'node_id': node_id, 'telemetry': telemetry})
 
     @socketio.on('agent:config_changed')
     def handle_agent_config_changed(data):
