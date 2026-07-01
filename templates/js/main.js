@@ -224,21 +224,17 @@ socket.on('update', (data) => {
     if (agentUpdateSection) {
         agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
     }
-    // Show agent token in sidebar
+    // Show agent token if api_token exists (agent mode)
     const agentTokenSection = document.getElementById('agent-token-section');
     const agentTokenBanner = document.getElementById('agent-token-banner');
-    if (data.agent_mode && data.api_token) {
-        if (agentTokenSection) {
-            agentTokenSection.classList.remove('hidden');
-            document.getElementById('agent-token-value').textContent = data.api_token;
-        }
-        if (agentTokenBanner) {
-            agentTokenBanner.classList.remove('hidden');
-            document.getElementById('agent-token-banner-value').textContent = data.api_token;
-        }
-    } else {
-        if (agentTokenSection) agentTokenSection.classList.add('hidden');
-        if (agentTokenBanner) agentTokenBanner.classList.add('hidden');
+    const hasToken = data.api_token && data.api_token.length > 0;
+    if (agentTokenSection) {
+        agentTokenSection.classList.toggle('hidden', !hasToken);
+        if (hasToken) document.getElementById('agent-token-value').textContent = data.api_token;
+    }
+    if (agentTokenBanner) {
+        agentTokenBanner.classList.toggle('hidden', !hasToken);
+        if (hasToken) document.getElementById('agent-token-banner-value').textContent = data.api_token;
     }
     // Show DSM nav button if DSM fans detected
     const dsmBtn = document.getElementById('nav-dsm-btn');
