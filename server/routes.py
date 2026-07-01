@@ -393,59 +393,85 @@ def api_history():
 
 @routes.route('/api/update/check')
 def api_update_check():
-    """Check for updates — reads CONFIG_VERSION from remote core/state.py via GitHub API."""
-    import urllib.request, ssl, base64
+    """Check for updates — compare local vs remote git hash."""
+    import subprocess
 
     current_version = CONFIG_VERSION
-    repo = os.getenv('FANCONTROL_REPO', 'Biowolfx/fancontrol-web')
-
-    logger.info(f'[CHECK] Current version: {current_version}, checking remote...')
-
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
     remote_version = ''
     remote_hash = ''
     commit_msg = ''
+    local_hash = ''
 
+    repo_dir = '/repo'
+
+    # Get local hash from running code
     try:
-        req = urllib.request.Request(
-            f'https://api.github.com/repos/{repo}/commits/main',
-            headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'fancontrol-web'}
+        local_result = subprocess.run(
+            ['git', '-C', repo_dir, 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
         )
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-            data = json.loads(resp.read())
-            remote_hash = data['sha'][:8]
-            commit_msg = data['commit']['message'].split('\n')[0]
-    except Exception as e:
-        logger.error(f'Update check: failed to fetch commit info: {e}')
+        local_hash = local_result.stdout.strip()
+    except Exception:
+        pass
 
-    # Use GitHub Contents API (not raw URL — raw is CDN-cached and stale)
+    # Fetch latest from remote and compare
     try:
-        req2 = urllib.request.Request(
-            f'https://api.github.com/repos/{repo}/contents/core/state.py?ref=main',
-            headers={'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'fancontrol-web'}
+        fetch = subprocess.run(
+            ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
         )
-        with urllib.request.urlopen(req2, timeout=10, context=ctx) as resp:
-            file_data = json.loads(resp.read())
-            content = base64.b64decode(file_data['content']).decode()
-            m = re.search(r"CONFIG_VERSION\s*=\s*['\"](.+?)['\"]", content)
-            if m:
-                remote_version = m.group(1)
+        if fetch.returncode != 0:
+            logger.error(f'Update check: git fetch failed: {fetch.stderr[:200]}')
     except Exception as e:
-        logger.error(f'Update check: failed to fetch remote state.py: {e}')
+        logger.error(f'Update check: git fetch error: {e}')
 
-    has_update = bool(remote_version and current_version and remote_version != current_version)
-    logger.info(f'[CHECK] Result: has_update={has_update}, current={current_version}, remote={remote_version}')
+    # Get remote hash
+    try:
+        remote_result = subprocess.run(
+            ['git', '-C', repo_dir, 'rev-parse', '--short', 'origin/main'],
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+        )
+        remote_hash = remote_result.stdout.strip()
+    except Exception:
+        pass
+
+    # Get remote commit message
+    try:
+        msg_result = subprocess.run(
+            ['git', '-C', repo_dir, 'log', '--oneline', '-1', 'origin/main'],
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+        )
+        commit_msg = msg_result.stdout.strip()
+    except Exception:
+        pass
+
+    # Read remote CONFIG_VERSION from fetched code
+    try:
+        ver_result = subprocess.run(
+            ['git', '-C', repo_dir, 'show', f'origin/main:core/state.py'],
+            capture_output=True, text=True, timeout=5,
+            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+        )
+        m = re.search(r"CONFIG_VERSION\s*=\s*['\"](.+?)['\"]", ver_result.stdout)
+        if m:
+            remote_version = m.group(1)
+    except Exception:
+        pass
+
+    has_update = bool(remote_hash and local_hash and remote_hash != local_hash)
+    logger.info(f'[CHECK] local={local_hash}, remote={remote_hash}, has_update={has_update}')
 
     return jsonify({
         'status': 'ok',
         'has_update': has_update,
         'current_version': current_version,
-        'remote_version': remote_version or 'unknown',
-        'current_hash': 'N/A',
-        'remote_hash': remote_hash,
+        'remote_version': remote_version or current_version,
+        'current_hash': local_hash or 'N/A',
+        'remote_hash': remote_hash or 'N/A',
         'commit_message': commit_msg
     })
 
