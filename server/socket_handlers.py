@@ -33,26 +33,43 @@ def _start_heartbeat_checker(socketio):
                         try:
                             last_seen = datetime.fromisoformat(node['last_seen'])
                             age = (now - last_seen).total_seconds()
-                            # Only mark offline if node was connected via WS and hasn't sent telemetry
-                            if age > 15 and nid in _ws_connected:
-                                update_node_status(nid, 'offline')
-                                _ws_connected.discard(nid)
-                                with state_lock:
-                                    if 'nodes' in state and nid in state['nodes']:
-                                        state['nodes'][nid]['status'] = 'offline'
-                                invalidate_state_cache()
-
-                                socketio.emit('node:update', {
-                                    'node_id': nid,
-                                    'status': 'offline',
-                                    'name': node['name'],
-                                })
-
-                                logger.info(f'Agent {node["name"]} marked offline (no telemetry for 15s)')
+                            if nid in _ws_connected:
+                                # WS-connected: offline after 15s no telemetry
+                                if age > 15:
+                                    update_node_status(nid, 'offline')
+                                    _ws_connected.discard(nid)
+                                    with state_lock:
+                                        if 'nodes' in state and nid in state['nodes']:
+                                            state['nodes'][nid]['status'] = 'offline'
+                                    invalidate_state_cache()
+                                    socketio.emit('node:update', {
+                                        'node_id': nid,
+                                        'status': 'offline',
+                                        'name': node['name'],
+                                    })
+                                    logger.info(f'Agent {node["name"]} marked offline (no telemetry)')
+                            elif node.get('ip') and age > 60:
+                                # Probe-only: re-probe every 60s, mark offline if unreachable
+                                from server.discovery import probe_agent
+                                info = probe_agent(node['ip'], timeout=2)
+                                if not info:
+                                    update_node_status(nid, 'offline')
+                                    with state_lock:
+                                        if 'nodes' in state and nid in state['nodes']:
+                                            state['nodes'][nid]['status'] = 'offline'
+                                    invalidate_state_cache()
+                                    socketio.emit('node:update', {
+                                        'node_id': nid,
+                                        'status': 'offline',
+                                        'name': node['name'],
+                                    })
+                                    logger.info(f'Agent {node["name"]} ({node["ip"]}) marked offline (probe failed)')
+                                else:
+                                    # Still reachable — refresh last_seen
+                                    update_node_status(nid, 'online')
                         except (ValueError, TypeError):
                             pass
 
-                    # Probe offline agents via HTTP every 30s
                     elif node['status'] == 'offline' and node.get('ip'):
                         should_probe = True
                         if node.get('last_seen'):

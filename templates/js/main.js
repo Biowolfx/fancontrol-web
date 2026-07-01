@@ -4652,7 +4652,7 @@ async function loadNodes() {
 }
 
 function renderNodeSidebar() {
-    const container = document.getElementById('node-list');
+    const container = document.getElementById('server-tree');
     if (!container) return;
     
     let html = '';
