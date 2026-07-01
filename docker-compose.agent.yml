@@ -17,8 +17,6 @@ services:
       - /volume1/docker/fancontrol-web:/repo
     environment:
       - MODE=agent
-      - SERVER_URL=ws://192.168.1.100:5059
-      - API_TOKEN=your-token-here
-      - NODE_ID=server1
-      - NODE_NAME=Server 1
+      - SERVER_URL=ws://YOUR_SERVER_IP:5059
+      - NODE_NAME=NAS Agent
       - CONTAINER_NAME=fancontrol-agent
