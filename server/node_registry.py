@@ -126,7 +126,8 @@ def delete_node(node_id: str) -> bool:
             conn.close()
 
 
-def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = None, port: Optional[int] = None) -> bool:
+def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = None,
+                port: Optional[int] = None, api_token: Optional[str] = None) -> bool:
     with _lock:
         conn = _get_conn()
         try:
@@ -141,6 +142,9 @@ def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = No
             if port is not None:
                 updates.append('port = ?')
                 params.append(port)
+            if api_token is not None:
+                updates.append('api_token = ?')
+                params.append(api_token)
             if not updates:
                 return False
             params.append(node_id)
