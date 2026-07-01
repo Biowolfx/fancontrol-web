@@ -12,7 +12,11 @@ logger = logging.getLogger('fancontrol')
 
 def _start_heartbeat_checker(socketio):
     """Background thread that checks agent heartbeats and probes offline agents."""
+    # Track which nodes connected via WebSocket (have real telemetry)
+    _ws_connected = set()
+
     def _check_loop():
+        nonlocal _ws_connected
         while True:
             time.sleep(10)
             try:
@@ -23,18 +27,23 @@ def _start_heartbeat_checker(socketio):
                 now = datetime.utcnow()
 
                 for node in nodes:
+                    nid = node['node_id']
+
                     if node['status'] == 'online' and node.get('last_seen'):
                         try:
                             last_seen = datetime.fromisoformat(node['last_seen'])
-                            if (now - last_seen).total_seconds() > 15:
-                                update_node_status(node['node_id'], 'offline')
+                            age = (now - last_seen).total_seconds()
+                            # Only mark offline if node was connected via WS and hasn't sent telemetry
+                            if age > 15 and nid in _ws_connected:
+                                update_node_status(nid, 'offline')
+                                _ws_connected.discard(nid)
                                 with state_lock:
-                                    if 'nodes' in state and node['node_id'] in state['nodes']:
-                                        state['nodes'][node['node_id']]['status'] = 'offline'
+                                    if 'nodes' in state and nid in state['nodes']:
+                                        state['nodes'][nid]['status'] = 'offline'
                                 invalidate_state_cache()
 
                                 socketio.emit('node:update', {
-                                    'node_id': node['node_id'],
+                                    'node_id': nid,
                                     'status': 'offline',
                                     'name': node['name'],
                                 })
@@ -45,7 +54,6 @@ def _start_heartbeat_checker(socketio):
 
                     # Probe offline agents via HTTP every 30s
                     elif node['status'] == 'offline' and node.get('ip'):
-                        # Only probe every ~30s (use last_seen as throttle)
                         should_probe = True
                         if node.get('last_seen'):
                             try:
@@ -59,20 +67,20 @@ def _start_heartbeat_checker(socketio):
                             from server.discovery import probe_agent
                             info = probe_agent(node['ip'], timeout=2)
                             if info:
-                                update_node_status(node['node_id'], 'online')
-                                update_node(node['node_id'], ip=node['ip'])
+                                update_node_status(nid, 'online')
+                                update_node(nid, ip=node['ip'])
                                 with state_lock:
                                     if 'nodes' not in state:
                                         state['nodes'] = {}
-                                    state['nodes'][node['node_id']] = {
-                                        'node_id': node['node_id'],
+                                    state['nodes'][nid] = {
+                                        'node_id': nid,
                                         'name': node['name'],
                                         'status': 'online',
                                     }
                                 invalidate_state_cache()
 
                                 socketio.emit('node:update', {
-                                    'node_id': node['node_id'],
+                                    'node_id': nid,
                                     'status': 'online',
                                     'name': node['name'],
                                     'ip': node['ip'],
@@ -82,8 +90,18 @@ def _start_heartbeat_checker(socketio):
             except Exception as e:
                 logger.error(f'Heartbeat check error: {e}')
 
+    def on_ws_connect(node_id):
+        """Called when agent connects via WebSocket."""
+        _ws_connected.add(node_id)
+
+    def on_ws_disconnect(node_id):
+        """Called when agent disconnects from WebSocket."""
+        _ws_connected.discard(node_id)
+
     thread = threading.Thread(target=_check_loop, daemon=True)
     thread.start()
+
+    return on_ws_connect, on_ws_disconnect
 
 
 def register_handlers(socketio):
@@ -120,7 +138,7 @@ def register_handlers(socketio):
         """Handle state request from client"""
         socketio.emit('update', get_state())
 
-    _start_heartbeat_checker(socketio)
+    _on_ws_connect, _on_ws_disconnect = _start_heartbeat_checker(socketio)
 
     from server.agent_handlers import register_agent_handlers
-    register_agent_handlers(socketio)
+    register_agent_handlers(socketio, on_connect=_on_ws_connect, on_disconnect=_on_ws_disconnect)

@@ -36,7 +36,7 @@ def _start_ping_loop(socketio):
     thread.start()
 
 
-def register_agent_handlers(socketio):
+def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     """Register Socket.IO event handlers for agent connections."""
 
     _start_ping_loop(socketio)
@@ -68,6 +68,9 @@ def register_agent_handlers(socketio):
 
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
+
+        if on_connect:
+            on_connect(node_id)
 
         # Push token to agent
         socketio.emit('server:token_push', {

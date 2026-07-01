@@ -4670,9 +4670,9 @@ function renderNodeSidebar() {
                     <div class="text-gray-500 text-[10px] truncate">${node.status}${node.ip ? ' · ' + escapeHtml(node.ip) : ''}</div>
                 </div>
                 <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="text-gray-400 hover:text-neon-cyan text-xs px-0.5 flex-shrink-0" title="Rename">&#9998;</button>
+                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0" title="Rename">&#9998;</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="text-gray-400 hover:text-red-400 text-xs px-0.5 flex-shrink-0" title="Delete">&times;</button>
+                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0" title="Delete">X</button>
             </div>
         `;
     }
