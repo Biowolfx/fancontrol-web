@@ -118,6 +118,28 @@ def delete_node(node_id: str) -> bool:
             conn.close()
 
 
+def update_node(node_id: str, name: Optional[str] = None) -> bool:
+    with _lock:
+        conn = _get_conn()
+        try:
+            updates = []
+            params = []
+            if name is not None:
+                updates.append('name = ?')
+                params.append(name)
+            if not updates:
+                return False
+            params.append(node_id)
+            cursor = conn.execute(
+                f'UPDATE nodes SET {", ".join(updates)} WHERE node_id = ?',
+                params
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+
 def update_node_status(node_id: str, status: str, telemetry: Optional[Dict] = None) -> bool:
     with _lock:
         conn = _get_conn()

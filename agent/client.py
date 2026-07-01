@@ -300,8 +300,19 @@ def start_client():
 
     logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
 
-    from agent.announcer import start_announcer
+    from agent.announcer import start_announcer, _handle_msearch
     start_announcer(NODE_ID, NODE_NAME, api_token=API_TOKEN)
+
+    # Start M-SEARCH responder so server's active scan can find this agent
+    import threading
+    responder_thread = threading.Thread(
+        target=_handle_msearch,
+        args=(NODE_ID, NODE_NAME),
+        kwargs={'api_token': API_TOKEN},
+        daemon=True
+    )
+    responder_thread.start()
+    logger.info('[agent] M-SEARCH responder started')
 
     if not SERVER_URL:
         logger.info('No SERVER_URL set — running standalone')

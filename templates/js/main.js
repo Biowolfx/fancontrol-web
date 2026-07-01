@@ -211,6 +211,12 @@ socket.on('update', (data) => {
     if (agentUpdateSection) {
         agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
     }
+    // Show DSM nav button if DSM fans detected
+    const dsmBtn = document.getElementById('nav-dsm-btn');
+    if (dsmBtn) {
+        const hasDsm = data.fans && Object.values(data.fans).some(f => f.control_method === 'dsm_scemd');
+        dsmBtn.classList.toggle('hidden', !hasDsm);
+    }
 });
 
 socket.on('hardware_discovered', (data) => {
@@ -3332,6 +3338,185 @@ function applyDsmFanSpeed() {
     });
 }
 
+// ============================================================================
+// DSM SCHEME EDITOR
+// ============================================================================
+
+let _dsmSchemes = [];
+let _dsmActiveScheme = null;
+
+async function renderDsmSchemeEditor() {
+    const container = document.getElementById('dsm-scheme-inner');
+    if (!container) return;
+
+    container.innerHTML = '<div class="text-gray-500 text-center py-8">Loading DSM schemes...</div>';
+
+    try {
+        const [schemesResp, activeResp] = await Promise.all([
+            fetch('/api/dsm/schemes'),
+            fetch('/api/dsm/active')
+        ]);
+
+        const schemesData = await schemesResp.json();
+        const activeData = await activeResp.json();
+
+        if (schemesData.status !== 'ok') {
+            container.innerHTML = `<div class="text-red-400 text-center py-8">${schemesData.message || 'Failed to load schemes'}</div>`;
+            return;
+        }
+
+        _dsmSchemes = schemesData.schemes || [];
+        _dsmActiveScheme = activeData.active_scheme || null;
+
+        if (_dsmSchemes.length === 0) {
+            container.innerHTML = '<div class="text-gray-500 text-center py-8">No fan schemes found in scemd.xml</div>';
+            return;
+        }
+
+        let html = `
+            <div class="max-w-4xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-white">DSM Fan Schemes</h2>
+                    <button onclick="showView('dashboard')" class="text-gray-400 hover:text-white text-sm">
+                        &larr; Back to Dashboard
+                    </button>
+                </div>
+        `;
+
+        for (const scheme of _dsmSchemes) {
+            const isActive = scheme.type === _dsmActiveScheme;
+            const schemeLabel = _schemeLabel(scheme.type);
+
+            html += `
+                <div class="mb-6 bg-gray-900/50 border ${isActive ? 'border-green-500/50' : 'border-gray-700'} rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-white font-semibold">${schemeLabel}</h3>
+                            ${isActive ? '<span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded">Active</span>' : ''}
+                            ${scheme.hibernation_speed === 'STOP' ? '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-0.5 rounded">Hibernation: STOP</span>' : ''}
+                        </div>
+                        <button onclick="applyDsmScheme('${escapeHtml(scheme.type)}')"
+                                class="px-3 py-1 bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan text-xs rounded hover:bg-neon-cyan/30 transition-all">
+                            Apply
+                        </button>
+                    </div>
+            `;
+
+            if (scheme.entries.length > 0) {
+                html += `
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-gray-400 text-xs border-b border-gray-700">
+                                <th class="text-left py-2">Sensor</th>
+                                <th class="text-left py-2">Speed</th>
+                                <th class="text-left py-2">Action</th>
+                                <th class="text-left py-2">Threshold</th>
+                                <th class="text-right py-2">Edit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                for (let i = 0; i < scheme.entries.length; i++) {
+                    const entry = scheme.entries[i];
+                    const isLast = i === scheme.entries.length - 1;
+                    const sensorLabel = entry.sensor_type === 'cpu_temperature' ? 'CPU' : 'Disk';
+                    const speedDisplay = entry.fan_speed || '--';
+                    const actionClass = entry.action === 'SHUTDOWN' ? 'text-red-400' : 'text-gray-300';
+                    const threshold = entry.threshold_temp + '°C';
+
+                    html += `
+                        <tr class="border-b border-gray-800 hover:bg-gray-800/30">
+                            <td class="py-2">
+                                <span class="px-1.5 py-0.5 rounded text-xs ${entry.sensor_type === 'cpu_temperature' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'}">${sensorLabel}</span>
+                            </td>
+                            <td class="py-2 text-white font-mono">${escapeHtml(speedDisplay)}</td>
+                            <td class="py-2 ${actionClass}">${escapeHtml(entry.action)}</td>
+                            <td class="py-2 text-gray-300">${threshold}</td>
+                            <td class="py-2 text-right">
+                                <button onclick="editDsmEntry('${escapeHtml(scheme.type)}', ${i})"
+                                        class="text-gray-500 hover:text-neon-cyan text-xs px-1">✎</button>
+                            </td>
+                        </tr>
+                    `;
+                }
+
+                html += '</tbody></table>';
+            } else {
+                html += '<div class="text-gray-500 text-xs py-2">No entries</div>';
+            }
+
+            html += '</div>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+
+    } catch (e) {
+        container.innerHTML = `<div class="text-red-400 text-center py-8">Error loading DSM schemes: ${e.message}</div>`;
+    }
+}
+
+function _schemeLabel(type) {
+    const labels = {
+        'DUAL_MODE_HIGH': 'High Performance',
+        'DUAL_MODE_LOW': 'Quiet Mode',
+        'FULL_SPEED': 'Full Speed',
+        'STOP': 'Stop (Fan Off)',
+        'FLAT': 'Flat Config',
+    };
+    return labels[type] || type;
+}
+
+async function editDsmEntry(schemeType, index) {
+    const scheme = _dsmSchemes.find(s => s.type === schemeType);
+    if (!scheme || !scheme.entries[index]) return;
+
+    const entry = scheme.entries[index];
+    const newSpeed = prompt(`Fan speed % for ${entry.sensor_type} (threshold ${entry.threshold_temp}°C):`, entry.fan_speed || '20');
+    if (newSpeed === null) return;
+
+    const newAction = prompt(`Action (NONE or SHUTDOWN):`, entry.action || 'NONE');
+    if (newAction === null) return;
+
+    const newThreshold = prompt(`Threshold temperature °C:`, entry.threshold_temp || '0');
+    if (newThreshold === null) return;
+
+    try {
+        const resp = await fetch(`/api/dsm/scheme/${schemeType}/entry/${index}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fan_speed_pct: parseInt(newSpeed) || 20,
+                action: newAction.toUpperCase() === 'SHUTDOWN' ? 'SHUTDOWN' : 'NONE',
+                threshold_temp: parseInt(newThreshold) || 0
+            })
+        });
+        if (resp.ok) {
+            renderDsmSchemeEditor();
+        } else {
+            const err = await resp.json();
+            alert(err.message || 'Failed to update entry');
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function applyDsmScheme(schemeType) {
+    try {
+        const resp = await fetch('/api/dsm/apply', { method: 'POST' });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            showToast('Scheme applied successfully', 'success');
+        } else {
+            alert(data.message || 'Failed to apply scheme');
+        }
+    } catch (e) {
+        alert('Error applying scheme: ' + e.message);
+    }
+}
+
 function runCalibration() {
     console.log('[FanControl] Starting calibration...');
     
@@ -4477,13 +4662,17 @@ function renderNodeSidebar() {
         const isActive = selectedNodeId === node.node_id;
         
         html += `
-            <div class="flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
+            <div class="group flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
                  onclick="selectNode('${escapeHtml(node.node_id)}')">
                 <div class="w-2 h-2 rounded-full ${statusDot} flex-shrink-0"></div>
                 <div class="flex-1 min-w-0">
                     <div class="text-white text-sm truncate">${escapeHtml(node.name)}${modeIcon}</div>
                     <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
                 </div>
+                <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
+                        class="hidden group-hover:block text-gray-500 hover:text-neon-cyan text-xs px-1" title="Rename">✎</button>
+                <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
+                        class="hidden group-hover:block text-gray-500 hover:text-red-400 text-xs px-1" title="Delete">&times;</button>
             </div>
         `;
     }
@@ -4496,7 +4685,7 @@ function renderNodeSidebar() {
 }
 
 function renderNodesOverview() {
-    const container = document.getElementById('nodes-grid');
+    const container = document.getElementById('nodes-grid-inner');
     if (!container) return;
     
     let html = '';
@@ -4555,7 +4744,7 @@ async function loadNodeDetail(nodeId) {
 }
 
 function renderNodeDetail(node) {
-    const container = document.getElementById('node-detail-content');
+    const container = document.getElementById('node-detail-inner');
     if (!container) return;
     
     const telemetry = node.telemetry || {};
@@ -4626,17 +4815,33 @@ function showView(view) {
     const inspector = document.getElementById('inspector-container');
     const addBtn = document.getElementById('dashboard-add-btn');
     const groupBtn = document.getElementById('dashboard-group-btn');
+    const nodesGrid = document.getElementById('nodes-grid');
+    const nodeDetail = document.getElementById('node-detail-content');
+    const dsmScheme = document.getElementById('dsm-scheme-container');
 
+    // Hide all views first
+    [canvas, inspector, nodesGrid, nodeDetail, dsmScheme].forEach(el => {
+        if (el) el.classList.add('hidden');
+    });
+    [addBtn, groupBtn].forEach(el => {
+        if (el) el.classList.add('hidden');
+    });
+
+    // Show the requested view
     if (view === 'dashboard') {
         if (canvas) canvas.classList.remove('hidden');
-        if (inspector) inspector.classList.add('hidden');
         if (addBtn) addBtn.classList.remove('hidden');
         if (groupBtn) groupBtn.classList.remove('hidden');
     } else if (view === 'inspector') {
-        if (canvas) canvas.classList.add('hidden');
         if (inspector) inspector.classList.remove('hidden');
-        if (addBtn) addBtn.classList.add('hidden');
-        if (groupBtn) groupBtn.classList.add('hidden');
+    } else if (view === 'nodes') {
+        if (nodesGrid) nodesGrid.classList.remove('hidden');
+        renderNodesOverview();
+    } else if (view === 'node-detail') {
+        if (nodeDetail) nodeDetail.classList.remove('hidden');
+    } else if (view === 'dsm-scheme') {
+        if (dsmScheme) dsmScheme.classList.remove('hidden');
+        renderDsmSchemeEditor();
     }
 
     // Update nav button styles
@@ -4684,6 +4889,58 @@ async function deleteNode(nodeId) {
     } catch (e) {
         console.error('[FanControl] Failed to delete node:', e);
     }
+}
+
+async function renameNode(nodeId, currentName) {
+    const newName = prompt(t('nodes.rename_prompt', 'Enter new name:'), currentName);
+    if (!newName || newName.trim() === currentName) return;
+    try {
+        await fetch(`/api/nodes/${nodeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() })
+        });
+        loadNodes();
+    } catch (e) {
+        console.error('[FanControl] Failed to rename node:', e);
+    }
+}
+
+async function scanForAgents() {
+    const btn = document.getElementById('scan-agents-btn');
+    const list = document.getElementById('discovered-agents-list');
+    if (!list) return;
+
+    btn.disabled = true;
+    btn.textContent = '...';
+    list.classList.remove('hidden');
+    list.innerHTML = '<div class="text-gray-500 text-xs py-1">Scanning...</div>';
+
+    try {
+        const resp = await fetch('/api/nodes/discover');
+        const data = await resp.json();
+
+        if (!data || data.length === 0) {
+            list.innerHTML = '<div class="text-gray-500 text-xs py-1">No agents found on network</div>';
+        } else {
+            let html = '';
+            for (const agent of data) {
+                html += `
+                    <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
+                        <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)}</span>
+                        <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')"
+                                class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
+                    </div>
+                `;
+            }
+            list.innerHTML = html;
+        }
+    } catch (e) {
+        list.innerHTML = '<div class="text-red-400 text-xs py-1">Scan failed</div>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '🔍';
 }
 
 socket.on('node:update', (data) => {

@@ -110,13 +110,17 @@ def start_discovery_listener():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except (AttributeError, OSError):
+                pass  # SO_REUSEPORT not available on all platforms
             sock.bind(('', SSDP_PORT))
 
             mreq = socket.inet_aton(SSDP_ADDR) + socket.inet_aton('0.0.0.0')
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
             sock.settimeout(1)
 
-            logger.info('SSDP discovery listener started')
+            logger.info('SSDP discovery listener started on port %d', SSDP_PORT)
 
             while _listener_running:
                 try:

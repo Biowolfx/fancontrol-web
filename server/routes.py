@@ -232,6 +232,96 @@ def api_set_dsm_fan_speed():
         return jsonify({'status': 'error', 'message': 'Failed to set fan speed'}), 500
 
 
+# ============================================================================
+# DSM Scheme Management
+# ============================================================================
+
+@routes.route('/api/dsm/schemes', methods=['GET'])
+def api_get_dsm_schemes():
+    """Return all fan_config schemes from scemd.xml."""
+    from core.dsm_fan import is_dsm_fan_available, get_all_schemes
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    info = get_all_schemes()
+    if info is None:
+        return jsonify({'status': 'error', 'message': 'Failed to parse scemd.xml'}), 500
+    return jsonify({'status': 'ok', **info})
+
+
+@routes.route('/api/dsm/scheme/<scheme_type>', methods=['GET'])
+def api_get_dsm_scheme(scheme_type):
+    """Return a single scheme by type."""
+    from core.dsm_fan import is_dsm_fan_available, get_scheme
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    scheme = get_scheme(scheme_type)
+    if scheme is None:
+        return jsonify({'status': 'error', 'message': f'Scheme {scheme_type} not found'}), 404
+    return jsonify({'status': 'ok', 'scheme': scheme})
+
+
+@routes.route('/api/dsm/scheme/<scheme_type>', methods=['PUT'])
+def api_update_dsm_scheme(scheme_type):
+    """Update a scheme's entries."""
+    from core.dsm_fan import is_dsm_fan_available, update_scheme
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    data = request.get_json(silent=True) or {}
+    entries = data.get('entries')
+    if not entries or not isinstance(entries, list):
+        return jsonify({'status': 'error', 'message': 'entries array required'}), 400
+
+    if update_scheme(scheme_type, entries):
+        return jsonify({'status': 'ok'})
+    return jsonify({'status': 'error', 'message': 'Failed to update scheme'}), 500
+
+
+@routes.route('/api/dsm/scheme/<scheme_type>/entry/<int:index>', methods=['PUT'])
+def api_update_dsm_entry(scheme_type, index):
+    """Update a single entry in a scheme."""
+    from core.dsm_fan import is_dsm_fan_available, update_scheme_entry
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    data = request.get_json(silent=True) or {}
+    fan_speed = data.get('fan_speed_pct')
+    action = data.get('action')
+    threshold = data.get('threshold_temp')
+
+    if update_scheme_entry(scheme_type, index,
+                           fan_speed_pct=fan_speed,
+                           action=action,
+                           threshold_temp=threshold):
+        return jsonify({'status': 'ok'})
+    return jsonify({'status': 'error', 'message': 'Failed to update entry'}), 500
+
+
+@routes.route('/api/dsm/active', methods=['GET'])
+def api_get_dsm_active():
+    """Return the currently active scheme type."""
+    from core.dsm_fan import is_dsm_fan_available, get_active_scheme_type
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    active = get_active_scheme_type()
+    return jsonify({'status': 'ok', 'active_scheme': active})
+
+
+@routes.route('/api/dsm/apply', methods=['POST'])
+def api_apply_dsm_schemes():
+    """Write pending changes and restart scemd service."""
+    from core.dsm_fan import is_dsm_fan_available, get_all_schemes, _restart_scemd
+    if not is_dsm_fan_available():
+        return jsonify({'status': 'error', 'message': 'DSM fan control not available'}), 400
+
+    if _restart_scemd():
+        return jsonify({'status': 'ok', 'message': 'scemd service restarted'})
+    return jsonify({'status': 'error', 'message': 'Failed to restart scemd service'}), 500
+
+
 @routes.route('/api/test/start', methods=['POST'])
 def api_test_start():
     """Start individual fan test"""
@@ -684,6 +774,24 @@ def api_get_node(node_id):
     if not node:
         return jsonify({'error': 'Node not found'}), 404
     return jsonify(node)
+
+
+@routes.route('/api/nodes/<node_id>', methods=['PUT'])
+def api_update_node(node_id):
+    """Update a node (rename)."""
+    from server.node_registry import get_node, update_node
+    node = get_node(node_id)
+    if not node:
+        return jsonify({'error': 'Node not found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+
+    if update_node(node_id, name=name):
+        return jsonify({'status': 'ok', 'name': name})
+    return jsonify({'error': 'Update failed'}), 500
 
 
 @routes.route('/api/nodes/<node_id>', methods=['DELETE'])

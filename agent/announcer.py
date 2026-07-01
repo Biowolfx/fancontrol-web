@@ -45,7 +45,7 @@ def start_announcer(node_id: str, node_name: str, port: int = 5059, api_token: s
     def _announce_loop():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
             response = _build_ssdp_response(node_id, node_name, port, api_token)
 
             logger.info(f'SSDP announcer started for {node_name}')
@@ -64,7 +64,7 @@ def start_announcer(node_id: str, node_name: str, port: int = 5059, api_token: s
     return thread
 
 
-def _handle_msearch(node_id: str, node_name: str, port: int = 5059):
+def _handle_msearch(node_id: str, node_name: str, port: int = 5059, api_token: str = ''):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -73,7 +73,7 @@ def _handle_msearch(node_id: str, node_name: str, port: int = 5059):
         mreq = socket.inet_aton(SSDP_ADDR) + socket.inet_aton('0.0.0.0')
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        response = _build_ssdp_response(node_id, node_name, port)
+        response = _build_ssdp_response(node_id, node_name, port, api_token=api_token)
 
         while True:
             data, addr = sock.recvfrom(1024)
