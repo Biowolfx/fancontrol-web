@@ -3263,13 +3263,16 @@ function renderDiscoveredHardware(data) {
     if (data.fans && Object.keys(data.fans).length > 0) {
         html += '<h4 class="text-sm font-semibold text-neon-cyan mb-2">🌀 Fans</h4>';
         for (const [id, fan] of Object.entries(data.fans)) {
+            const cleanLabel = fan.label.replace(/\s*\(Synology-[^)]+\)/, '');
+            const isDsm = fan.control_method === 'dsm_scemd';
             html += `
                 <div class="flex items-center justify-between bg-cyber-accent rounded-lg p-3 mb-1">
                     <div>
-                        <span class="text-sm text-white">${escapeHtml(fan.label)}</span>
-                        <span class="text-xs text-gray-500 ml-2">${fan.writable ? '✅ Controllable' : '⚠️ Read-only'}</span>
+                        <span class="text-sm text-white">${escapeHtml(cleanLabel)}</span>
+                        <span class="text-xs text-gray-500 ml-2">${fan.writable ? 'Controllable' : 'Read-only'}</span>
+                        ${isDsm ? '<span class="text-xs bg-blue-900 bg-opacity-30 text-blue-400 px-2 py-0.5 rounded ml-2">DSM</span>' : ''}
                     </div>
-                    <span class="text-xs bg-orange-900 bg-opacity-30 text-neon-orange px-2 py-0.5 rounded">Not calibrated</span>
+                    ${!isDsm ? '<span class="text-xs bg-orange-900 bg-opacity-30 text-neon-orange px-2 py-0.5 rounded">Not calibrated</span>' : ''}
                 </div>
             `;
         }
@@ -3305,34 +3308,104 @@ function renderDiscoveredHardware(data) {
     
     container.innerHTML = html || `<p class="text-gray-500">${t('setup.no_hardware', 'No hardware detected')}</p>`;
     
-    // Determine fan control method and show appropriate action
+    // Determine available control modes
     const actionDiv = document.getElementById('setup-step-action');
-    const dsmSection = document.getElementById('dsm-speed-section');
-    const hasDsmFans = data.fans && Object.values(data.fans).some(f => f.control_method === 'dsm_scemd');
-    const hasHwmonFans = data.fans && Object.values(data.fans).some(f => f.control_method !== 'dsm_scemd' && Object.keys(data.fans).length > 0);
-
-    if (hasDsmFans) {
-        // DSM mode: show speed slider instead of calibration
-        document.getElementById('calibrate-btn').classList.add('hidden');
-        document.getElementById('skip-calibrate-btn').classList.add('hidden');
-        dsmSection.classList.remove('hidden');
-        document.getElementById('calibrate-hint').textContent = t('setup.dsm_hint', 'Fan speed is controlled via DSM. Set the desired speed percentage below.');
+    const controlSelect = document.getElementById('control-mode-select');
+    const hwmonBtn = document.getElementById('btn-hwmon');
+    const dsmBtn = document.getElementById('btn-dsm');
+    const hint = document.getElementById('mode-unavailable-hint');
+    
+    const kernelInfo = data.kernel_info || {};
+    const hasHwmon = kernelInfo.has_hwmon_pwm;
+    const hasDsm = kernelInfo.has_scemd;
+    const hasFans = data.fans && Object.keys(data.fans).length > 0;
+    
+    // Always show mode selection when fans are detected
+    if (hasFans && (hasHwmon || hasDsm)) {
+        controlSelect.classList.remove('hidden');
+        document.getElementById('hwmon-action').classList.add('hidden');
+        document.getElementById('dsm-action').classList.add('hidden');
         actionDiv.classList.remove('hidden');
-    } else if (hasHwmonFans) {
-        // HWMon mode: show calibration button
-        document.getElementById('calibrate-btn').classList.remove('hidden');
-        document.getElementById('skip-calibrate-btn').classList.add('hidden');
-        dsmSection.classList.add('hidden');
-        document.getElementById('calibrate-hint').textContent = t('setup.calibrate_hint', 'To complete setup, fans must be calibrated. This takes about 1-2 minutes.');
+        
+        // HWMon button state
+        if (hasHwmon) {
+            hwmonBtn.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+            hwmonBtn.disabled = false;
+        } else {
+            hwmonBtn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+            hwmonBtn.disabled = true;
+        }
+        
+        // DSM button state
+        if (hasDsm) {
+            dsmBtn.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+            dsmBtn.disabled = false;
+        } else {
+            dsmBtn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+            dsmBtn.disabled = true;
+        }
+        
+        // Show hint if one mode unavailable
+        if (hasHwmon && !hasDsm) {
+            hint.textContent = 'DSM schemes not found — only hwmon control available.';
+            hint.classList.remove('hidden');
+        } else if (!hasHwmon && hasDsm) {
+            hint.textContent = 'hwmon PWM not available on this kernel — only DSM scheme control available.';
+            hint.classList.remove('hidden');
+        } else {
+            hint.classList.add('hidden');
+        }
+    } else if (hasFans && !hasHwmon && !hasDsm) {
+        // Fans but no control method
+        controlSelect.classList.add('hidden');
+        document.getElementById('hwmon-action').classList.add('hidden');
+        document.getElementById('dsm-action').classList.add('hidden');
         actionDiv.classList.remove('hidden');
+        hint.textContent = 'No fan control method available.';
+        hint.classList.remove('hidden');
     } else {
-        // No fans: show skip button
-        document.getElementById('calibrate-btn').classList.add('hidden');
-        document.getElementById('skip-calibrate-btn').classList.remove('hidden');
-        dsmSection.classList.add('hidden');
-        document.getElementById('calibrate-hint').textContent = t('setup.no_fans_hint', 'No controllable fans detected. You can continue in monitoring-only mode.');
-        actionDiv.classList.remove('hidden');
+        // No fans
+        controlSelect.classList.add('hidden');
+        document.getElementById('hwmon-action').classList.add('hidden');
+        document.getElementById('dsm-action').classList.add('hidden');
+        actionDiv.classList.add('hidden');
     }
+}
+
+let _wizardHardwareData = null;
+
+function selectControlMode(mode) {
+    const hwmonAction = document.getElementById('hwmon-action');
+    const dsmAction = document.getElementById('dsm-action');
+    const hwmonBtn = document.getElementById('btn-hwmon');
+    const dsmBtn = document.getElementById('btn-dsm');
+    
+    hwmonAction.classList.add('hidden');
+    dsmAction.classList.add('hidden');
+    
+    if (mode === 'hwmon') {
+        hwmonBtn.classList.add('card-selected');
+        dsmBtn.classList.remove('card-selected');
+        hwmonAction.classList.remove('hidden');
+    } else {
+        dsmBtn.classList.add('card-selected');
+        hwmonBtn.classList.remove('card-selected');
+        dsmAction.classList.remove('hidden');
+    }
+}
+
+function applyDsmAndContinue() {
+    // Skip calibration, go straight to DSM scheme editor
+    fetch('/api/skip-calibration', { method: 'POST' }).catch(() => {});
+    fetch('/api/dsm/fan-speed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed: 50 })
+    }).catch(() => {});
+    wizardStep = 'done';
+    currentState = { ...currentState, initialized: true, tested: true };
+    showMainScreen();
+    setTimeout(() => showView('dsm-scheme'), 500);
 }
 
 function skipCalibration() {

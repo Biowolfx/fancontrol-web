@@ -288,29 +288,60 @@
                 <h3 class="text-xl font-bold text-neon-green mb-4" data-i18n="setup.results_title">✅ Hardware Detected</h3>
                 <div id="discovered-devices" class="max-h-96 overflow-y-auto space-y-3 mb-6"></div>
                 <div id="setup-step-action" class="hidden text-center">
-                    <p id="calibrate-hint" class="text-gray-400 mb-4" data-i18n="setup.calibrate_hint">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
-                    <button id="calibrate-btn" onclick="runCalibration()"
-                            class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg 
-                                   transition-all duration-300 hover:shadow-neon-cyan disabled:opacity-50 disabled:cursor-not-allowed">
-                        🎯 Start Fan Calibration
-                    </button>
-                    <button id="skip-calibrate-btn" onclick="skipCalibration()"
-                            class="hidden bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg 
-                                   transition-all duration-300">
-                        ⏭️ Continue Without Calibration
-                    </button>
-                    <div id="dsm-speed-section" class="hidden mt-4">
-                        <label class="text-gray-400 text-sm">Fan Speed: <span id="dsm-speed-value">50</span>%</label>
-                        <input id="dsm-speed-slider" type="range" min="0" max="100" value="50"
-                               class="w-full mt-2 accent-cyan-500"
-                               oninput="document.getElementById('dsm-speed-value').textContent = this.value">
-                        <button onclick="applyDsmFanSpeed()"
-                                class="mt-3 bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-2 px-6 rounded-lg transition-all">
-                            ✅ Apply & Continue
-                        </button>
+                    <!-- Control Mode Selection -->
+                    <div id="control-mode-select" class="mb-6">
+                        <p class="text-gray-400 text-sm mb-4">Choose how to control fans:</p>
+                        <div class="flex justify-center gap-4">
+                            <button id="btn-hwmon" onclick="selectControlMode('hwmon')"
+                                    class="card-hover relative w-52 p-4 rounded-xl border border-gray-700 bg-gray-800/50 text-left transition-all">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xl">🐧</span>
+                                    <span class="text-white font-semibold text-sm">Direct Control</span>
+                                </div>
+                                <div class="text-gray-400 text-xs">hwmon / PWM</div>
+                                <p class="text-gray-500 text-[10px] mt-2">Direct fan speed control via Linux sysfs. Requires calibration to determine RPM curves.</p>
+                            </button>
+                            <button id="btn-dsm" onclick="selectControlMode('dsm')"
+                                    class="card-hover relative w-52 p-4 rounded-xl border border-gray-700 bg-gray-800/50 text-left transition-all">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xl">🌡</span>
+                                    <span class="text-white font-semibold text-sm">DSM Scheme</span>
+                                </div>
+                                <div class="text-gray-400 text-xs">scemd.xml</div>
+                                <p class="text-gray-500 text-[10px] mt-2">Control fans by editing DSM temperature-threshold schemes. No calibration needed.</p>
+                            </button>
+                        </div>
+                        <p id="mode-unavailable-hint" class="text-neon-orange text-xs mt-3 hidden"></p>
                     </div>
-                    <div id="calibrate-loader" class="hidden mt-4 text-neon-cyan animate-pulse">
-                        Calibrating: determining PWM/RPM curves...
+
+                    <!-- HWMon action (calibration) -->
+                    <div id="hwmon-action" class="hidden">
+                        <p id="calibrate-hint" class="text-gray-400 mb-4">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
+                        <button id="calibrate-btn" onclick="runCalibration()"
+                                class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg 
+                                       transition-all duration-300 hover:shadow-neon-cyan disabled:opacity-50 disabled:cursor-not-allowed">
+                            Start Fan Calibration
+                        </button>
+                        <div id="calibrate-loader" class="hidden mt-4 text-neon-cyan animate-pulse">
+                            Calibrating: determining PWM/RPM curves...
+                        </div>
+                    </div>
+
+                    <!-- DSM action (scheme editor) -->
+                    <div id="dsm-action" class="hidden">
+                        <div class="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-4 text-left max-w-md mx-auto">
+                            <div class="flex items-start gap-2">
+                                <span class="text-yellow-400 mt-0.5">⚠</span>
+                                <div>
+                                    <p class="text-yellow-300 text-sm font-semibold mb-1">DSM Scheme Control</p>
+                                    <p class="text-gray-400 text-xs">Direct speed control is not available in this mode. You configure temperature thresholds and corresponding fan speeds by editing the DSM scheme table.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="applyDsmAndContinue()"
+                                class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg transition-all duration-300">
+                            Open DSM Scheme Editor
+                        </button>
                     </div>
                 </div>
             </div>
