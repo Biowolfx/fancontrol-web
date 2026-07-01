@@ -4,6 +4,8 @@ import logging
 import socket
 import threading
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime
 from typing import Callable, Dict, List
 
@@ -208,3 +210,48 @@ def _parse_and_notify(data: str, source_ip: str):
             cb(_discovered_nodes[node_id])
         except Exception as e:
             logger.error(f'Discovery callback error: {e}')
+
+
+# ============================================================================
+# HTTP Probe — fallback when SSDP multicast doesn't work (Docker/VM)
+# ============================================================================
+
+def probe_agent(ip: str, port: int = 5059, timeout: int = 3) -> dict:
+    """Try to reach an agent directly via HTTP /api/agent/status."""
+    try:
+        url = f'http://{ip}:{port}/api/agent/status'
+        req = urllib.request.Request(url, method='GET')
+        req.add_header('User-Agent', 'FanControl-Web')
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read().decode()
+            import json
+            info = json.loads(data)
+            info['ip'] = ip
+            info['port'] = port
+            return info
+    except Exception as e:
+        logger.debug(f'Probe {ip}:{port} failed: {e}')
+        return None
+
+
+def probe_known_agents(timeout: int = 2) -> List[Dict]:
+    """Probe all registered nodes that are offline via HTTP."""
+    from server.node_registry import list_nodes
+    results = []
+    nodes = list_nodes()
+    for node in nodes:
+        if node.get('status') == 'online':
+            continue
+        ip = node.get('ip', '')
+        if not ip:
+            continue
+        info = probe_agent(ip, timeout=timeout)
+        if info:
+            results.append({
+                'node_id': node['node_id'],
+                'name': node['name'],
+                'ip': ip,
+                'status': 'online',
+                'info': info,
+            })
+    return results

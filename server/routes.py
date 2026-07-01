@@ -840,10 +840,83 @@ def api_set_node_mode(node_id):
 
 @routes.route('/api/nodes/discover')
 def api_discover_nodes():
-    """Scan LAN for agents via SSDP."""
-    from server.discovery import scan_for_agents
-    nodes = scan_for_agents(timeout=5)
+    """Scan LAN for agents via SSDP + HTTP probe of offline nodes."""
+    from server.discovery import scan_for_agents, probe_known_agents
+    nodes = scan_for_agents(timeout=3)
+    # Also probe offline nodes directly via HTTP
+    probed = probe_known_agents(timeout=2)
+    # Merge: SSDP results first, then newly-probed online nodes
+    found_ids = {n['node_id'] for n in nodes}
+    for p in probed:
+        if p['node_id'] not in found_ids:
+            nodes.append(p)
     return jsonify(nodes)
+
+
+@routes.route('/api/nodes/probe', methods=['POST'])
+def api_probe_ip():
+    """Probe a specific IP for an agent."""
+    from server.discovery import probe_agent
+    from server.node_registry import list_nodes, get_node
+    data = request.get_json()
+    ip = (data.get('ip') or '').strip()
+    port = int(data.get('port', 5059))
+    if not ip:
+        return jsonify({'error': 'IP required'}), 400
+
+    info = probe_agent(ip, port=port, timeout=3)
+    if not info:
+        return jsonify({'error': 'Agent not reachable'}), 404
+
+    # Check if this agent is already registered
+    nodes = list_nodes()
+    existing = None
+    for n in nodes:
+        if n.get('ip') == ip:
+            existing = n
+            break
+
+    if existing:
+        # Update status to online
+        from server.node_registry import update_node_status
+        update_node_status(existing['node_id'], 'online')
+        info['node_id'] = existing['node_id']
+        info['name'] = existing['name']
+        info['already_registered'] = True
+    else:
+        info['already_registered'] = False
+
+    return jsonify(info)
+
+
+@routes.route('/api/nodes/add-by-ip', methods=['POST'])
+def api_add_node_by_ip():
+    """Add a node by IP address directly."""
+    from server.node_registry import add_node, list_nodes
+    from server.discovery import probe_agent
+    data = request.get_json()
+    ip = (data.get('ip') or '').strip()
+    name = (data.get('name') or '').strip()
+    port = int(data.get('port', 5059))
+    if not ip:
+        return jsonify({'error': 'IP required'}), 400
+    if not name:
+        name = ip
+
+    # Check for duplicate IP
+    for n in list_nodes():
+        if n.get('ip') == ip:
+            return jsonify({'error': 'Node with this IP already exists'}), 409
+
+    info = probe_agent(ip, port=port, timeout=3)
+    api_token = info.get('X-FANCONTROL-TOKEN', '') if info else ''
+
+    node = add_node(name, api_token=api_token, ip=ip)
+
+    from server.node_registry import update_node_status
+    update_node_status(node['node_id'], 'online' if info else 'offline')
+
+    return jsonify(node), 201
 
 
 # ============================================================================
@@ -869,7 +942,7 @@ def api_accept_discovered(node_id):
         if not agent:
             return jsonify({'error': 'Agent not found'}), 404
 
-        node = add_node(agent['name'], api_token=agent['api_token'])
+        node = add_node(agent['name'], api_token=agent.get('api_token', ''), ip=agent.get('ip', ''))
         del _discovered_nodes[node_id]
 
     return jsonify(node), 201

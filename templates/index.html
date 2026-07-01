@@ -370,7 +370,11 @@
                 <div class="flex gap-1">
                     <input id="new-node-name" type="text"
                            class="flex-1 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
-                           placeholder="Add server..." data-i18n-placeholder="nodes.name_placeholder"
+                           placeholder="Node name..." data-i18n-placeholder="nodes.name_placeholder"
+                           onkeydown="if(event.key==='Enter')addNode()">
+                    <input id="new-node-ip" type="text"
+                           class="w-28 bg-cyber-bg border border-cyber-accent rounded px-2 py-1 text-xs text-white focus:border-neon-cyan focus:outline-none"
+                           placeholder="IP address"
                            onkeydown="if(event.key==='Enter')addNode()">
                     <button onclick="addNode()"
                             class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all">
@@ -378,7 +382,7 @@
                     </button>
                     <button onclick="scanForAgents()" id="scan-agents-btn"
                             class="px-2 py-1 bg-cyber-accent border border-cyber-accent rounded text-neon-cyan text-xs hover:bg-neon-cyan hover:bg-opacity-20 transition-all" title="Scan for agents">
-                        🔍
+                        &#128269;
                     </button>
                 </div>
                 <!-- Discovered agents list -->

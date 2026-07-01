@@ -43,6 +43,7 @@ def register_agent_handlers(socketio):
 
     @socketio.on('agent:connect')
     def handle_agent_connect(data):
+        from flask import request as flask_request
         node_id = data.get('node_id')
         node_name = data.get('node_name')
         api_token = data.get('api_token')
@@ -59,6 +60,12 @@ def register_agent_handlers(socketio):
             return {'status': 'error', 'message': 'Invalid token'}
 
         node_id = node['node_id']
+        # Store agent IP from WebSocket connection
+        agent_ip = flask_request.remote_addr if flask_request else ''
+        if agent_ip and agent_ip != '127.0.0.1':
+            from server.node_registry import update_node
+            update_node(node_id, ip=agent_ip)
+
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
 

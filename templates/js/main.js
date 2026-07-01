@@ -4670,9 +4670,9 @@ function renderNodeSidebar() {
                     <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
                 </div>
                 <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="text-gray-600 hover:text-neon-cyan text-[10px] transition-opacity px-0.5 opacity-50 hover:opacity-100" title="Rename">✎</button>
+                        class="text-gray-400 hover:text-neon-cyan text-xs px-1 rounded hover:bg-gray-700/50" title="Rename">&#9998;</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="text-gray-600 hover:text-red-400 text-[10px] transition-opacity px-0.5 opacity-50 hover:opacity-100" title="Delete">×</button>
+                        class="text-gray-400 hover:text-red-400 text-xs px-1 rounded hover:bg-red-900/30" title="Delete">&times;</button>
             </div>
         `;
     }
@@ -4858,22 +4858,39 @@ function showView(view) {
 }
 
 async function addNode() {
-    const input = document.getElementById('new-node-name');
-    const name = input?.value?.trim();
-    if (!name) return;
-    
+    const nameInput = document.getElementById('new-node-name');
+    const ipInput = document.getElementById('new-node-ip');
+    const name = nameInput?.value?.trim();
+    const ip = ipInput?.value?.trim();
+    if (!name && !ip) return;
+
     try {
-        const resp = await fetch('/api/nodes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-        });
+        let resp;
+        if (ip) {
+            // Add by IP — probes agent automatically
+            resp = await fetch('/api/nodes/add-by-ip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name || ip, ip })
+            });
+        } else {
+            resp = await fetch('/api/nodes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+        }
         if (resp.ok) {
-            input.value = '';
+            nameInput.value = '';
+            ipInput.value = '';
             loadNodes();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Failed to add node', 'error');
         }
     } catch (e) {
         console.error('[FanControl] Failed to add node:', e);
+        showToast('Failed to add node: ' + e.message, 'error');
     }
 }
 
@@ -4934,14 +4951,20 @@ async function scanForAgents() {
 
         let html = '';
 
-        // Show scan results
+        // Show scan results (SSDP + HTTP probe)
         if (scanResults && scanResults.length > 0) {
             for (const agent of scanResults) {
+                const label = agent.already_registered
+                    ? `<span class="text-neon-green">online</span> ${escapeHtml(agent.name || agent.node_id)}`
+                    : escapeHtml(agent.name || agent.node_id);
+                const btnLabel = agent.already_registered ? 'Refresh' : '+ Add';
+                const onclick = agent.already_registered
+                    ? `loadNodes(); showToast('Node refreshed', 'success')`
+                    : `acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')`;
                 html += `
                     <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
-                        <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)}</span>
-                        <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')"
-                                class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
+                        <span class="text-white truncate">${label} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
+                        <button onclick="${onclick}" class="text-neon-cyan hover:text-cyan-300 px-1">${btnLabel}</button>
                     </div>
                 `;
             }
@@ -4953,9 +4976,8 @@ async function scanForAgents() {
                 if (!scanResults || !scanResults.find(a => a.node_id === agent.node_id)) {
                     html += `
                         <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
-                            <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)}</span>
-                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')"
-                                    class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
+                            <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
+                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')" class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
                         </div>
                     `;
                 }
@@ -4963,14 +4985,8 @@ async function scanForAgents() {
         }
 
         if (!html) {
-            // Show diagnostic info
-            const existingNodes = nodesData.map(n => n.name).join(', ');
             html = '<div class="text-gray-500 text-xs py-1">';
-            html += 'No agents found on network';
-            if (existingNodes) {
-                html += `<br><span class="text-gray-600">Existing nodes: ${escapeHtml(existingNodes)}</span>`;
-            }
-            html += '<br><span class="text-gray-600">Agent must be running in --mode agent on same network</span>';
+            html += 'No agents found. Use IP field below to add manually.';
             html += '</div>';
         }
 
@@ -4980,7 +4996,7 @@ async function scanForAgents() {
     }
 
     btn.disabled = false;
-    btn.textContent = '🔍';
+    btn.textContent = '\uD83D\uDD0D';
 }
 
 socket.on('node:update', (data) => {
