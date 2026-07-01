@@ -4662,17 +4662,17 @@ function renderNodeSidebar() {
         const isActive = selectedNodeId === node.node_id;
         
         html += `
-            <div class="group flex items-center gap-2 p-2 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
+            <div class="flex items-center gap-1 p-1.5 rounded cursor-pointer transition-all ${isActive ? 'bg-cyan-900/30 border border-cyan-500/30' : 'hover:bg-gray-800/50 border border-transparent'}"
                  onclick="selectNode('${escapeHtml(node.node_id)}')">
                 <div class="w-2 h-2 rounded-full ${statusDot} flex-shrink-0"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-white text-sm truncate">${escapeHtml(node.name)}${modeIcon}</div>
-                    <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
+                <div class="flex-1 min-w-0 overflow-hidden">
+                    <div class="text-white text-xs truncate">${escapeHtml(node.name)}${modeIcon}</div>
+                    <div class="text-gray-500 text-[10px] truncate">${node.status}${node.ip ? ' · ' + escapeHtml(node.ip) : ''}</div>
                 </div>
                 <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="text-gray-400 hover:text-neon-cyan text-xs px-1 rounded hover:bg-gray-700/50" title="Rename">&#9998;</button>
+                        class="text-gray-400 hover:text-neon-cyan text-xs px-0.5 flex-shrink-0" title="Rename">&#9998;</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="text-gray-400 hover:text-red-400 text-xs px-1 rounded hover:bg-red-900/30" title="Delete">&times;</button>
+                        class="text-gray-400 hover:text-red-400 text-xs px-0.5 flex-shrink-0" title="Delete">&times;</button>
             </div>
         `;
     }

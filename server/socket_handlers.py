@@ -11,12 +11,12 @@ logger = logging.getLogger('fancontrol')
 
 
 def _start_heartbeat_checker(socketio):
-    """Background thread that checks agent heartbeats."""
+    """Background thread that checks agent heartbeats and probes offline agents."""
     def _check_loop():
         while True:
             time.sleep(10)
             try:
-                from server.node_registry import list_nodes, update_node_status
+                from server.node_registry import list_nodes, update_node_status, update_node
                 from core.state import state, state_lock, invalidate_state_cache
 
                 nodes = list_nodes()
@@ -42,6 +42,43 @@ def _start_heartbeat_checker(socketio):
                                 logger.info(f'Agent {node["name"]} marked offline (no telemetry for 15s)')
                         except (ValueError, TypeError):
                             pass
+
+                    # Probe offline agents via HTTP every 30s
+                    elif node['status'] == 'offline' and node.get('ip'):
+                        # Only probe every ~30s (use last_seen as throttle)
+                        should_probe = True
+                        if node.get('last_seen'):
+                            try:
+                                last = datetime.fromisoformat(node['last_seen'])
+                                if (now - last).total_seconds() < 30:
+                                    should_probe = False
+                            except (ValueError, TypeError):
+                                pass
+
+                        if should_probe:
+                            from server.discovery import probe_agent
+                            info = probe_agent(node['ip'], timeout=2)
+                            if info:
+                                update_node_status(node['node_id'], 'online')
+                                update_node(node['node_id'], ip=node['ip'])
+                                with state_lock:
+                                    if 'nodes' not in state:
+                                        state['nodes'] = {}
+                                    state['nodes'][node['node_id']] = {
+                                        'node_id': node['node_id'],
+                                        'name': node['name'],
+                                        'status': 'online',
+                                    }
+                                invalidate_state_cache()
+
+                                socketio.emit('node:update', {
+                                    'node_id': node['node_id'],
+                                    'status': 'online',
+                                    'name': node['name'],
+                                    'ip': node['ip'],
+                                })
+
+                                logger.info(f'Agent {node["name"]} ({node["ip"]}) came online via HTTP probe')
             except Exception as e:
                 logger.error(f'Heartbeat check error: {e}')
 
