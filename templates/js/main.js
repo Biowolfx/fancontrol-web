@@ -4670,9 +4670,9 @@ function renderNodeSidebar() {
                     <div class="text-gray-500 text-xs">${node.status}${node.ip ? ' &middot; ' + escapeHtml(node.ip) : ''}</div>
                 </div>
                 <button onclick="event.stopPropagation(); renameNode('${escapeHtml(node.node_id)}', '${escapeHtml(node.name)}')"
-                        class="text-gray-600 hover:text-neon-cyan text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5" title="Rename">✎</button>
+                        class="text-gray-600 hover:text-neon-cyan text-[10px] transition-opacity px-0.5 opacity-50 hover:opacity-100" title="Rename">✎</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5" title="Delete">×</button>
+                        class="text-gray-600 hover:text-red-400 text-[10px] transition-opacity px-0.5 opacity-50 hover:opacity-100" title="Delete">×</button>
             </div>
         `;
     }
@@ -4880,14 +4880,21 @@ async function addNode() {
 async function deleteNode(nodeId) {
     if (!confirm(t('nodes.confirm_delete', 'Delete this node?'))) return;
     try {
-        await fetch(`/api/nodes/${nodeId}`, { method: 'DELETE' });
-        if (selectedNodeId === nodeId) {
-            selectedNodeId = null;
-            showView('nodes');
+        const resp = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' });
+        if (resp.ok) {
+            if (selectedNodeId === nodeId) {
+                selectedNodeId = null;
+                showView('nodes');
+            }
+            loadNodes();
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            console.error('[FanControl] Delete failed:', resp.status, err);
+            showToast(`Delete failed: ${err.error || resp.status}`, 'error');
         }
-        loadNodes();
     } catch (e) {
         console.error('[FanControl] Failed to delete node:', e);
+        showToast('Delete failed: ' + e.message, 'error');
     }
 }
 

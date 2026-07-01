@@ -18,14 +18,18 @@ _lock = threading.Lock()
 
 
 def scan_for_agents(timeout: int = DISCOVERY_TIMEOUT) -> List[Dict]:
-    global _discovered_nodes
+    """Send M-SEARCH and collect responses. Preserves existing discovered nodes."""
+    logger.info('Starting SSDP M-SEARCH scan...')
 
-    with _lock:
-        _discovered_nodes.clear()
+    found = []
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except (AttributeError, OSError):
+            pass
         sock.settimeout(timeout)
 
         msearch = (
@@ -37,12 +41,15 @@ def scan_for_agents(timeout: int = DISCOVERY_TIMEOUT) -> List[Dict]:
             '\r\n'
         )
         sock.sendto(msearch.encode(), (SSDP_ADDR, SSDP_PORT))
+        logger.info('M-SEARCH sent to 239.255.255.250:1900')
 
         start = time.time()
         while time.time() - start < timeout:
             try:
                 data, addr = sock.recvfrom(1024)
-                _parse_response(data.decode(errors='ignore'), addr[0])
+                decoded = data.decode(errors='ignore')
+                logger.debug(f'SSDP response from {addr[0]}: {decoded[:100]}')
+                _parse_response(decoded, addr[0])
             except socket.timeout:
                 break
 
@@ -51,7 +58,10 @@ def scan_for_agents(timeout: int = DISCOVERY_TIMEOUT) -> List[Dict]:
         logger.error(f'Discovery scan failed: {e}')
 
     with _lock:
-        return list(_discovered_nodes.values())
+        found = list(_discovered_nodes.values())
+
+    logger.info(f'SSDP scan complete: {len(found)} agents found')
+    return found
 
 
 def _parse_response(data: str, source_ip: str):
@@ -69,13 +79,17 @@ def _parse_response(data: str, source_ip: str):
 
     node_id = usn.split('urn:fancontrol-web:agent:')[-1]
     node_name = headers.get('X-FANCONTROL-NAME', node_id)
+    api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', f'http://{source_ip}:5059')
+
+    logger.info(f'SSDP scan found agent: {node_name} ({source_ip})')
 
     with _lock:
         _discovered_nodes[node_id] = {
             'node_id': node_id,
             'name': node_name,
             'ip': source_ip,
+            'api_token': api_token,
             'location': location,
         }
 
@@ -150,11 +164,20 @@ def _parse_and_notify(data: str, source_ip: str):
             key, _, value = line.partition(':')
             headers[key.strip().upper()] = value.strip()
 
-    if headers.get('ST') != 'urn:fancontrol-web:agent':
+    # Accept both ST and USN matching for agent detection
+    st = headers.get('ST', '')
+    usn = headers.get('USN', '')
+    is_agent = (st == 'urn:fancontrol-web:agent' or 'urn:fancontrol-web:agent:' in usn)
+
+    if not is_agent:
         return
 
     node_id = headers.get('X-FANCONTROL-ID', '')
-    node_name = headers.get('X-FANCONTROL-NAME', '')
+    # Fallback: extract from USN if X-FanControl-Id header missing
+    if not node_id and 'urn:fancontrol-web:agent:' in usn:
+        node_id = usn.split('urn:fancontrol-web:agent:')[-1]
+
+    node_name = headers.get('X-FANCONTROL-NAME', node_id)
     api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', '')
 
@@ -178,10 +201,10 @@ def _parse_and_notify(data: str, source_ip: str):
             'discovered_at': datetime.utcnow().isoformat(),
         }
 
+    logger.info(f'Discovered new agent: {node_name} ({source_ip})')
+
     for cb in _discovery_callbacks:
         try:
             cb(_discovered_nodes[node_id])
         except Exception as e:
             logger.error(f'Discovery callback error: {e}')
-
-    logger.info(f'Discovered new agent: {node_name} ({source_ip})')
