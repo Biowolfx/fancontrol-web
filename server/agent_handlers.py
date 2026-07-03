@@ -95,6 +95,8 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'status': 'online',
                 'control_mode': control_mode,
                 'config': agent_config,
+                'dsm_schemes': agent_config.get('dsm_schemes', []),
+                'kernel_info': agent_config.get('kernel_info', {}),
             }
         invalidate_state_cache()
 

@@ -119,6 +119,13 @@ state['node_name'] = NODE_NAME
 state['api_token'] = API_TOKEN
 state['agent_config_snapshot'] = None
 
+# Detect kernel info
+try:
+    from core.kernel_detect import get_kernel_info
+    state['kernel_info'] = get_kernel_info()
+except Exception:
+    state['kernel_info'] = {}
+
 _sio: Optional[socketio.Client] = None
 _telemetry_thread: Optional[threading.Thread] = None
 
@@ -199,15 +206,25 @@ def _telemetry_loop():
 
 
 def _get_local_config():
-    """Get current local fan config."""
+    """Get current local fan config including kernel info and DSM schemes."""
     with state_lock:
-        return {
+        config = {
             'fans': {k: {kk: vv for kk, vv in v.items()
                          if kk not in ('rpm', 'pwm_value')}
                      for k, v in state['fans'].items()},
             'temp_sensors': state['temp_sensors'],
             'hdd_sensors': state['hdd_sensors'],
+            'kernel_info': state.get('kernel_info', {}),
         }
+        # Include DSM schemes if available
+        try:
+            from core.dsm_fan import is_dsm_fan_available, get_all_schemes
+            if is_dsm_fan_available():
+                config['dsm_schemes'] = get_all_schemes()
+                logger.info(f'Including {len(config["dsm_schemes"])} DSM schemes in config')
+        except Exception as e:
+            logger.debug(f'Could not load DSM schemes: {e}')
+        return config
 
 
 def _get_telemetry():
@@ -215,11 +232,15 @@ def _get_telemetry():
     with state_lock:
         return {
             'fans': {k: {'rpm': v.get('rpm', 0),
-                         'pwm_value': v.get('pwm_value', 0)}
+                         'pwm_value': v.get('pwm_value', 0),
+                         'control_method': v.get('control_method', 'hwmon'),
+                         'label': v.get('label', k)}
                      for k, v in state['fans'].items()},
-            'temp_sensors': {k: {'value': v.get('value', 0)}
+            'temp_sensors': {k: {'value': v.get('value', 0),
+                                 'label': v.get('label', k)}
                             for k, v in state['temp_sensors'].items()},
-            'hdd_sensors': {k: {'temp': v.get('temp', 0)}
+            'hdd_sensors': {k: {'temp': v.get('temp', 0),
+                                'label': v.get('label', k)}
                            for k, v in state['hdd_sensors'].items()},
             'failsafe': state.get('failsafe', False),
             'standby_mode': state.get('standby_mode', False),
@@ -262,36 +283,56 @@ def _apply_config(config):
 
 
 def _on_token_push(data):
-    """Server pushes new token after registration."""
-    global API_TOKEN
-    new_token = data.get('token')
+    """Server pushes updated token — save locally."""
+    new_token = data.get('token', '')
     if not new_token:
         return
 
+    global API_TOKEN
     API_TOKEN = new_token
     state['api_token'] = new_token
 
-    # Save to config
     import json
     from pathlib import Path
     config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
-    config = {}
-    if config_path.exists():
-        try:
+    try:
+        config = {}
+        if config_path.exists():
             with open(config_path) as f:
                 config = json.load(f)
-        except Exception:
-            pass
-
-    config['api_token'] = new_token
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
+        config['api_token'] = new_token
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        logger.warning(f'Could not persist api_token to config: {e}')
 
     logger.info(f'Received new token from server, reconnecting...')
 
     # Reconnect with new token
     if _sio and _sio.connected:
         _sio.disconnect()
+
+
+def _on_dsm_apply(data):
+    """Server pushes DSM scheme changes — apply to local scemd.xml."""
+    scheme_type = data.get('scheme_type')
+    entries = data.get('entries', [])
+    logger.info(f'Received DSM scheme apply: {scheme_type} ({len(entries)} entries)')
+
+    try:
+        from core.dsm_fan import update_scheme_entry
+        for entry in entries:
+            idx = entry.get('index')
+            if idx is not None:
+                update_scheme_entry(
+                    scheme_type, idx,
+                    fan_speed_pct=entry.get('fan_speed_pct'),
+                    action=entry.get('action'),
+                    threshold_temp=entry.get('threshold_temp'),
+                )
+        logger.info(f'DSM scheme {scheme_type} applied successfully')
+    except Exception as e:
+        logger.error(f'Failed to apply DSM scheme: {e}')
 
 
 def start_client():
@@ -331,6 +372,7 @@ def start_client():
     _sio.on('server:set_control_mode', _on_set_control_mode)
     _sio.on('server:command', _on_command)
     _sio.on('server:token_push', _on_token_push)
+    _sio.on('server:dsm:apply', _on_dsm_apply)
 
     try:
         _sio.connect(SERVER_URL)

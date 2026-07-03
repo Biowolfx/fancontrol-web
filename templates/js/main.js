@@ -650,11 +650,13 @@ function renderRemoteNodeTree(node) {
     `;
 
     for (const [fanId, fan] of Object.entries(fans)) {
+        const cleanLabel = (fan.label || fanId).replace(/\s*\(Synology-[^)]+\)/, '');
+        const isDsm = fan.control_method === 'dsm_scemd';
         html += `
             <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-cyber-accent"
                  onclick="selectNodeFan('${escapeHtml(node.node_id)}', '${escapeHtml(fanId)}')">
                 <span class="text-xs">🌀</span>
-                <span class="text-xs text-gray-300 truncate">${escapeHtml(fan.label || fanId)}</span>
+                <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(cleanLabel)}${isDsm ? ' <span class="text-blue-400 text-[10px]">DSM</span>' : ''}</span>
                 <span class="ml-auto text-xs font-mono text-neon-cyan">${fan.rpm || 0}</span>
             </div>
         `;
@@ -719,8 +721,21 @@ function selectFanFromTree(fanId, source) {
 }
 
 function selectNodeFan(nodeId, fanId) {
+    // Check if this is a DSM fan on a remote node
+    const node = nodesData.find(n => n.node_id === nodeId);
+    if (node && node.telemetry && node.telemetry.fans && node.telemetry.fans[fanId]) {
+        const fan = node.telemetry.fans[fanId];
+        if (fan.control_method === 'dsm_scemd') {
+            _currentRemoteNodeId = nodeId;
+            showView('dsm-scheme');
+            renderDsmSchemeEditor(nodeId);
+            return;
+        }
+    }
     console.log('[FanControl] Select node fan:', nodeId, fanId);
 }
+
+let _currentRemoteNodeId = null;
 
 // ============================================================================
 // DASHBOARD CARDS
@@ -3456,20 +3471,33 @@ function applyDsmFanSpeed() {
 let _dsmSchemes = [];
 let _dsmActiveScheme = null;
 
-async function renderDsmSchemeEditor() {
+async function renderDsmSchemeEditor(remoteNodeId) {
     const container = document.getElementById('dsm-scheme-inner');
     if (!container) return;
 
     container.innerHTML = '<div class="text-gray-500 text-center py-8">Loading DSM schemes...</div>';
 
     try {
-        const [schemesResp, activeResp] = await Promise.all([
-            fetch('/api/dsm/schemes'),
-            fetch('/api/dsm/active')
-        ]);
+        let schemesData, activeData;
 
-        const schemesData = await schemesResp.json();
-        const activeData = await activeResp.json();
+        if (remoteNodeId) {
+            // Remote node — use schemes from node state
+            const node = nodesData.find(n => n.node_id === remoteNodeId);
+            if (!node) {
+                container.innerHTML = '<div class="text-red-400 text-center py-8">Node not found</div>';
+                return;
+            }
+            schemesData = { status: 'ok', schemes: node.dsm_schemes || [] };
+            activeData = { active_scheme: null };
+        } else {
+            // Local server
+            const [schemesResp, activeResp] = await Promise.all([
+                fetch('/api/dsm/schemes'),
+                fetch('/api/dsm/active')
+            ]);
+            schemesData = await schemesResp.json();
+            activeData = await activeResp.json();
+        }
 
         if (schemesData.status !== 'ok') {
             container.innerHTML = `<div class="text-red-400 text-center py-8">${schemesData.message || 'Failed to load schemes'}</div>`;
@@ -3616,15 +3644,32 @@ async function editDsmEntry(schemeType, index) {
 
 async function applyDsmScheme(schemeType) {
     try {
-        const resp = await fetch('/api/dsm/apply', { method: 'POST' });
-        const data = await resp.json();
-        if (data.status === 'ok') {
-            showToast('Scheme applied successfully', 'success');
+        if (_currentRemoteNodeId) {
+            // Remote node — push scheme via WebSocket
+            const node = nodesData.find(n => n.node_id === _currentRemoteNodeId);
+            const scheme = (node?.dsm_schemes || []).find(s => s.type === schemeType);
+            if (!scheme) {
+                showToast('Scheme not found', 'error');
+                return;
+            }
+            socket.emit('server:dsm:apply', {
+                node_id: _currentRemoteNodeId,
+                scheme_type: schemeType,
+                entries: scheme.entries,
+            });
+            showToast('Scheme applied to remote agent', 'success');
         } else {
-            alert(data.message || 'Failed to apply scheme');
+            // Local server
+            const resp = await fetch('/api/dsm/apply', { method: 'POST' });
+            const data = await resp.json();
+            if (data.status === 'ok') {
+                showToast('Scheme applied successfully', 'success');
+            } else {
+                showToast(data.message || 'Failed to apply scheme', 'error');
+            }
         }
     } catch (e) {
-        alert('Error applying scheme: ' + e.message);
+        showToast('Error applying scheme: ' + e.message, 'error');
     }
 }
 
