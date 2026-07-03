@@ -236,12 +236,7 @@ socket.on('update', (data) => {
         agentTokenBanner.classList.toggle('hidden', !hasToken);
         if (hasToken) document.getElementById('agent-token-banner-value').textContent = data.api_token;
     }
-    // Show DSM nav button if DSM fans detected
-    const dsmBtn = document.getElementById('nav-dsm-btn');
-    if (dsmBtn) {
-        const hasDsm = data.fans && Object.values(data.fans).some(f => f.control_method === 'dsm_scemd');
-        dsmBtn.classList.toggle('hidden', !hasDsm);
-    }
+    // DSM scheme view is accessed by clicking DSM fans in tree — no nav button needed
 });
 
 socket.on('hardware_discovered', (data) => {
@@ -700,6 +695,16 @@ function toggleNodeGroup(nodeId) {
 
 function selectFanFromTree(fanId, source) {
     currentFanId = fanId;
+
+    // Check if this is a DSM fan — open scheme editor instead of inspector
+    if (currentState && currentState.fans && currentState.fans[fanId]) {
+        const fan = currentState.fans[fanId];
+        if (fan.control_method === 'dsm_scemd') {
+            showView('dsm-scheme');
+            buildServerTree();
+            return;
+        }
+    }
 
     // Show inspector view
     showView('inspector');
