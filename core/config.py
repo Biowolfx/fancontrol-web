@@ -56,30 +56,38 @@ def migrate_config(cfg: Dict) -> Dict:
 
 
 def _do_save_config():
-    """Actually write config to disk."""
+    """Actually write config to disk, preserving all existing fields."""
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        config = {
-            'config_version': CONFIG_VERSION,
-            'initialized': state.get('initialized', False),
-            'tested': state.get('tested', False),
-            'language': state.get('language', 'en'),
-            'fans': {},
-            'dashboard': state.get('dashboard', {'groups': [], 'cards': []})
-        }
+        # Read existing config to preserve wizard-set fields
+        existing = {}
+        if CONFIG_PATH.exists():
+            try:
+                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
 
+        existing['config_version'] = CONFIG_VERSION
+        existing['initialized'] = state.get('initialized', False)
+        existing['tested'] = state.get('tested', False)
+        existing['language'] = state.get('language', 'en')
+
+        fans_data = {}
         with state_lock:
             for fan_id, fan in state.get('fans', {}).items():
-                config['fans'][fan_id] = {
+                fans_data[fan_id] = {
                     field: fan.get(field)
                     for field in FAN_FIELDS
                     if field in fan
                 }
+        existing['fans'] = fans_data
+        existing['dashboard'] = state.get('dashboard', {'groups': [], 'cards': []})
 
         tmp_path = CONFIG_PATH.with_suffix('.tmp')
         with open(tmp_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+            json.dump(existing, f, indent=2, ensure_ascii=False)
         tmp_path.replace(CONFIG_PATH)
 
         logger.info('Configuration saved successfully')

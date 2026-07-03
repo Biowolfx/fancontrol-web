@@ -191,6 +191,34 @@ def _on_command(data):
         set_pwm(fan_id, int(value * 255 // 100))
 
 
+def _on_dsm_apply(data):
+    """Server pushes a DSM scheme change — apply locally."""
+    scheme_type = data.get('scheme_type')
+    entries = data.get('entries', [])
+    logger.info(f'Received DSM scheme apply: {scheme_type} ({len(entries)} entries)')
+    try:
+        from core.dsm_fan import update_scheme_entry
+        for entry in entries:
+            idx = entry.get('index')
+            field = entry.get('field', 'fan_speed')
+            value = entry.get('value')
+            if idx is not None and value is not None:
+                update_scheme_entry(scheme_type, idx, field, value)
+                logger.info(f'Updated {scheme_type}[{idx}].{field} = {value}')
+        # Reload schemes in state
+        with state_lock:
+            try:
+                from core.dsm_fan import is_dsm_fan_available, get_all_schemes
+                if is_dsm_fan_available():
+                    state['dsm_schemes'] = get_all_schemes()
+            except Exception:
+                pass
+        invalidate_state_cache()
+        logger.info(f'DSM scheme {scheme_type} applied successfully')
+    except Exception as e:
+        logger.error(f'Failed to apply DSM scheme: {e}')
+
+
 def _telemetry_loop():
     """Send telemetry to server periodically."""
     while True:
@@ -248,15 +276,25 @@ def _get_telemetry():
 
 
 def _save_local_config():
-    """Save current config to local config.json."""
+    """Save current config to local config.json, preserving wizard fields."""
     import json
     from pathlib import Path
 
     config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Read existing config to preserve wizard-set fields
+        existing = {}
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+
         with state_lock:
-            config = {
+            # Update runtime fields, preserve mode/server_url/node_name etc.
+            existing.update({
                 'fans': {k: {kk: vv for kk, vv in v.items()
                              if kk not in ('rpm', 'pwm_value')}
                          for k, v in state['fans'].items()},
@@ -264,9 +302,13 @@ def _save_local_config():
                 'hdd_sensors': state['hdd_sensors'],
                 'control_mode': state.get('control_mode', 'server'),
                 'initialized': state.get('initialized', False),
-            }
+                'api_token': state.get('api_token', existing.get('api_token', '')),
+                'node_id': state.get('node_id', existing.get('node_id', '')),
+                'node_name': state.get('node_name', existing.get('node_name', '')),
+                'server_url': state.get('server_url', existing.get('server_url', '')),
+            })
         with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
+            json.dump(existing, f, indent=2)
     except Exception as e:
         logger.error(f'Failed to save local config: {e}')
 

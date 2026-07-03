@@ -248,7 +248,12 @@ def main():
                 import json
                 with open(CONFIG_PATH) as f:
                     saved = json.load(f)
-                args.mode = saved.get('mode', 'server')
+                saved_mode = saved.get('mode')
+                if not saved_mode:
+                    logger.warning(f'[setup] Config exists but "mode" is missing! Keys: {list(saved.keys())}')
+                    logger.warning('[setup] Defaulting to server mode. Re-run wizard or add "mode" to config.json')
+                    saved_mode = 'server'
+                args.mode = saved_mode
                 logger.info(f'[setup] Setup complete — switching to mode: {args.mode}')
             except Exception as e:
                 logger.warning(f'[setup] Failed to read config: {e}')
