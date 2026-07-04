@@ -528,23 +528,43 @@ def read_disk_smart(disk_identifier: str) -> dict:
             try:
                 logger.info(f'SMART attempt: {" ".join(cmd)}')
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-                if result.returncode == 0 or (result.stdout and 'SMART' in result.stdout.upper()):
-                    output = result.stdout
+                stdout = result.stdout or ''
+
+                # Check if output has actual SMART data (not just device info)
+                has_device_info = 'Model Family' in stdout or 'Device Model' in stdout or 'Serial Number' in stdout
+                has_smart_attrs = 'SMART Attributes' in stdout or 'SMART overall-health' in stdout or 'Raw_Read_Error_Rate' in stdout
+                has_nvme_smart = 'SMART/Health' in stdout or 'Available Spare' in stdout
+
+                if has_device_info and (has_smart_attrs or has_nvme_smart):
+                    output = stdout
                     used_cmd = cmd
-                    logger.info(f'SMART success with: {" ".join(cmd)}')
+                    logger.info(f'SMART success with attrs: {" ".join(cmd)}')
                     break
-                # Also accept if we got useful output despite non-zero exit
-                if result.stdout and ('Model Family' in result.stdout or 'Device Model' in result.stdout
-                                       or 'Serial Number' in result.stdout):
-                    output = result.stdout
-                    used_cmd = cmd
-                    logger.info(f'SMART success (non-zero exit) with: {" ".join(cmd)}')
-                    break
+                elif has_device_info:
+                    logger.info(f'SMART: device info found but no attributes with {" ".join(cmd)}, trying next...')
+                elif result.returncode == 0 and stdout.strip():
+                    logger.debug(f'SMART: some output but no recognized data: {" ".join(cmd)}')
                 if result.stderr:
-                    logger.debug(f'SMART attempt failed: {" ".join(cmd)} — {result.stderr[:200]}')
+                    logger.debug(f'SMART stderr: {result.stderr[:200]}')
             except subprocess.TimeoutExpired:
                 logger.debug(f'SMART timeout: {" ".join(cmd)}')
                 continue
+
+        # If no method found attributes, try one more time with -a (all SMART data)
+        if not output:
+            for base_dev in [f'/dev/{clean_name}', '/dev/sda']:
+                try:
+                    cmd = ['smartctl', '-a', base_dev]
+                    logger.info(f'SMART fallback -a: {" ".join(cmd)}')
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                    stdout = result.stdout or ''
+                    if 'SMART Attributes' in stdout or 'SMART overall-health' in stdout or 'SMART/Health' in stdout:
+                        output = stdout
+                        used_cmd = cmd
+                        logger.info(f'SMART -a success: {" ".join(cmd)}')
+                        break
+                except Exception:
+                    pass
 
         if not output:
             return {'error': 'smartctl failed — no SMART data available (disk may be behind RAID controller)'}
