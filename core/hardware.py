@@ -646,6 +646,11 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
                 if temp is not None:
                     logger.info(f'DISK TEMP: {clean_name} = {temp}°C via {" ".join(cmd)}')
                     return float(temp), False
+                else:
+                    # Log what temp attributes exist for debugging
+                    for line in stdout.split('\n'):
+                        if any(kw in line for kw in ['Temperature', 'Airflow', 'temperature', 'temp', 'Celsius']):
+                            logger.info(f'DISK TEMP DEBUG: {clean_name} — {line.strip()[:120]}')
 
             except subprocess.TimeoutExpired:
                 continue
