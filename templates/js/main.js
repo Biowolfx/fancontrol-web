@@ -630,6 +630,7 @@ function renderRemoteNodeTree(node) {
     const telemetry = node.telemetry || {};
     const fans = telemetry.fans || {};
     const temps = telemetry.temp_sensors || {};
+    const disks = telemetry.hdd_sensors || {};
     const fanCount = Object.keys(fans).length;
     const statusColor = node.status === 'online' ? 'text-neon-green' : 'text-gray-500';
     const statusDot = node.status === 'online' ? 'bg-neon-green' : 'bg-gray-500';
@@ -672,7 +673,17 @@ function renderRemoteNodeTree(node) {
         `;
     }
 
-    if (fanCount === 0 && Object.keys(temps).length === 0) {
+    for (const [diskId, disk] of Object.entries(disks)) {
+        html += `
+            <div class="flex items-center gap-2 p-1.5 rounded hover:bg-cyber-accent cursor-pointer">
+                <span class="text-xs">💾</span>
+                <span class="text-xs text-gray-300 truncate">${escapeHtml(disk.label || diskId)}</span>
+                <span class="ml-auto text-xs font-mono ${getTempColorClass(disk.temp)}">${disk.temp > 0 ? disk.temp + '°C' : '--'}</span>
+            </div>
+        `;
+    }
+
+    if (fanCount === 0 && Object.keys(temps).length === 0 && Object.keys(disks).length === 0) {
         html += `<div class="text-xs text-gray-600 p-1.5">No telemetry</div>`;
     }
 
