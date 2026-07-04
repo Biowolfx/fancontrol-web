@@ -642,15 +642,21 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
                 if not stdout:
                     continue
 
-                temp = _parse_disk_temp_preferred(stdout)
+                temp, source = _parse_disk_temp_preferred(stdout)
                 if temp is not None:
-                    logger.info(f'DISK TEMP: {clean_name} = {temp}°C via {" ".join(cmd)}')
+                    logger.info(f'DISK TEMP: {clean_name} = {temp}°C (source={source}) via {" ".join(cmd)}')
+                    # Always log all temp-related SMART lines for diagnostics
+                    for line in stdout.split('\n'):
+                        if any(kw in line for kw in ['Airflow', 'HDA_Temp', 'Temperature_Celsius',
+                                                      'Current Drive Temperature', 'temperature',
+                                                      '190 ', '194 ', '194\t', 'SMART Attributes']):
+                            logger.info(f'DISK TEMP ATTR: {clean_name} — {line.strip()[:150]}')
                     return float(temp), False
                 else:
-                    # Log what temp attributes exist for debugging
+                    # Log ALL temp-related attributes for debugging
                     for line in stdout.split('\n'):
-                        if any(kw in line for kw in ['Temperature', 'Airflow', 'temperature', 'temp', 'Celsius']):
-                            logger.info(f'DISK TEMP DEBUG: {clean_name} — {line.strip()[:120]}')
+                        if any(kw in line for kw in ['Temperature', 'Airflow', 'temperature', 'temp', 'Celsius', '190', '194']):
+                            logger.info(f'DISK TEMP DEBUG: {clean_name} — {line.strip()[:150]}')
 
             except subprocess.TimeoutExpired:
                 continue
@@ -658,36 +664,100 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
     except Exception as e:
         logger.debug(f'Error reading disk temp for {disk_identifier}: {e}')
 
+    # Method 2: hdparm (some drives expose temp via ATA IDENTIFY)
+    try:
+        clean_name = disk_identifier.replace('/dev/', '').strip()
+        result = subprocess.run(
+            ['hdparm', '-I', f'/dev/{clean_name}'],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout:
+            for line in result.stdout.split('\n'):
+                low = line.lower()
+                if 'temperature' in low:
+                    match = re.search(r'(-?\d{1,3})\s*(?:°|deg|C)', line, re.IGNORECASE)
+                    if not match:
+                        match = re.search(r':\s*(-?\d{1,3})', line)
+                    if match:
+                        temp = int(match.group(1))
+                        if 10 < temp < 80:
+                            logger.info(f'DISK TEMP: {clean_name} = {temp}°C via hdparm')
+                            return float(temp), False
+    except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+        pass
+
+    # Method 3: sysfs temperature
+    try:
+        clean_name = disk_identifier.replace('/dev/', '').strip()
+        sysfs_temp = _read_sysfs_temp(clean_name)
+        if sysfs_temp is not None:
+            logger.info(f'DISK TEMP: {clean_name} = {sysfs_temp}°C via sysfs')
+            return sysfs_temp, False
+    except Exception:
+        pass
+
     return None, False
 
 
-def _parse_disk_temp_preferred(output: str) -> Optional[int]:
-    """Parse temperature from smartctl output, preferring Airflow over raw Celsius."""
-    # First pass: look for Airflow_Temperature_Cel (most accurate — actual air temp)
-    for line in output.split('\n'):
+def _parse_disk_temp_preferred(output: str) -> Tuple[Optional[int], str]:
+    """Parse temperature from smartctl output.
+    Priority order chosen to avoid picking controller temps on Synology SATA:
+    1. Airflow_Temperature_Cel — actual air temp near the disk (best)
+    2. HDA_Temperature — head/disk assembly temp
+    3. Current Drive Temperature header — self-assessment temp from smartctl
+    4. Temperature_Celsius attribute — last resort (may be controller/IC temp)
+    Returns (temperature, source_label)."""
+    lines = output.split('\n')
+
+    # Pass 1: Airflow_Temperature_Cel (attribute 190 — actual air temp)
+    for line in lines:
         if 'Airflow_Temperature_Cel' in line:
             numbers = re.findall(r'\b(\d{2,3})\b', line)
             for num in numbers:
                 temp = int(num)
-                if 15 < temp < 70:
-                    return temp
+                if 10 < temp < 80:
+                    return temp, 'airflow'
 
-    # Second pass: Temperature_Celsius (may be controller temp on some drives)
-    for line in output.split('\n'):
+    # Pass 2: HDA_Temperature (disk surface temp)
+    for line in lines:
+        if 'HDA_Temperature' in line:
+            numbers = re.findall(r'\b(\d{2,3})\b', line)
+            for num in numbers:
+                temp = int(num)
+                if 10 < temp < 80:
+                    return temp, 'hda'
+
+    # Pass 3: "Current Drive Temperature:" header — often more reliable than attribute 194
+    for line in lines:
+        if 'Current Drive Temperature' in line:
+            match = re.search(r':\s*(\d+)\s*C', line, re.IGNORECASE)
+            if match:
+                temp = int(match.group(1))
+                if 0 < temp < 100:
+                    return temp, 'smartctl_header'
+            # Some drives: "Current Drive Temperature: 36" (no "C")
+            match = re.search(r':\s*(\d+)\s*$', line)
+            if match:
+                temp = int(match.group(1))
+                if 0 < temp < 100:
+                    return temp, 'smartctl_header'
+
+    # Pass 4: Temperature_Celsius attribute (ID 194 — may be controller/IC temp)
+    for line in lines:
         if 'Temperature_Celsius' in line:
             match = re.search(r'(\d+)\s*\(', line)
             if match:
                 temp = int(match.group(1))
                 if 0 < temp < 100:
-                    return temp
+                    return temp, 'celsius'
 
             numbers = re.findall(r'\b(\d{2,3})\b', line)
             for num in numbers:
                 temp = int(num)
-                if 15 < temp < 70:
-                    return temp
+                if 10 < temp < 80:
+                    return temp, 'celsius'
 
-    return None
+    return None, ''
 
 
 def _read_sysfs_temp(dev_name: str) -> Optional[float]:
