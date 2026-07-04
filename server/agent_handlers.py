@@ -105,6 +105,9 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
+        # Save agent config (incl. dsm_schemes) to config column
+        # so telemetry updates don't overwrite it
+        update_node_config(node_id, agent_config)
 
         if on_connect:
             on_connect(node_id)
