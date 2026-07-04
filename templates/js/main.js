@@ -3531,7 +3531,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                 container.innerHTML = '<div class="text-red-400 text-center py-8">Node not found</div>';
                 return;
             }
-            schemesData = { status: 'ok', schemes: node.dsm_schemes || [] };
+            schemesData = { status: 'ok', schemes: node.config?.dsm_schemes || node.dsm_schemes || [] };
             activeData = { active_scheme: null };
         } else {
             // Local server
@@ -3665,6 +3665,18 @@ async function editDsmEntry(schemeType, index) {
     const newThreshold = prompt(`Threshold temperature °C:`, entry.threshold_temp || '0');
     if (newThreshold === null) return;
 
+    // Update locally first (works for both local and remote)
+    entry.fan_speed = parseInt(newSpeed) || 20;
+    entry.action = newAction.toUpperCase() === 'SHUTDOWN' ? 'SHUTDOWN' : 'NONE';
+    entry.threshold_temp = parseInt(newThreshold) || 0;
+
+    if (_currentRemoteNodeId) {
+        // Remote — local edit only, applied when user clicks "Apply"
+        renderDsmSchemeEditor();
+        return;
+    }
+
+    // Local — persist to scemd.xml immediately
     try {
         const resp = await fetch(`/api/dsm/scheme/${schemeType}/entry/${index}`, {
             method: 'PUT',
@@ -3691,7 +3703,7 @@ async function applyDsmScheme(schemeType) {
         if (_currentRemoteNodeId) {
             // Remote node — push scheme via WebSocket
             const node = nodesData.find(n => n.node_id === _currentRemoteNodeId);
-            const scheme = (node?.dsm_schemes || []).find(s => s.type === schemeType);
+            const scheme = (node?.config?.dsm_schemes || node?.dsm_schemes || []).find(s => s.type === schemeType);
             if (!scheme) {
                 showToast('Scheme not found', 'error');
                 return;
@@ -3699,7 +3711,12 @@ async function applyDsmScheme(schemeType) {
             socket.emit('server:dsm:apply', {
                 node_id: _currentRemoteNodeId,
                 scheme_type: schemeType,
-                entries: scheme.entries,
+                entries: scheme.entries.map((e, i) => ({
+                    index: i,
+                    fan_speed_pct: e.fan_speed,
+                    action: e.action,
+                    threshold_temp: e.threshold_temp,
+                })),
             });
             showToast('Scheme applied to remote agent', 'success');
         } else {

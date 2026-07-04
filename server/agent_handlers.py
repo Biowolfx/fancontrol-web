@@ -271,6 +271,15 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             node_id = data.get('node_id', '')
         update_node_status(node_id, 'online')
 
+    @socketio.on('server:dsm:apply')
+    def handle_server_dsm_apply(data):
+        """Forward DSM scheme apply from UI to a remote agent."""
+        node_id = data.get('node_id')
+        if not node_id or node_id not in state.get('nodes', {}):
+            return
+        _emit_to_node(socketio, 'agent:dsm:apply', data, node_id)
+        logger.info(f'DSM apply forwarded to agent {node_id}')
+
     @socketio.on('disconnect')
     def handle_disconnect():
         """Clean up SID mapping on disconnect."""
