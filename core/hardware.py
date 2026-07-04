@@ -483,6 +483,7 @@ def read_disk_smart(disk_identifier: str) -> dict:
     """
     Read full SMART data for a disk.
     Returns dict with device info, attributes, and metadata.
+    Tries multiple access methods: direct, SAT, MegaRAID.
     """
     try:
         clean_name = disk_identifier.replace('/dev/', '').strip()
@@ -492,19 +493,55 @@ def read_disk_smart(disk_identifier: str) -> dict:
 
         is_nvme = clean_name.startswith('nvme')
 
-        cmd = ['smartctl', '-A', '-i', f'/dev/{clean_name}']
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode != 0:
-                cmd2 = ['smartctl', '-A', '-i', '-d', 'sat', f'/dev/{clean_name}']
-                result = subprocess.run(cmd2, capture_output=True, text=True, timeout=15)
-        except subprocess.TimeoutExpired:
-            return {'error': 'Timeout reading SMART data'}
+        # Extract disk index from name (e.g., sda=0, sdb=1)
+        disk_index = -1
+        if clean_name.startswith('sd'):
+            disk_index = ord(clean_name[2]) - ord('a')
+        elif clean_name.startswith('nvme'):
+            try:
+                disk_index = int(clean_name.split('n')[0].replace('nvme', ''))
+            except (ValueError, IndexError):
+                pass
 
-        if result.returncode != 0 and not result.stdout:
-            return {'error': f'smartctl failed with code {result.returncode}'}
+        # Try multiple access methods in order
+        attempts = []
 
-        output = result.stdout
+        if is_nvme:
+            attempts.append(['smartctl', '-A', '-i', f'/dev/{clean_name}'])
+            attempts.append(['smartctl', '-A', '-i', '-d', 'nvme', f'/dev/{clean_name}'])
+        else:
+            # 1. Direct access
+            attempts.append(['smartctl', '-A', '-i', f'/dev/{clean_name}'])
+            # 2. SAT passthrough
+            attempts.append(['smartctl', '-A', '-i', '-d', 'sat', f'/dev/{clean_name}'])
+            # 3. MegaRAID (common on Synology official kernel)
+            if disk_index >= 0:
+                for megaraid_idx in range(disk_index, disk_index + 1):
+                    attempts.append(['smartctl', '-A', '-i', '-d', f'megaraid,{megaraid_idx}', f'/dev/sda'])
+            # 4. Areca RAID (some Synology models)
+            if disk_index >= 0:
+                attempts.append(['smartctl', '-A', '-i', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
+
+        output = ''
+        used_cmd = None
+        for cmd in attempts:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                if result.returncode == 0 or (result.stdout and 'SMART' in result.stdout.upper()):
+                    output = result.stdout
+                    used_cmd = cmd
+                    break
+                # Also accept if we got useful output despite non-zero exit
+                if result.stdout and ('Model Family' in result.stdout or 'Device Model' in result.stdout
+                                       or 'Serial Number' in result.stdout):
+                    output = result.stdout
+                    used_cmd = cmd
+                    break
+            except subprocess.TimeoutExpired:
+                continue
+
+        if not output:
+            return {'error': 'smartctl failed — no SMART data available (disk may be behind RAID controller)'}
 
         device_info = {}
         for line in output.split('\n'):
@@ -529,6 +566,7 @@ def read_disk_smart(disk_identifier: str) -> dict:
             'device_info': device_info,
             'attributes': attributes,
             'attr_type': attr_type,
+            'access_method': ' '.join(used_cmd) if used_cmd else 'unknown',
         }
 
     except Exception as e:
