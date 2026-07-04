@@ -408,7 +408,7 @@ def _ensure_backup():
 
 
 def _write_and_restart(tree):
-    """Write tree back to scemd.xml and restart service."""
+    """Write tree back to scemd.xml, verify integrity, then restart service."""
     try:
         tree.write(SCEMD_PATH, encoding='unicode', xml_declaration=False)
         logger.info(f'Wrote {SCEMD_PATH}')
@@ -416,7 +416,30 @@ def _write_and_restart(tree):
         logger.error(f'Failed to write {SCEMD_PATH}: {e}')
         return False
 
+    # Verify written XML is parseable before restarting scemd
+    try:
+        from xml.etree import ElementTree
+        ElementTree.parse(SCEMD_PATH)
+    except Exception as e:
+        logger.error(f'Written XML is corrupt, restoring backup: {e}')
+        _restore_backup()
+        return False
+
     return _restart_scemd()
+
+
+def _restore_backup():
+    """Restore scemd.xml from backup."""
+    import shutil
+    backup = Path(SCEMD_BACKUP)
+    if backup.exists():
+        try:
+            shutil.copy2(backup, SCEMD_PATH)
+            logger.info(f'Restored {SCEMD_PATH} from backup')
+        except Exception as e:
+            logger.error(f'Failed to restore backup: {e}')
+    else:
+        logger.error('No backup available to restore')
 
 
 def _restart_scemd():
