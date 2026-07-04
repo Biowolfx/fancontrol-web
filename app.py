@@ -25,7 +25,7 @@ from core.hardware import (
 from core.control import (
     get_db_connection, loop,
 )
-from core.config import save_config, load_config, DATA_DIR, CONFIG_PATH
+from core.config import save_config, load_config, DATA_DIR, CONFIG_PATH, cfg
 
 from server.routes import routes
 from server.socket_handlers import register_handlers
@@ -34,7 +34,7 @@ from server.socket_handlers import register_handlers
 # CONFIGURATION & INITIALIZATION
 # ============================================================================
 
-LOG_DIR = os.getenv('FANCONTROL_LOG_DIR', str(DATA_DIR / 'logs'))
+LOG_DIR = cfg.log_dir
 try:
     Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
 except Exception:
@@ -72,7 +72,7 @@ except Exception:
 
 # Flask & SocketIO
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-CORS_ORIGINS = os.getenv('FANCONTROL_CORS_ORIGINS', '*').split(',')
+CORS_ORIGINS = cfg.cors_origins
 
 socketio = SocketIO(
     app,
@@ -186,7 +186,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description='FanControl Web')
     parser.add_argument('--mode', choices=['setup', 'server', 'agent'],
-                       default=os.environ.get('MODE', 'server'),
+                       default=cfg.mode,
                        help='Run mode: setup, server (default), or agent')
     args = parser.parse_args()
 

@@ -3,6 +3,7 @@
 import os
 import sys
 import pytest
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -395,3 +396,42 @@ class TestIsDsmFanAvailable:
     def test_returns_bool(self):
         result = is_dsm_fan_available()
         assert isinstance(result, bool)
+
+
+# ============================================================================
+# core.config: Config dataclass
+# ============================================================================
+
+from core.config import Config
+
+
+class TestConfig:
+    def test_defaults(self):
+        c = Config()
+        assert c.mode in ('server', 'agent', 'setup')
+        assert c.telemetry_interval == 5
+        assert c.node_id == 'agent-1'
+        assert isinstance(c.data_dir, type(Path('/')))
+
+    def test_frozen(self):
+        c = Config()
+        with pytest.raises(AttributeError):
+            c.mode = 'agent'
+
+    def test_custom_values(self):
+        c = Config(mode='agent', node_id='test-node', telemetry_interval=10)
+        assert c.mode == 'agent'
+        assert c.node_id == 'test-node'
+        assert c.telemetry_interval == 10
+
+    def test_log_dir_defaults_to_data_dir_logs(self):
+        c = Config(data_dir=Path('/tmp/test'))
+        assert c.log_dir == '/tmp/test/logs'
+
+    def test_log_dir_override(self):
+        c = Config(log_dir='/custom/logs')
+        assert c.log_dir == '/custom/logs'
+
+    def test_cors_origins_list(self):
+        c = Config(cors_origins='http://a.com,http://b.com')
+        assert c.cors_origins == ['http://a.com', 'http://b.com']

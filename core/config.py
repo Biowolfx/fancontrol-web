@@ -6,14 +6,57 @@ import os
 import tempfile
 import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from core.state import state, state_lock, CONFIG_VERSION
 
 logger = logging.getLogger('fancontrol')
 
-DATA_DIR = Path(os.getenv('FANCONTROL_DATA_DIR', '/data'))
+
+# ============================================================================
+# Centralized environment configuration
+# ============================================================================
+
+@dataclass(frozen=True)
+class Config:
+    """Single source of truth for all environment variables.
+
+    Read once at import time. Immutable — no runtime mutation.
+    For tests: Config(**overrides) or monkeypatch the module-level `cfg`.
+    """
+    # Paths
+    data_dir: Path = field(default_factory=lambda: Path(os.getenv('FANCONTROL_DATA_DIR', '/data')))
+    hwmon_dir: Path = field(default_factory=lambda: Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon')))
+    log_dir: str = field(default_factory=lambda: os.getenv('FANCONTROL_LOG_DIR', ''))
+
+    # App
+    mode: str = field(default_factory=lambda: os.getenv('MODE', 'server'))
+    cors_origins: List[str] = field(default_factory=lambda: os.getenv('FANCONTROL_CORS_ORIGINS', '*').split(','))
+
+    # Agent connection
+    server_url: str = field(default_factory=lambda: os.getenv('SERVER_URL', ''))
+    api_token: str = field(default_factory=lambda: os.getenv('API_TOKEN', ''))
+    node_id: str = field(default_factory=lambda: os.getenv('NODE_ID', 'agent-1'))
+    node_name: str = field(default_factory=lambda: os.getenv('NODE_NAME', 'Agent 1'))
+    telemetry_interval: int = field(default_factory=lambda: int(os.getenv('TELEMETRY_INTERVAL', '5')))
+
+    # Server
+    update_token: str = field(default_factory=lambda: os.getenv('FANCONTROL_UPDATE_TOKEN', ''))
+
+    def __post_init__(self):
+        # Resolve log_dir default after data_dir is known
+        if not self.log_dir:
+            object.__setattr__(self, 'log_dir', str(self.data_dir / 'logs'))
+        # Normalize cors_origins: accept "a,b" string from constructor
+        if isinstance(self.cors_origins, str):
+            object.__setattr__(self, 'cors_origins', self.cors_origins.split(','))
+
+
+cfg = Config()
+
+DATA_DIR = cfg.data_dir
 CONFIG_PATH = DATA_DIR / 'config.json'
 DB_FILE = DATA_DIR / 'fancontrol.db'
 

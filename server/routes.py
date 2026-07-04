@@ -17,6 +17,7 @@ from flask import Blueprint, jsonify, render_template, request, send_from_direct
 from werkzeug.exceptions import BadRequest
 
 from core.state import state, state_lock, get_state, CONFIG_VERSION, invalidate_state_cache
+from core.config import cfg
 from core.config import save_config, load_config, DATA_DIR, CONFIG_PATH
 from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, refresh, read_disk_smart
 from core.calibration import test_fans
@@ -545,7 +546,7 @@ def api_update_check():
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
     """Pull latest code, sync to /app, then exit process."""
-    update_token = os.environ.get('FANCONTROL_UPDATE_TOKEN')
+    update_token = cfg.update_token
     if update_token:
         provided = request.headers.get('X-Update-Token') or request.args.get('token')
         if provided != update_token:

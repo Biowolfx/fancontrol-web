@@ -9,14 +9,16 @@ from typing import Optional
 import socketio
 
 from core.state import state, state_lock, get_state, invalidate_state_cache
+from core.config import cfg
 
 logger = logging.getLogger('fancontrol')
 
-SERVER_URL = os.environ.get('SERVER_URL', '')
-API_TOKEN = os.environ.get('API_TOKEN', '')
-NODE_ID = os.environ.get('NODE_ID', 'agent-1')
-NODE_NAME = os.environ.get('NODE_NAME', 'Agent 1')
-TELEMETRY_INTERVAL = int(os.environ.get('TELEMETRY_INTERVAL', '5'))
+# Mutable globals — can be overridden by config.json via _init_agent_config()
+SERVER_URL = cfg.server_url
+API_TOKEN = cfg.api_token
+NODE_ID = cfg.node_id
+NODE_NAME = cfg.node_name
+TELEMETRY_INTERVAL = cfg.telemetry_interval
 
 
 def _init_agent_config():
@@ -26,7 +28,7 @@ def _init_agent_config():
     import json
     from pathlib import Path
 
-    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+    config_path = cfg.data_dir / 'config.json'
     config = {}
     if config_path.exists():
         try:
@@ -67,7 +69,7 @@ def _init_token():
     import json
     from pathlib import Path
 
-    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+    config_path = cfg.data_dir / 'config.json'
 
     # If token provided via env, use it
     if API_TOKEN:
@@ -286,7 +288,7 @@ def _save_local_config():
     import json
     from pathlib import Path
 
-    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+    config_path = cfg.data_dir / 'config.json'
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         # Read existing config to preserve wizard-set fields
@@ -352,7 +354,7 @@ def _on_node_id_push(data):
     if changed:
         import json
         from pathlib import Path
-        config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+        config_path = cfg.data_dir / 'config.json'
         try:
             config = {}
             if config_path.exists():

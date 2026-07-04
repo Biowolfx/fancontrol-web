@@ -21,7 +21,8 @@ if not _has_smartctl:
 
 executor = ThreadPoolExecutor(max_workers=16)
 
-HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
+from core.config import cfg
+HWMON_DIR = cfg.hwmon_dir
 
 CALIBRATION_STEPS = [
     0, 25, 51, 76, 102, 127, 153, 178, 204, 229, 255
