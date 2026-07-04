@@ -224,17 +224,22 @@ socket.on('update', (data) => {
     if (agentUpdateSection) {
         agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
     }
-    // Show agent token if api_token exists (agent mode)
+    // Hide "Add Node" section in agent mode (no server features)
+    const addNodeSection = document.getElementById('add-node-section');
+    if (addNodeSection) {
+        addNodeSection.classList.toggle('hidden', !!data.agent_mode);
+    }
+    // Show agent token in sidebar only in agent mode
     const agentTokenSection = document.getElementById('agent-token-section');
     const agentTokenBanner = document.getElementById('agent-token-banner');
     const hasToken = data.api_token && data.api_token.length > 0;
     if (agentTokenSection) {
-        agentTokenSection.classList.toggle('hidden', !hasToken);
+        agentTokenSection.classList.toggle('hidden', !data.agent_mode || !hasToken);
         if (hasToken) document.getElementById('agent-token-value').textContent = data.api_token;
     }
+    // Hide the big banner — token is already in sidebar
     if (agentTokenBanner) {
-        agentTokenBanner.classList.toggle('hidden', !hasToken);
-        if (hasToken) document.getElementById('agent-token-banner-value').textContent = data.api_token;
+        agentTokenBanner.classList.add('hidden');
     }
     // DSM scheme view is accessed by clicking DSM fans in tree — no nav button needed
 });

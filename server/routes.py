@@ -208,6 +208,8 @@ def api_get_disk_smart(disk_id):
 @routes.route('/api/nodes/<node_id>/disks/<disk_id>/smart')
 def api_proxy_disk_smart(node_id, disk_id):
     """Proxy SMART request to a remote agent."""
+    import logging
+    logger = logging.getLogger('fancontrol')
     from server.node_registry import get_node
     node = get_node(node_id)
     if not node:
@@ -219,11 +221,19 @@ def api_proxy_disk_smart(node_id, disk_id):
     try:
         import urllib.request, json
         url = f'http://{ip}:{port}/api/agent/disks/{disk_id}/smart'
+        logger.info(f'Proxying SMART request to {url}')
         req = urllib.request.Request(url)
         req.add_header('User-Agent', 'FanControl-Web')
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return jsonify(json.loads(resp.read().decode()))
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            logger.info(f'SMART proxy result for {disk_id}: has_attrs={bool(data.get("attributes"))}')
+            return jsonify(data)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors='ignore')
+        logger.error(f'SMART proxy HTTP error: {e.code} {body[:200]}')
+        return jsonify({'error': f'Agent returned {e.code}: {body[:200]}'}), e.code
     except Exception as e:
+        logger.error(f'SMART proxy error: {e}')
         return jsonify({'error': str(e)}), 502
 
 

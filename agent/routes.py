@@ -70,13 +70,19 @@ def revert_to_agent_config():
 @agent_routes.route('/api/agent/disks/<disk_id>/smart')
 def agent_disk_smart(disk_id):
     """Get SMART data for a disk on the agent."""
-    from core.hardware import read_disk_smart
-    with state_lock:
-        disk = state.get('hdd_sensors', {}).get(disk_id)
-        if not disk:
-            return jsonify({'error': 'Disk not found'}), 404
-        device = disk.get('device', '')
-        if not device:
-            return jsonify({'error': 'No device path'}), 404
-    result = read_disk_smart(device)
-    return jsonify(result)
+    import logging
+    logger = logging.getLogger('fancontrol')
+    try:
+        from core.hardware import read_disk_smart
+        with state_lock:
+            disk = state.get('hdd_sensors', {}).get(disk_id)
+            if not disk:
+                return jsonify({'error': 'Disk not found'}), 404
+            device = disk.get('device', '')
+            if not device:
+                return jsonify({'error': 'No device path'}), 404
+        result = read_disk_smart(device)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f'Agent SMART error for {disk_id}: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
