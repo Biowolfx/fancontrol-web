@@ -258,6 +258,18 @@ def main():
             except Exception as e:
                 logger.warning(f'[setup] Failed to read config: {e}')
                 args.mode = 'server'
+    elif not is_setup_needed():
+        # Setup done, no MODE env var — read mode from saved config
+        try:
+            import json
+            with open(CONFIG_PATH) as f:
+                saved = json.load(f)
+            saved_mode = saved.get('mode')
+            if saved_mode and saved_mode != args.mode:
+                logger.info(f'[mode] Config has mode={saved_mode}, overriding default {args.mode}')
+                args.mode = saved_mode
+        except Exception:
+            pass
 
     if args.mode == 'agent':
         # Load config BEFORE importing agent client (module reads env vars at import time)
