@@ -650,6 +650,22 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
             except subprocess.TimeoutExpired:
                 continue
 
+        # Fallback: try smartctl -a (full output) which includes Airflow_Temperature_Cel
+        for base_dev in [f'/dev/{clean_name}', '/dev/sda']:
+            try:
+                cmd = ['smartctl', '-a', '-n', 'standby', base_dev]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 2:
+                    return None, True
+                stdout = result.stdout or ''
+                if stdout:
+                    temp = _parse_disk_temp_preferred(stdout)
+                    if temp is not None:
+                        logger.info(f'DISK TEMP: {clean_name} = {temp}°C via {" ".join(cmd)}')
+                        return float(temp), False
+            except Exception:
+                pass
+
                 # Prefer Airflow_Temperature_Cel (actual air temp) over Temperature_Celsius (controller)
                 temp = _parse_disk_temp_preferred(stdout)
                 if temp is not None:
