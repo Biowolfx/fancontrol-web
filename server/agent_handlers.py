@@ -207,10 +207,27 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         server_config = node.get('config', {}) if node else {}
 
         # Check for conflict: agent config differs from server config
-        # Compare only meaningful fields, ignore metadata
+        # Compare only meaningful fields, ignore metadata and runtime values
         _cmp_keys = {'fans', 'temp_sensors', 'hdd_sensors', 'kernel_info', 'dsm_schemes', 'control_mode'}
-        server_cmp = {k: v for k, v in (server_config or {}).items() if k in _cmp_keys}
-        agent_cmp = {k: v for k, v in (agent_config or {}).items() if k in _cmp_keys}
+        _runtime_fan_keys = {'rpm', 'pwm_value', 'raw_pwm', 'last_update', 'current_pct', 'target_pwm'}
+
+        def _strip_runtime(cfg):
+            """Remove runtime-only fields for comparison."""
+            result = {}
+            for k, v in (cfg or {}).items():
+                if k not in _cmp_keys:
+                    continue
+                if k == 'fans' and isinstance(v, dict):
+                    result[k] = {
+                        fid: {fk: fv for fk, fv in fval.items() if fk not in _runtime_fan_keys}
+                        for fid, fval in v.items()
+                    }
+                else:
+                    result[k] = v
+            return result
+
+        server_cmp = _strip_runtime(server_config)
+        agent_cmp = _strip_runtime(agent_config)
 
         if server_cmp and agent_cmp and server_cmp != agent_cmp:
             # Save agent's config as snapshot for revert
