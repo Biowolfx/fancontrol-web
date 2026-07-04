@@ -253,7 +253,8 @@ def _get_local_config():
         try:
             from core.dsm_fan import is_dsm_fan_available, get_all_schemes
             if is_dsm_fan_available():
-                config['dsm_schemes'] = get_all_schemes()
+                result = get_all_schemes()
+                config['dsm_schemes'] = result.get('schemes', []) if result else []
                 logger.info(f'Including {len(config["dsm_schemes"])} DSM schemes in config')
         except Exception as e:
             logger.debug(f'Could not load DSM schemes: {e}')
