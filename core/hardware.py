@@ -605,6 +605,7 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
     Read temperature from a disk.
     Returns (temperature_celsius, is_standby)
     Tries multiple access methods: smartctl direct, SAT, sysfs, SMART attributes.
+    Prefers Airflow_Temperature_Cel over Temperature_Celsius for accuracy.
     """
     try:
         clean_name = disk_identifier.replace('/dev/', '').strip()
@@ -612,12 +613,7 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
         if not is_physical_disk(clean_name):
             return None, False
 
-        # Method 1: sysfs temperature (fast, no smartctl needed)
-        sysfs_temp = _read_sysfs_temp(clean_name)
-        if sysfs_temp is not None:
-            return sysfs_temp, False
-
-        # Method 2: smartctl with multiple access methods
+        # Method 1: smartctl with multiple access methods (preferred — most accurate)
         attempts = []
         attempts.append(['smartctl', '-A', '-n', 'standby', f'/dev/{clean_name}'])
         attempts.append(['smartctl', '-A', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
@@ -642,25 +638,55 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
                     return None, True  # standby
 
                 stdout = result.stdout or ''
+                if not stdout:
+                    continue
 
-                if clean_name.startswith('nvme') or clean_name.startswith('nvme'):
-                    for line in stdout.split('\n'):
-                        if 'Temperature:' in line:
-                            match = re.search(r'(\d+)\s*Celsius', line)
-                            if match:
-                                return float(match.group(1)), False
-
-                temp = parse_smart_temp(stdout)
+                # Prefer Airflow_Temperature_Cel (actual air temp) over Temperature_Celsius (controller)
+                temp = _parse_disk_temp_preferred(stdout)
                 if temp is not None:
                     return float(temp), False
 
             except subprocess.TimeoutExpired:
                 continue
 
+        # Method 2: sysfs (fallback, may be controller temp)
+        sysfs_temp = _read_sysfs_temp(clean_name)
+        if sysfs_temp is not None:
+            return sysfs_temp, False
+
     except Exception as e:
         logger.debug(f'Error reading disk temp for {disk_identifier}: {e}')
 
     return None, False
+
+
+def _parse_disk_temp_preferred(output: str) -> Optional[int]:
+    """Parse temperature from smartctl output, preferring Airflow over raw Celsius."""
+    # First pass: look for Airflow_Temperature_Cel (most accurate — actual air temp)
+    for line in output.split('\n'):
+        if 'Airflow_Temperature_Cel' in line:
+            numbers = re.findall(r'\b(\d{2,3})\b', line)
+            for num in numbers:
+                temp = int(num)
+                if 15 < temp < 70:
+                    return temp
+
+    # Second pass: Temperature_Celsius (may be controller temp on some drives)
+    for line in output.split('\n'):
+        if 'Temperature_Celsius' in line:
+            match = re.search(r'(\d+)\s*\(', line)
+            if match:
+                temp = int(match.group(1))
+                if 0 < temp < 100:
+                    return temp
+
+            numbers = re.findall(r'\b(\d{2,3})\b', line)
+            for num in numbers:
+                temp = int(num)
+                if 15 < temp < 70:
+                    return temp
+
+    return None
 
 
 def _read_sysfs_temp(dev_name: str) -> Optional[float]:
