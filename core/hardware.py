@@ -699,63 +699,58 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
     return None, False
 
 
+def _extract_smart_raw_value(line: str) -> Optional[int]:
+    """Extract the RAW_VALUE from a smartctl SMART attribute line.
+
+    Format: ID# ATTRIBUTE_NAME FLAGS VALUE WORST THRESH TYPE UPDATED FAILING_NOW RAW_VALUE
+    Example: 190 Airflow_Temperature_Cel 0x0022 065 053 000 Old_age Always - 35 (Min/Max 26/45)
+
+    The RAW_VALUE (35) is the actual temperature. The VALUE field (065) is a
+    normalized 0-253 scale — NOT the temperature. Previous code used findall()
+    which grabbed 065 first, reporting 65°C instead of 35°C.
+    """
+    # The raw value comes after the FAILING_NOW column (always `-` or a flag)
+    match = re.search(r'\s-\s+(\d{1,3})\b', line)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def _parse_disk_temp_preferred(output: str) -> Tuple[Optional[int], str]:
     """Parse temperature from smartctl output.
-    Priority order chosen to avoid picking controller temps on Synology SATA:
-    1. Airflow_Temperature_Cel — actual air temp near the disk (best)
+    Priority:
+    1. Airflow_Temperature_Cel — actual air temp near disk (best)
     2. HDA_Temperature — head/disk assembly temp
-    3. Current Drive Temperature header — self-assessment temp from smartctl
+    3. Current Drive Temperature header
     4. Temperature_Celsius attribute — last resort (may be controller/IC temp)
     Returns (temperature, source_label)."""
     lines = output.split('\n')
 
-    # Pass 1: Airflow_Temperature_Cel (attribute 190 — actual air temp)
     for line in lines:
         if 'Airflow_Temperature_Cel' in line:
-            numbers = re.findall(r'\b(\d{2,3})\b', line)
-            for num in numbers:
-                temp = int(num)
-                if 10 < temp < 80:
-                    return temp, 'airflow'
+            raw = _extract_smart_raw_value(line)
+            if raw and 10 < raw < 80:
+                return raw, 'airflow'
 
-    # Pass 2: HDA_Temperature (disk surface temp)
     for line in lines:
         if 'HDA_Temperature' in line:
-            numbers = re.findall(r'\b(\d{2,3})\b', line)
-            for num in numbers:
-                temp = int(num)
-                if 10 < temp < 80:
-                    return temp, 'hda'
+            raw = _extract_smart_raw_value(line)
+            if raw and 10 < raw < 80:
+                return raw, 'hda'
 
-    # Pass 3: "Current Drive Temperature:" header — often more reliable than attribute 194
     for line in lines:
         if 'Current Drive Temperature' in line:
-            match = re.search(r':\s*(\d+)\s*C', line, re.IGNORECASE)
-            if match:
-                temp = int(match.group(1))
-                if 0 < temp < 100:
-                    return temp, 'smartctl_header'
-            # Some drives: "Current Drive Temperature: 36" (no "C")
-            match = re.search(r':\s*(\d+)\s*$', line)
+            match = re.search(r':\s*(\d+)', line)
             if match:
                 temp = int(match.group(1))
                 if 0 < temp < 100:
                     return temp, 'smartctl_header'
 
-    # Pass 4: Temperature_Celsius attribute (ID 194 — may be controller/IC temp)
     for line in lines:
         if 'Temperature_Celsius' in line:
-            match = re.search(r'(\d+)\s*\(', line)
-            if match:
-                temp = int(match.group(1))
-                if 0 < temp < 100:
-                    return temp, 'celsius'
-
-            numbers = re.findall(r'\b(\d{2,3})\b', line)
-            for num in numbers:
-                temp = int(num)
-                if 10 < temp < 80:
-                    return temp, 'celsius'
+            raw = _extract_smart_raw_value(line)
+            if raw and 0 < raw < 100:
+                return raw, 'celsius'
 
     return None, ''
 
