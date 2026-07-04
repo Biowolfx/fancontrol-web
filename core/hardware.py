@@ -635,11 +635,20 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
                 if result.returncode == 2:
+                    logger.info(f'DISK TEMP: {clean_name} standby via {" ".join(cmd)}')
                     return None, True  # standby
 
                 stdout = result.stdout or ''
                 if not stdout:
                     continue
+
+                temp = _parse_disk_temp_preferred(stdout)
+                if temp is not None:
+                    logger.info(f'DISK TEMP: {clean_name} = {temp}°C via {" ".join(cmd)}')
+                    return float(temp), False
+
+            except subprocess.TimeoutExpired:
+                continue
 
                 # Prefer Airflow_Temperature_Cel (actual air temp) over Temperature_Celsius (controller)
                 temp = _parse_disk_temp_preferred(stdout)
@@ -652,6 +661,7 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
         # Method 2: sysfs (fallback, may be controller temp)
         sysfs_temp = _read_sysfs_temp(clean_name)
         if sysfs_temp is not None:
+            logger.info(f'DISK TEMP: {clean_name} = {sysfs_temp}°C via sysfs (fallback)')
             return sysfs_temp, False
 
     except Exception as e:
