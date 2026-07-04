@@ -604,49 +604,84 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
     """
     Read temperature from a disk.
     Returns (temperature_celsius, is_standby)
+    Tries multiple access methods: smartctl direct, SAT, sysfs, SMART attributes.
     """
     try:
         clean_name = disk_identifier.replace('/dev/', '').strip()
-        
+
         if not is_physical_disk(clean_name):
             return None, False
-        
-        cmd = ['smartctl', '-A', '-n', 'standby', f'/dev/{clean_name}']
-        
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            
-            if result.returncode == 2:
-                return None, True
-            
-            if result.returncode != 0:
-                cmd2 = ['smartctl', '-A', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}']
-                result = subprocess.run(cmd2, capture_output=True, text=True, timeout=10)
-                
+
+        # Method 1: sysfs temperature (fast, no smartctl needed)
+        sysfs_temp = _read_sysfs_temp(clean_name)
+        if sysfs_temp is not None:
+            return sysfs_temp, False
+
+        # Method 2: smartctl with multiple access methods
+        attempts = []
+        attempts.append(['smartctl', '-A', '-n', 'standby', f'/dev/{clean_name}'])
+        attempts.append(['smartctl', '-A', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
+        # MegaRAID
+        disk_index = -1
+        if clean_name.startswith('sata'):
+            try:
+                disk_index = int(clean_name.replace('sata', ''))
+            except ValueError:
+                pass
+        elif clean_name.startswith('sd'):
+            disk_index = ord(clean_name[2]) - ord('a')
+        if disk_index >= 0:
+            attempts.append(['smartctl', '-A', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
+            attempts.append(['smartctl', '-A', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
+
+        for cmd in attempts:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
                 if result.returncode == 2:
-                    return None, True
-                if result.returncode != 0:
-                    return None, False
-            
-            if clean_name.startswith('nvme'):
-                for line in result.stdout.split('\n'):
-                    if 'Temperature:' in line:
-                        match = re.search(r'(\d+)\s*Celsius', line)
-                        if match:
-                            return float(match.group(1)), False
-            
-            temp = parse_smart_temp(result.stdout)
-            if temp is not None:
-                return float(temp), False
-                
-        except subprocess.TimeoutExpired:
-            logger.debug(f'Timeout reading {disk_identifier}')
-            return None, False
-            
+                    return None, True  # standby
+
+                stdout = result.stdout or ''
+
+                if clean_name.startswith('nvme') or clean_name.startswith('nvme'):
+                    for line in stdout.split('\n'):
+                        if 'Temperature:' in line:
+                            match = re.search(r'(\d+)\s*Celsius', line)
+                            if match:
+                                return float(match.group(1)), False
+
+                temp = parse_smart_temp(stdout)
+                if temp is not None:
+                    return float(temp), False
+
+            except subprocess.TimeoutExpired:
+                continue
+
     except Exception as e:
-        logger.error(f'Error reading disk {disk_identifier}: {e}')
-    
+        logger.debug(f'Error reading disk temp for {disk_identifier}: {e}')
+
     return None, False
+
+
+def _read_sysfs_temp(dev_name: str) -> Optional[float]:
+    """Try to read temperature from sysfs."""
+    import glob as _glob
+    # Try common sysfs temperature paths
+    patterns = [
+        f'/sys/block/{dev_name}/device/scsi_disk/*/temperature',
+        f'/sys/block/{dev_name}/device/scsi_disk/*/hwmon/hwmon*/temp1_input',
+        f'/sys/block/{dev_name}/hwmon/hwmon*/temp1_input',
+    ]
+    for pattern in patterns:
+        try:
+            for path in _glob.glob(pattern):
+                with open(path) as f:
+                    val = int(f.read().strip())
+                    if val > 0:
+                        return val / 1000.0 if val > 200 else float(val)
+        except Exception:
+            continue
+    return None
 
 
 def discover_disks() -> Dict[str, Dict]:
