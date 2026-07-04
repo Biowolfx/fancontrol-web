@@ -892,7 +892,7 @@ function renderPickerCard(card) {
         icon = '💾';
         colorClass = 'text-neon-purple';
         valueHtml = `<div class="flex items-baseline gap-2"><span class="text-2xl font-bold font-mono ${colorClass}" data-disk-id="${sourceId}" data-source="${source}">--</span><span class="text-xs text-gray-500">°C</span></div>`;
-        valueHtml += renderSparkline(`disk:${sourceId}`, '#c084fc');
+        valueHtml += renderSparkline(`disk:${source}:${sourceId}`, '#c084fc');
     } else if (type === 'system') {
         icon = '🖥';
         colorClass = 'text-yellow-400';
@@ -2454,9 +2454,17 @@ function startPickerLiveUpdate() {
         });
         document.querySelectorAll('[data-disk-id]').forEach(el => {
             const id = el.dataset.diskId;
-            if (currentState?.hdd_sensors?.[id]) {
-                el.textContent = currentState.hdd_sensors[id].temp || '--';
-                pushSparkline(`disk:${id}`, currentState.hdd_sensors[id].temp || 0);
+            const src = el.dataset.source;
+            let temp = null;
+            if (src === 'local') {
+                temp = currentState?.hdd_sensors?.[id]?.temp;
+            } else {
+                const node = nodesData.find(n => n.node_id === src);
+                temp = node?.telemetry?.hdd_sensors?.[id]?.temp;
+            }
+            if (temp != null) {
+                el.textContent = temp || '--';
+                pushSparkline(`disk:${src}:${id}`, temp || 0);
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
