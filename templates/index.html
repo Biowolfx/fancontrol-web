@@ -576,14 +576,24 @@
                             </label>
                         </div>
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-xs text-gray-500 w-8" data-i18n="calibration.min_pwm">Min</span>
+                            <span class="text-xs text-gray-500 w-8 flex items-center gap-1" data-i18n="calibration.min_pwm">Min
+                                <span class="relative group">
+                                    <span class="text-gray-500 cursor-help">&#x24D8;</span>
+                                    <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-gray-900 border border-gray-600 rounded-lg text-xs text-gray-300 hidden group-hover:block z-50">Overrides auto-calculated value. Recalibrate to restore automatic detection.</span>
+                                </span>
+                            </span>
                             <input id="cal-min-pwm" type="range" min="0" max="255" value="0"
                                    class="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                                    oninput="updateCalibrationParam('min_pwm', this.value)">
                             <span id="cal-min-pwm-val" class="text-xs text-gray-400 w-8 text-right">0</span>
                         </div>
                         <div class="flex items-center gap-2 mt-2">
-                            <span class="text-xs text-gray-500 w-8" data-i18n="calibration.max_pwm">Max</span>
+                            <span class="text-xs text-gray-500 w-8 flex items-center gap-1" data-i18n="calibration.max_pwm">Max
+                                <span class="relative group">
+                                    <span class="text-gray-500 cursor-help">&#x24D8;</span>
+                                    <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2 bg-gray-900 border border-gray-600 rounded-lg text-xs text-gray-300 hidden group-hover:block z-50">Overrides auto-calculated value. Recalibrate to restore automatic detection.</span>
+                                </span>
+                            </span>
                             <input id="cal-max-pwm" type="range" min="0" max="255" value="255"
                                    class="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                                    oninput="updateCalibrationParam('max_pwm', this.value)">
