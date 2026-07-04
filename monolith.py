@@ -56,7 +56,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.12.7"
+CONFIG_VERSION = "3.12.8"
 
 state_lock = threading.RLock()
 
@@ -3220,7 +3220,6 @@ def _parse_response(data: str, source_ip: str):
 
     node_id = usn.split('urn:fancontrol-web:agent:')[-1]
     node_name = headers.get('X-FANCONTROL-NAME', node_id)
-    api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', f'http://{source_ip}:5059')
 
     logger.info(f'SSDP scan found agent: {node_name} ({source_ip})')
@@ -3230,7 +3229,6 @@ def _parse_response(data: str, source_ip: str):
             'node_id': node_id,
             'name': node_name,
             'ip': source_ip,
-            'api_token': api_token,
             'location': location,
         }
 
@@ -3319,7 +3317,6 @@ def _parse_and_notify(data: str, source_ip: str):
         node_id = usn.split('urn:fancontrol-web:agent:')[-1]
 
     node_name = headers.get('X-FANCONTROL-NAME', node_id)
-    api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', '')
 
     if not node_id:
@@ -3329,14 +3326,13 @@ def _parse_and_notify(data: str, source_ip: str):
         if node_id in _discovered_nodes:
             return
 
-        if get_node(node_id) or get_node_by_token(api_token):
+        if get_node(node_id):
             return
 
         _discovered_nodes[node_id] = {
             'node_id': node_id,
             'name': node_name,
             'ip': source_ip,
-            'api_token': api_token,
             'location': location,
             'discovered_at': datetime.utcnow().isoformat(),
         }
@@ -4941,7 +4937,18 @@ def api_add_node_by_ip():
             return jsonify({'error': 'Node with this IP already exists'}), 409
 
     info = probe_agent(ip, port=port, timeout=3)
-    api_token = info.get('X-FANCONTROL-TOKEN', '') if info else ''
+
+    # Fetch api_token from agent via HTTP
+    api_token = ''
+    if info:
+        try:
+            import urllib.request as _urllib_request
+            import json as _json
+            resp = _urllib_request.urlopen(f'http://{ip}:{port}/api/agent/status', timeout=5)
+            status = _json.loads(resp.read())
+            api_token = status.get('api_token', '')
+        except Exception:
+            pass
 
     node = add_node(name, api_token=api_token, ip=ip)
 
@@ -4963,15 +4970,37 @@ def api_list_discovered():
 
 @routes.route('/api/discovered/<node_id>/accept', methods=['POST'])
 def api_accept_discovered(node_id):
-    """Accept a discovered agent and register it."""
+    """Accept a discovered agent and register it.
+
+    Fetches the api_token from the agent's /api/agent/status endpoint
+    over unicast HTTP (token is no longer broadcast via SSDP).
+    """
+    import urllib.request as _urllib_request
 
     with _lock:
         agent = _discovered_nodes.get(node_id)
         if not agent:
             return jsonify({'error': 'Agent not found'}), 404
 
-        node = add_node(agent['name'], api_token=agent.get('api_token', ''), ip=agent.get('ip', ''))
-        del _discovered_nodes[node_id]
+        agent_ip = agent.get('ip', '')
+        agent_name = agent.get('name', node_id)
+
+    # Fetch api_token from agent via unicast HTTP
+    api_token = ''
+    try:
+        url = f'http://{agent_ip}:5059/api/agent/status'
+        resp = _urllib_request.urlopen(url, timeout=5)
+        import json as _json
+        status = _json.loads(resp.read())
+        api_token = status.get('api_token', '')
+    except Exception as e:
+        logger.warning(f'Could not fetch token from agent {agent_ip}: {e}')
+        return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502
+
+    node = add_node(agent_name, api_token=api_token, ip=agent_ip)
+
+    with _lock:
+        _discovered_nodes.pop(node_id, None)
 
     return jsonify(node), 201
 
@@ -4995,7 +5024,7 @@ SSDP_PORT = 1900
 SSDP_INTERVAL = 60
 
 
-def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059, api_token: str = '') -> str:
+def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059) -> str:
     ip = _get_local_ip()
     return (
         'HTTP/1.1 200 OK\r\n'
@@ -5007,7 +5036,6 @@ def _build_ssdp_response(node_id: str, node_name: str, port: int = 5059, api_tok
         'ST: urn:fancontrol-web:agent\r\n'
         f'X-FanControl-Name: {node_name}\r\n'
         f'X-FanControl-Id: {node_id}\r\n'
-        f'X-FanControl-Token: {api_token}\r\n'
         '\r\n'
     )
 
@@ -5023,12 +5051,12 @@ def _get_local_ip() -> str:
         return '127.0.0.1'
 
 
-def start_announcer(node_id: str, node_name: str, port: int = 5059, api_token: str = '') -> Optional[threading.Thread]:
+def start_announcer(node_id: str, node_name: str, port: int = 5059) -> Optional[threading.Thread]:
     def _announce_loop():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
-            response = _build_ssdp_response(node_id, node_name, port, api_token)
+            response = _build_ssdp_response(node_id, node_name, port)
 
             logger.info(f'SSDP announcer started for {node_name}')
 
@@ -5046,7 +5074,7 @@ def start_announcer(node_id: str, node_name: str, port: int = 5059, api_token: s
     return thread
 
 
-def _handle_msearch(node_id: str, node_name: str, port: int = 5059, api_token: str = ''):
+def _handle_msearch(node_id: str, node_name: str, port: int = 5059):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -5059,7 +5087,7 @@ def _handle_msearch(node_id: str, node_name: str, port: int = 5059, api_token: s
         mreq = socket.inet_aton(SSDP_ADDR) + socket.inet_aton('0.0.0.0')
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        response = _build_ssdp_response(node_id, node_name, port, api_token=api_token)
+        response = _build_ssdp_response(node_id, node_name, port)
         logger.info(f'M-SEARCH responder started on port {SSDP_PORT} for {node_name}')
 
         while True:
@@ -5465,14 +5493,13 @@ def start_client():
 
     logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
 
-    start_announcer(NODE_ID, NODE_NAME, api_token=API_TOKEN)
+    start_announcer(NODE_ID, NODE_NAME)
 
     # Start M-SEARCH responder so server's active scan can find this agent
     import threading
     responder_thread = threading.Thread(
         target=_handle_msearch,
         args=(NODE_ID, NODE_NAME),
-        kwargs={'api_token': API_TOKEN},
         daemon=True
     )
     responder_thread.start()

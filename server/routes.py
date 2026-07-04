@@ -1036,7 +1036,18 @@ def api_add_node_by_ip():
             return jsonify({'error': 'Node with this IP already exists'}), 409
 
     info = probe_agent(ip, port=port, timeout=3)
-    api_token = info.get('X-FANCONTROL-TOKEN', '') if info else ''
+
+    # Fetch api_token from agent via HTTP
+    api_token = ''
+    if info:
+        try:
+            import urllib.request
+            import json
+            resp = urllib.request.urlopen(f'http://{ip}:{port}/api/agent/status', timeout=5)
+            status = json.loads(resp.read())
+            api_token = status.get('api_token', '')
+        except Exception:
+            pass
 
     node = add_node(name, api_token=api_token, ip=ip)
 
@@ -1060,16 +1071,38 @@ def api_list_discovered():
 
 @routes.route('/api/discovered/<node_id>/accept', methods=['POST'])
 def api_accept_discovered(node_id):
-    """Accept a discovered agent and register it."""
+    """Accept a discovered agent and register it.
+
+    Fetches the api_token from the agent's /api/agent/status endpoint
+    over unicast HTTP (token is no longer broadcast via SSDP).
+    """
     from server.discovery import _discovered_nodes, _lock
     from server.node_registry import add_node
+    import urllib.request
 
     with _lock:
         agent = _discovered_nodes.get(node_id)
         if not agent:
             return jsonify({'error': 'Agent not found'}), 404
 
-        node = add_node(agent['name'], api_token=agent.get('api_token', ''), ip=agent.get('ip', ''))
-        del _discovered_nodes[node_id]
+        agent_ip = agent.get('ip', '')
+        agent_name = agent.get('name', node_id)
+
+    # Fetch api_token from agent via unicast HTTP
+    api_token = ''
+    try:
+        url = f'http://{agent_ip}:5059/api/agent/status'
+        req = urllib.request.urlopen(url, timeout=5)
+        import json
+        status = json.loads(req.read())
+        api_token = status.get('api_token', '')
+    except Exception as e:
+        logger.warning(f'Could not fetch token from agent {agent_ip}: {e}')
+        return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502
+
+    node = add_node(agent_name, api_token=api_token, ip=agent_ip)
+
+    with _lock:
+        _discovered_nodes.pop(node_id, None)
 
     return jsonify(node), 201

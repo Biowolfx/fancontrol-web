@@ -83,7 +83,6 @@ def _parse_response(data: str, source_ip: str):
 
     node_id = usn.split('urn:fancontrol-web:agent:')[-1]
     node_name = headers.get('X-FANCONTROL-NAME', node_id)
-    api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', f'http://{source_ip}:5059')
 
     logger.info(f'SSDP scan found agent: {node_name} ({source_ip})')
@@ -93,7 +92,6 @@ def _parse_response(data: str, source_ip: str):
             'node_id': node_id,
             'name': node_name,
             'ip': source_ip,
-            'api_token': api_token,
             'location': location,
         }
 
@@ -182,7 +180,6 @@ def _parse_and_notify(data: str, source_ip: str):
         node_id = usn.split('urn:fancontrol-web:agent:')[-1]
 
     node_name = headers.get('X-FANCONTROL-NAME', node_id)
-    api_token = headers.get('X-FANCONTROL-TOKEN', '')
     location = headers.get('LOCATION', '')
 
     if not node_id:
@@ -192,15 +189,14 @@ def _parse_and_notify(data: str, source_ip: str):
         if node_id in _discovered_nodes:
             return
 
-        from server.node_registry import get_node_by_token, get_node
-        if get_node(node_id) or get_node_by_token(api_token):
+        from server.node_registry import get_node
+        if get_node(node_id):
             return
 
         _discovered_nodes[node_id] = {
             'node_id': node_id,
             'name': node_name,
             'ip': source_ip,
-            'api_token': api_token,
             'location': location,
             'discovered_at': datetime.utcnow().isoformat(),
         }
