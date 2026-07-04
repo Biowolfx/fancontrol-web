@@ -79,12 +79,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             node = add_node(node_name or node_id or 'Agent', api_token=api_token,
                             ip=agent_ip if agent_ip != '127.0.0.1' else '')
             logger.info(f'Auto-registered new agent: {node_name} ({agent_ip}) token={api_token[:8]}...')
-            # Notify browser
+            # Notify browser — agent is already connected via WebSocket
             socketio.emit('node:discovered', {
                 'node_id': node['node_id'],
                 'name': node['name'],
                 'ip': agent_ip,
                 'auto_registered': True,
+                'already_connected': True,
             })
 
         node_id = node['node_id']

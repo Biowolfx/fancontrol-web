@@ -861,7 +861,11 @@ def api_update_node(node_id):
 def api_delete_node(node_id):
     """Delete a node."""
     from server.node_registry import delete_node
+    from core.state import state, state_lock, invalidate_state_cache
     if delete_node(node_id):
+        with state_lock:
+            state.get('nodes', {}).pop(node_id, None)
+        invalidate_state_cache()
         return jsonify({'status': 'deleted'})
     return jsonify({'error': 'Node not found'}), 404
 

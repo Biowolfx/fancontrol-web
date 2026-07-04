@@ -5282,11 +5282,20 @@ function showToast(message, type = 'info', actions = []) {
 }
 
 socket.on('node:discovered', (data) => {
-    const msg = `Новый агент: ${data.name} (${data.ip})`;
-    showToast(msg, 'warning', [
-        { label: 'Добавить', onclick: `acceptDiscoveredAgent('${data.node_id}')` },
-        { label: 'Игнорировать', onclick: 'this.closest(".toast").remove()', secondary: true },
-    ]);
+    if (data.already_connected) {
+        // Agent auto-registered via WebSocket — already connected, just notify
+        showToast(`Agent connected: ${data.name} (${data.ip})`, 'success');
+        loadNodes();
+    } else {
+        // SSDP-discovered agent — check if dismissed
+        const dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]');
+        if (dismissed.includes(data.node_id)) return;
+        const msg = `Новый агент: ${data.name} (${data.ip})`;
+        showToast(msg, 'warning', [
+            { label: 'Добавить', onclick: `acceptDiscoveredAgent('${data.node_id}')` },
+            { label: 'Не напоминать', onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
+        ]);
+    }
 });
 
 socket.on('server:name_changed', (data) => {
@@ -5306,6 +5315,15 @@ async function acceptDiscoveredAgent(nodeId) {
     } catch (e) {
         showToast('Ошибка добавления агента', 'error');
     }
+}
+
+function dismissAgentForever(nodeId) {
+    const dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]');
+    if (!dismissed.includes(nodeId)) {
+        dismissed.push(nodeId);
+        localStorage.setItem('fc_dismissed_agents', JSON.stringify(dismissed));
+    }
+    showToast('Больше не напоминать', 'success');
 }
 
 function showConflictModal(data) {
