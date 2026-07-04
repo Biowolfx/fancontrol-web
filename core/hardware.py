@@ -615,8 +615,8 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
 
         # Method 1: smartctl with multiple access methods (preferred — most accurate)
         attempts = []
-        attempts.append(['smartctl', '-A', '-n', 'standby', f'/dev/{clean_name}'])
-        attempts.append(['smartctl', '-A', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
+        attempts.append(['smartctl', '-a', '-n', 'standby', f'/dev/{clean_name}'])
+        attempts.append(['smartctl', '-a', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
         # MegaRAID
         disk_index = -1
         if clean_name.startswith('sata'):
@@ -627,8 +627,8 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
         elif clean_name.startswith('sd'):
             disk_index = ord(clean_name[2]) - ord('a')
         if disk_index >= 0:
-            attempts.append(['smartctl', '-A', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
-            attempts.append(['smartctl', '-A', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
+            attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
+            attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
 
         for cmd in attempts:
             try:
@@ -649,36 +649,6 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
 
             except subprocess.TimeoutExpired:
                 continue
-
-        # Fallback: try smartctl -a (full output) which includes Airflow_Temperature_Cel
-        for base_dev in [f'/dev/{clean_name}', '/dev/sda']:
-            try:
-                cmd = ['smartctl', '-a', '-n', 'standby', base_dev]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                if result.returncode == 2:
-                    return None, True
-                stdout = result.stdout or ''
-                if stdout:
-                    temp = _parse_disk_temp_preferred(stdout)
-                    if temp is not None:
-                        logger.info(f'DISK TEMP: {clean_name} = {temp}°C via {" ".join(cmd)}')
-                        return float(temp), False
-            except Exception:
-                pass
-
-                # Prefer Airflow_Temperature_Cel (actual air temp) over Temperature_Celsius (controller)
-                temp = _parse_disk_temp_preferred(stdout)
-                if temp is not None:
-                    return float(temp), False
-
-            except subprocess.TimeoutExpired:
-                continue
-
-        # Method 2: sysfs (fallback, may be controller temp)
-        sysfs_temp = _read_sysfs_temp(clean_name)
-        if sysfs_temp is not None:
-            logger.info(f'DISK TEMP: {clean_name} = {sysfs_temp}°C via sysfs (fallback)')
-            return sysfs_temp, False
 
     except Exception as e:
         logger.debug(f'Error reading disk temp for {disk_identifier}: {e}')
