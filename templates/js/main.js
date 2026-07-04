@@ -5034,7 +5034,7 @@ function showView(view) {
         if (nodeDetail) nodeDetail.classList.remove('hidden');
     } else if (view === 'dsm-scheme') {
         if (dsmScheme) dsmScheme.classList.remove('hidden');
-        renderDsmSchemeEditor();
+        renderDsmSchemeEditor(_currentRemoteNodeId);
     }
 
     // Update nav button styles
