@@ -17,6 +17,19 @@ from server.node_registry import (
 
 logger = logging.getLogger('fancontrol')
 
+# Map agent SID → registry node_id, and reverse
+_sid_to_node: dict = {}
+_node_to_sid: dict = {}
+
+
+def _emit_to_node(socketio, event, data, node_id):
+    """Emit event to a specific agent by node_id via its SID."""
+    sid = _node_to_sid.get(node_id)
+    if sid:
+        socketio.emit(event, data, room=sid)
+    else:
+        logger.debug(f'No SID for node {node_id}, emit {event} skipped')
+
 
 def _start_ping_loop(socketio):
     """Ping all online agents every 30 seconds."""
@@ -27,8 +40,10 @@ def _start_ping_loop(socketio):
                 from server.node_registry import list_nodes
                 nodes = list_nodes()
                 for node in nodes:
-                    if node['status'] == 'online':
-                        socketio.emit('server:ping', {'node_id': node['node_id']}, room=node['node_id'])
+                    nid = node['node_id']
+                    sid = _node_to_sid.get(nid)
+                    if sid and node['status'] == 'online':
+                        socketio.emit('server:ping', {'node_id': nid}, room=sid)
             except Exception as e:
                 logger.error(f'Ping loop error: {e}')
 
@@ -44,12 +59,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     @socketio.on('agent:connect')
     def handle_agent_connect(data):
         from flask import request as flask_request
-        node_id = data.get('node_id')
+        agent_node_id = data.get('node_id')
         node_name = data.get('node_name')
         api_token = data.get('api_token')
         control_mode = data.get('control_mode', 'server')
         agent_config = data.get('config', {})
         agent_ip = flask_request.remote_addr if flask_request else ''
+        agent_sid = flask_request.sid if flask_request else None
 
         if not api_token:
             logger.warning('agent:connect rejected — no api_token')
@@ -77,16 +93,23 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             from server.node_registry import update_node
             update_node(node_id, ip=agent_ip)
 
+        # Track SID mapping for reliable delivery
+        if agent_sid:
+            _sid_to_node[agent_sid] = node_id
+            _node_to_sid[node_id] = agent_sid
+            logger.info(f'Agent SID mapped: {agent_sid} → {node_id}')
+
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
 
         if on_connect:
             on_connect(node_id)
 
-        # Push token to agent
-        socketio.emit('server:token_push', {
+        # Push node_id to agent so it uses the registry ID for telemetry
+        _emit_to_node(socketio, 'server:node_id_push', {
+            'node_id': node_id,
             'token': node['api_token'],
-        }, room=node_id)
+        }, node_id)
 
         with state_lock:
             state['nodes'][node_id] = {
@@ -103,9 +126,9 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # Push server config to agent if in server mode
         server_config = node.get('config', {})
         if server_config and control_mode == 'server':
-            socketio.emit('server:config_push', {
+            _emit_to_node(socketio, 'server:config_push', {
                 'config': server_config,
-            }, room=node_id)
+            }, node_id)
             logger.info(f'Pushed config to {node["name"]}')
 
             # Check for conflict on reconnect
@@ -125,11 +148,20 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
     @socketio.on('agent:telemetry')
     def handle_agent_telemetry(data):
-        node_id = data.get('node_id')
+        agent_node_id = data.get('node_id')
         telemetry = data.get('telemetry', {})
 
+        # Resolve agent's node_id to registry node_id via SID mapping
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
+
+        if not node_id:
+            # Fallback: try direct lookup
+            node_id = agent_node_id
+
         if not node_id or node_id not in state.get('nodes', {}):
-            logger.warning(f'agent:telemetry from unknown node: {node_id}')
+            logger.warning(f'agent:telemetry from unknown node: agent_sent={agent_node_id}, sid={agent_sid}')
             return
 
         update_node_status(node_id, 'online', telemetry)
@@ -144,11 +176,17 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
     @socketio.on('agent:config_changed')
     def handle_agent_config_changed(data):
-        node_id = data.get('node_id')
+        agent_node_id = data.get('node_id')
         agent_config = data.get('config', {})
 
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
+        if not node_id:
+            node_id = agent_node_id
+
         if not node_id or node_id not in state.get('nodes', {}):
-            logger.warning(f'agent:config_changed from unknown node: {node_id}')
+            logger.warning(f'agent:config_changed from unknown node: {agent_node_id}')
             return
 
         # Get server's authoritative config for this node
@@ -190,11 +228,17 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
     @socketio.on('agent:control_mode_changed')
     def handle_agent_control_mode_changed(data):
-        node_id = data.get('node_id')
+        agent_node_id = data.get('node_id')
         mode = data.get('mode', 'server')
 
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
+        if not node_id:
+            node_id = agent_node_id
+
         if not node_id or node_id not in state.get('nodes', {}):
-            logger.warning(f'agent:control_mode_changed from unknown node: {node_id}')
+            logger.warning(f'agent:control_mode_changed from unknown node: {agent_node_id}')
             return
 
         update_node_control_mode(node_id, mode)
@@ -210,5 +254,19 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     @socketio.on('agent:pong')
     def handle_agent_pong(data):
         """Agent responds to ping — update last_seen."""
-        node_id = data.get('node_id', '')
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
+        if not node_id:
+            node_id = data.get('node_id', '')
         update_node_status(node_id, 'online')
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        """Clean up SID mapping on disconnect."""
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        if agent_sid and agent_sid in _sid_to_node:
+            nid = _sid_to_node.pop(agent_sid)
+            _node_to_sid.pop(nid, None)
+            logger.info(f'Agent disconnected: {nid} (SID {agent_sid} released)')

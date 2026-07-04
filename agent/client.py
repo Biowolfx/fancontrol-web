@@ -324,35 +324,42 @@ def _apply_config(config):
                         state['fans'][fan_id][key] = fan_cfg[key]
 
 
-def _on_token_push(data):
-    """Server pushes updated token — save locally."""
+def _on_node_id_push(data):
+    """Server pushes correct node_id and token — update and save locally."""
+    new_node_id = data.get('node_id', '')
     new_token = data.get('token', '')
-    if not new_token:
-        return
 
-    global API_TOKEN
-    API_TOKEN = new_token
-    state['api_token'] = new_token
+    global NODE_ID, API_TOKEN
+    changed = False
 
-    import json
-    from pathlib import Path
-    config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
-    try:
-        config = {}
-        if config_path.exists():
-            with open(config_path) as f:
-                config = json.load(f)
-        config['api_token'] = new_token
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-    except Exception as e:
-        logger.warning(f'Could not persist api_token to config: {e}')
+    if new_node_id and new_node_id != NODE_ID:
+        logger.info(f'Received node_id from server: {NODE_ID} → {new_node_id}')
+        NODE_ID = new_node_id
+        state['node_id'] = new_node_id
+        changed = True
 
-    logger.info(f'Received new token from server, reconnecting...')
+    if new_token and new_token != API_TOKEN:
+        API_TOKEN = new_token
+        state['api_token'] = new_token
+        changed = True
 
-    # Reconnect with new token
-    if _sio and _sio.connected:
-        _sio.disconnect()
+    if changed:
+        import json
+        from pathlib import Path
+        config_path = Path(os.environ.get('FANCONTROL_DATA_DIR', '/data')) / 'config.json'
+        try:
+            config = {}
+            if config_path.exists():
+                with open(config_path) as f:
+                    config = json.load(f)
+            if new_node_id:
+                config['node_id'] = new_node_id
+            if new_token:
+                config['api_token'] = new_token
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            logger.warning(f'Could not persist node_id/token to config: {e}')
 
 
 def _on_dsm_apply(data):
@@ -413,7 +420,7 @@ def start_client():
     _sio.on('server:config_push', _on_config_push)
     _sio.on('server:set_control_mode', _on_set_control_mode)
     _sio.on('server:command', _on_command)
-    _sio.on('server:token_push', _on_token_push)
+    _sio.on('server:node_id_push', _on_node_id_push)
     _sio.on('server:dsm:apply', _on_dsm_apply)
 
     try:
