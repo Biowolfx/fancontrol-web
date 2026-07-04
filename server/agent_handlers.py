@@ -207,7 +207,12 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         server_config = node.get('config', {}) if node else {}
 
         # Check for conflict: agent config differs from server config
-        if server_config and agent_config and server_config != agent_config:
+        # Compare only meaningful fields, ignore metadata
+        _cmp_keys = {'fans', 'temp_sensors', 'hdd_sensors', 'kernel_info', 'dsm_schemes', 'control_mode'}
+        server_cmp = {k: v for k, v in (server_config or {}).items() if k in _cmp_keys}
+        agent_cmp = {k: v for k, v in (agent_config or {}).items() if k in _cmp_keys}
+
+        if server_cmp and agent_cmp and server_cmp != agent_cmp:
             # Save agent's config as snapshot for revert
             save_agent_snapshot(node_id, agent_config)
 
