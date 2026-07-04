@@ -647,7 +647,7 @@ function renderRemoteNodeTree(node) {
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
                         class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">X</button>
             </div>
-            <div class="node-children ml-4 space-y-0.5 hidden" id="node-children-${escapeHtml(node.node_id)}">
+            <div class="node-children ml-4 space-y-0.5 ${_collapsedNodes.has(node.node_id) ? 'hidden' : ''}" id="node-children-${escapeHtml(node.node_id)}">
     `;
 
     for (const [fanId, fan] of Object.entries(fans)) {
@@ -1724,15 +1724,23 @@ function hideCardConfig() {
 
 let _smartModalCardId = null;
 let _smartModalDiskId = null;
+let _smartModalSource = 'local';
 let _smartAttributes = [];
 let _smartAttrType = 'sata';
 let _smartCache = {};
 
-async function fetchDiskSmart(diskId, forceRefresh = false) {
+async function fetchDiskSmart(diskId, forceRefresh = false, source = 'local', nodeId = null) {
     try {
-        const url = forceRefresh
-            ? `/api/disks/${diskId}/smart?refresh=1`
-            : `/api/disks/${diskId}/smart`;
+        let url;
+        if (source === 'local') {
+            url = forceRefresh
+                ? `/api/disks/${diskId}/smart?refresh=1`
+                : `/api/disks/${diskId}/smart`;
+        } else {
+            url = forceRefresh
+                ? `/api/nodes/${source}/disks/${diskId}/smart?refresh=1`
+                : `/api/nodes/${source}/disks/${diskId}/smart`;
+        }
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         return await resp.json();
@@ -1749,10 +1757,21 @@ function showSmartModal(cardId) {
 
     _smartModalCardId = cardId;
     _smartModalDiskId = card.sourceId;
-    const disk = currentState?.hdd_sensors?.[card.sourceId];
+    _smartModalSource = card.source || 'local';
+
+    let disk;
+    if (_smartModalSource === 'local') {
+        disk = currentState?.hdd_sensors?.[card.sourceId];
+    } else {
+        const node = nodesData.find(n => n.node_id === _smartModalSource);
+        disk = node?.telemetry?.hdd_sensors?.[card.sourceId];
+    }
+
     const title = document.getElementById('smart-modal-title');
     if (title && disk) {
-        title.textContent = `SMART — ${disk.label || disk.dev_name}`;
+        title.textContent = `SMART — ${disk.label || disk.dev_name || card.sourceId}`;
+    } else if (title) {
+        title.textContent = `SMART — ${card.sourceId}`;
     }
     document.getElementById('smart-modal')?.classList.remove('hidden');
     refreshSmartData();
@@ -1762,6 +1781,7 @@ function hideSmartModal() {
     document.getElementById('smart-modal')?.classList.add('hidden');
     _smartModalCardId = null;
     _smartModalDiskId = null;
+    _smartModalSource = 'local';
 }
 
 async function refreshSmartData() {
@@ -1771,7 +1791,7 @@ async function refreshSmartData() {
 
     container.innerHTML = '<div class="text-center text-gray-400 py-4">Загрузка...</div>';
 
-    const data = await fetchDiskSmart(_smartModalDiskId, true);
+    const data = await fetchDiskSmart(_smartModalDiskId, true, _smartModalSource);
     if (!data || data.error) {
         container.innerHTML = `<div class="text-center text-red-400 py-4">${data?.error || 'Ошибка загрузки SMART данных'}</div>`;
         return;
@@ -2370,7 +2390,7 @@ async function prefetchSmartForCards() {
     for (const card of cards) {
         if (_smartCache[card.sourceId]) continue;
         try {
-            const data = await fetchDiskSmart(card.sourceId);
+            const data = await fetchDiskSmart(card.sourceId, false, card.source || 'local');
             if (data && !data.error) {
                 _smartCache[card.sourceId] = data;
                 updateCardDetails(card.id);

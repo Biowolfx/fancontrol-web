@@ -65,3 +65,18 @@ def revert_to_agent_config():
 
     save_config()
     return jsonify({'status': 'reverted'})
+
+
+@agent_routes.route('/api/agent/disks/<disk_id>/smart')
+def agent_disk_smart(disk_id):
+    """Get SMART data for a disk on the agent."""
+    from core.hardware import read_disk_smart
+    with state_lock:
+        disk = state.get('hdd_sensors', {}).get(disk_id)
+        if not disk:
+            return jsonify({'error': 'Disk not found'}), 404
+        device = disk.get('device', '')
+        if not device:
+            return jsonify({'error': 'No device path'}), 404
+    result = read_disk_smart(device)
+    return jsonify(result)

@@ -205,6 +205,28 @@ def api_get_disk_smart(disk_id):
     return jsonify(result)
 
 
+@routes.route('/api/nodes/<node_id>/disks/<disk_id>/smart')
+def api_proxy_disk_smart(node_id, disk_id):
+    """Proxy SMART request to a remote agent."""
+    from server.node_registry import get_node
+    node = get_node(node_id)
+    if not node:
+        return jsonify({'error': 'Node not found'}), 404
+    ip = node.get('ip', '')
+    if not ip:
+        return jsonify({'error': 'Node IP unknown'}), 400
+    port = node.get('port', 5059)
+    try:
+        import urllib.request, json
+        url = f'http://{ip}:{port}/api/agent/disks/{disk_id}/smart'
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'FanControl-Web')
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return jsonify(json.loads(resp.read().decode()))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+
 @routes.route('/api/initialize', methods=['POST'])
 def api_initialize():
     """Start fan calibration"""
