@@ -19,7 +19,7 @@ _has_smartctl = shutil.which('smartctl') is not None
 if not _has_smartctl:
     logger.warning('smartctl not found — SMART data and smartctl-based temp reading unavailable')
 
-executor = ThreadPoolExecutor(max_workers=8)
+executor = ThreadPoolExecutor(max_workers=16)
 
 HWMON_DIR = Path(os.getenv('FANCONTROL_HWMON_DIR', '/sys/class/hwmon'))
 
@@ -521,12 +521,9 @@ def read_disk_smart(disk_identifier: str) -> dict:
             attempts.append(['smartctl', '-A', '-i', f'/dev/{clean_name}'])
             # 2. SAT passthrough
             attempts.append(['smartctl', '-A', '-i', '-d', 'sat', f'/dev/{clean_name}'])
-            # 3. MegaRAID (common on Synology official kernel)
-            if disk_index >= 0:
-                for megaraid_idx in range(disk_index, disk_index + 1):
-                    attempts.append(['smartctl', '-A', '-i', '-d', f'megaraid,{megaraid_idx}', f'/dev/sda'])
-            # 4. Areca RAID (some Synology models)
-            if disk_index >= 0:
+            # 3-4. RAID controllers only for sdX devices
+            if clean_name.startswith('sd') and disk_index >= 0:
+                attempts.append(['smartctl', '-A', '-i', '-d', f'megaraid,{disk_index}', f'/dev/sda'])
                 attempts.append(['smartctl', '-A', '-i', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
 
         output = ''
@@ -534,7 +531,7 @@ def read_disk_smart(disk_identifier: str) -> dict:
         for cmd in attempts:
             try:
                 logger.info(f'SMART attempt: {" ".join(cmd)}')
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
                 stdout = result.stdout or ''
 
                 # Check if output has actual SMART data (not just device info)
@@ -625,22 +622,16 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
             attempts = []
             attempts.append(['smartctl', '-a', '-n', 'standby', f'/dev/{clean_name}'])
             attempts.append(['smartctl', '-a', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
-            # MegaRAID
-            disk_index = -1
-            if clean_name.startswith('sata'):
-                try:
-                    disk_index = int(clean_name.replace('sata', ''))
-                except ValueError:
-                    pass
-            elif clean_name.startswith('sd'):
+            # MegaRAID/Areca only for sdX devices (behind RAID controllers)
+            # Skip for Synology proprietary sataX/nvmeX — never behind RAID
+            if clean_name.startswith('sd'):
                 disk_index = ord(clean_name[2]) - ord('a')
-            if disk_index >= 0:
                 attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
                 attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
 
             for cmd in attempts:
                 try:
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
 
                     if result.returncode == 2:
                         logger.info(f'DISK TEMP: {clean_name} standby via {" ".join(cmd)}')
@@ -675,7 +666,7 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
         clean_name = disk_identifier.replace('/dev/', '').strip()
         result = subprocess.run(
             ['hdparm', '-I', f'/dev/{clean_name}'],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=3
         )
         if result.returncode == 0 and result.stdout:
             for line in result.stdout.split('\n'):

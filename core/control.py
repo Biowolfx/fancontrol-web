@@ -28,7 +28,7 @@ CONTROL_LOOP_INTERVAL = 5
 UNINITIALIZED_POLL_INTERVAL = 10
 TELEMETRY_LOG_INTERVAL = 300
 LOG_CLEANUP_INTERVAL = 86400
-DISK_POLL_COOLDOWN = 30
+DISK_POLL_COOLDOWN = 15
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -67,7 +67,7 @@ def refresh_disks():
     updated_values = {}
     for disk_id, future in futures_map.items():
         try:
-            result = future.result(timeout=5)
+            result = future.result(timeout=3)
             temp, standby = result if result else (None, False)
             
             if temp is not None:
