@@ -97,7 +97,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         if agent_sid:
             _sid_to_node[agent_sid] = node_id
             _node_to_sid[node_id] = agent_sid
-            logger.info(f'Agent SID mapped: {agent_sid} → {node_id}')
+            logger.info(f'[connect] Agent SID mapped: {agent_sid} → {node_id} '
+                        f'(agent_sent_node_id={data.get("node_id")})')
+        else:
+            logger.warning(f'[connect] No SID available for agent {node_id}')
 
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
@@ -156,12 +159,18 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         agent_sid = flask_request.sid if flask_request else None
         node_id = _sid_to_node.get(agent_sid) if agent_sid else None
 
+        logger.info(f'[telemetry-recv] agent_sent={agent_node_id} sid={agent_sid} '
+                    f'resolved={node_id} fans={list(telemetry.get("fans", {}).keys())} '
+                    f'temps={list(telemetry.get("temp_sensors", {}).keys())}')
+
         if not node_id:
             # Fallback: try direct lookup
             node_id = agent_node_id
 
         if not node_id or node_id not in state.get('nodes', {}):
-            logger.warning(f'agent:telemetry from unknown node: agent_sent={agent_node_id}, sid={agent_sid}')
+            logger.warning(f'agent:telemetry DROPPED: resolved={node_id} '
+                           f'nodes_keys={list(state.get("nodes", {}).keys())} '
+                           f'sid_map_keys={list(_sid_to_node.keys())}')
             return
 
         update_node_status(node_id, 'online', telemetry)

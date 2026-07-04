@@ -225,9 +225,14 @@ def _telemetry_loop():
         time.sleep(TELEMETRY_INTERVAL)
         if _sio and state['server_connected']:
             try:
+                telemetry = _get_telemetry()
+                logger.info(f'[telemetry] fans={list(telemetry["fans"].keys())} '
+                            f'temps={list(telemetry["temp_sensors"].keys())} '
+                            f'hdds={list(telemetry["hdd_sensors"].keys())} '
+                            f'node_id={NODE_ID}')
                 _sio.emit('agent:telemetry', {
                     'node_id': NODE_ID,
-                    'telemetry': _get_telemetry(),
+                    'telemetry': telemetry,
                 })
             except Exception as e:
                 logger.error(f'Telemetry send failed: {e}')
