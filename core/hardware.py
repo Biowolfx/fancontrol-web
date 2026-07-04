@@ -758,6 +758,15 @@ def _parse_disk_temp_preferred(output: str) -> Tuple[Optional[int], str]:
             if raw and 0 < raw < 100:
                 return raw, 'celsius'
 
+    # Pass 5: NVMe "Temperature: 37 Celsius" (non-SMART-attribute format)
+    for line in lines:
+        if 'Temperature:' in line and 'Celsius' in line:
+            match = re.search(r'Temperature:\s+(\d+)', line)
+            if match:
+                temp = int(match.group(1))
+                if 0 < temp < 100:
+                    return temp, 'nvme'
+
     return None, ''
 
 
