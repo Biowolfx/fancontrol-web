@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -13,6 +14,10 @@ from typing import Dict, Any, List, Optional, Tuple
 from core.state import state, state_lock
 
 logger = logging.getLogger('fancontrol')
+
+_has_smartctl = shutil.which('smartctl') is not None
+if not _has_smartctl:
+    logger.warning('smartctl not found — SMART data and smartctl-based temp reading unavailable')
 
 executor = ThreadPoolExecutor(max_workers=8)
 
@@ -485,6 +490,8 @@ def read_disk_smart(disk_identifier: str) -> dict:
     Returns dict with device info, attributes, and metadata.
     Tries multiple access methods: direct, SAT, MegaRAID.
     """
+    if not _has_smartctl:
+        return {'error': 'smartctl not installed'}
     try:
         clean_name = disk_identifier.replace('/dev/', '').strip()
 
@@ -613,53 +620,52 @@ def read_disk_temp(disk_identifier: str) -> Tuple[Optional[float], bool]:
         if not is_physical_disk(clean_name):
             return None, False
 
-        # Method 1: smartctl with multiple access methods (preferred — most accurate)
-        attempts = []
-        attempts.append(['smartctl', '-a', '-n', 'standby', f'/dev/{clean_name}'])
-        attempts.append(['smartctl', '-a', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
-        # MegaRAID
-        disk_index = -1
-        if clean_name.startswith('sata'):
-            try:
-                disk_index = int(clean_name.replace('sata', ''))
-            except ValueError:
-                pass
-        elif clean_name.startswith('sd'):
-            disk_index = ord(clean_name[2]) - ord('a')
-        if disk_index >= 0:
-            attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
-            attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
+        # Method 1: smartctl (skipped if not installed — falls through to hdparm/sysfs)
+        if _has_smartctl:
+            attempts = []
+            attempts.append(['smartctl', '-a', '-n', 'standby', f'/dev/{clean_name}'])
+            attempts.append(['smartctl', '-a', '-n', 'standby', '-d', 'sat', f'/dev/{clean_name}'])
+            # MegaRAID
+            disk_index = -1
+            if clean_name.startswith('sata'):
+                try:
+                    disk_index = int(clean_name.replace('sata', ''))
+                except ValueError:
+                    pass
+            elif clean_name.startswith('sd'):
+                disk_index = ord(clean_name[2]) - ord('a')
+            if disk_index >= 0:
+                attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'megaraid,{disk_index}', '/dev/sda'])
+                attempts.append(['smartctl', '-a', '-n', 'standby', '-d', f'areca,{disk_index + 1}', '/dev/arcmsr0'])
 
-        for cmd in attempts:
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            for cmd in attempts:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
-                if result.returncode == 2:
-                    logger.info(f'DISK TEMP: {clean_name} standby via {" ".join(cmd)}')
-                    return None, True  # standby
+                    if result.returncode == 2:
+                        logger.info(f'DISK TEMP: {clean_name} standby via {" ".join(cmd)}')
+                        return None, True  # standby
 
-                stdout = result.stdout or ''
-                if not stdout:
+                    stdout = result.stdout or ''
+                    if not stdout:
+                        continue
+
+                    temp, source = _parse_disk_temp_preferred(stdout)
+                    if temp is not None:
+                        logger.info(f'DISK TEMP: {clean_name} = {temp}°C (source={source}) via {" ".join(cmd)}')
+                        for line in stdout.split('\n'):
+                            if any(kw in line for kw in ['Airflow', 'HDA_Temp', 'Temperature_Celsius',
+                                                          'Current Drive Temperature', 'temperature',
+                                                          '190 ', '194 ', '194\t', 'SMART Attributes']):
+                                logger.info(f'DISK TEMP ATTR: {clean_name} — {line.strip()[:150]}')
+                        return float(temp), False
+                    else:
+                        for line in stdout.split('\n'):
+                            if any(kw in line for kw in ['Temperature', 'Airflow', 'temperature', 'temp', 'Celsius', '190', '194']):
+                                logger.info(f'DISK TEMP DEBUG: {clean_name} — {line.strip()[:150]}')
+
+                except subprocess.TimeoutExpired:
                     continue
-
-                temp, source = _parse_disk_temp_preferred(stdout)
-                if temp is not None:
-                    logger.info(f'DISK TEMP: {clean_name} = {temp}°C (source={source}) via {" ".join(cmd)}')
-                    # Always log all temp-related SMART lines for diagnostics
-                    for line in stdout.split('\n'):
-                        if any(kw in line for kw in ['Airflow', 'HDA_Temp', 'Temperature_Celsius',
-                                                      'Current Drive Temperature', 'temperature',
-                                                      '190 ', '194 ', '194\t', 'SMART Attributes']):
-                            logger.info(f'DISK TEMP ATTR: {clean_name} — {line.strip()[:150]}')
-                    return float(temp), False
-                else:
-                    # Log ALL temp-related attributes for debugging
-                    for line in stdout.split('\n'):
-                        if any(kw in line for kw in ['Temperature', 'Airflow', 'temperature', 'temp', 'Celsius', '190', '194']):
-                            logger.info(f'DISK TEMP DEBUG: {clean_name} — {line.strip()[:150]}')
-
-            except subprocess.TimeoutExpired:
-                continue
 
     except Exception as e:
         logger.debug(f'Error reading disk temp for {disk_identifier}: {e}')
