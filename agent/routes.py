@@ -74,14 +74,19 @@ def agent_disk_smart(disk_id):
     logger = logging.getLogger('fancontrol')
     try:
         from core.hardware import read_disk_smart
+        logger.info(f'[SMART] Request for disk_id={disk_id}')
         with state_lock:
             disk = state.get('hdd_sensors', {}).get(disk_id)
             if not disk:
+                logger.warning(f'[SMART] Disk {disk_id} not found in hdd_sensors')
                 return jsonify({'error': 'Disk not found'}), 404
             device = disk.get('device', '')
             if not device:
+                logger.warning(f'[SMART] No device path for {disk_id}')
                 return jsonify({'error': 'No device path'}), 404
+        logger.info(f'[SMART] Reading {device} for disk {disk_id}')
         result = read_disk_smart(device)
+        logger.info(f'[SMART] Result: attrs={len(result.get("attributes", []))} error={result.get("error")} method={result.get("access_method")}')
         return jsonify(result)
     except Exception as e:
         logger.error(f'Agent SMART error for {disk_id}: {e}', exc_info=True)

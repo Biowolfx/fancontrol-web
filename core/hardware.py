@@ -526,18 +526,24 @@ def read_disk_smart(disk_identifier: str) -> dict:
         used_cmd = None
         for cmd in attempts:
             try:
+                logger.info(f'SMART attempt: {" ".join(cmd)}')
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
                 if result.returncode == 0 or (result.stdout and 'SMART' in result.stdout.upper()):
                     output = result.stdout
                     used_cmd = cmd
+                    logger.info(f'SMART success with: {" ".join(cmd)}')
                     break
                 # Also accept if we got useful output despite non-zero exit
                 if result.stdout and ('Model Family' in result.stdout or 'Device Model' in result.stdout
                                        or 'Serial Number' in result.stdout):
                     output = result.stdout
                     used_cmd = cmd
+                    logger.info(f'SMART success (non-zero exit) with: {" ".join(cmd)}')
                     break
+                if result.stderr:
+                    logger.debug(f'SMART attempt failed: {" ".join(cmd)} — {result.stderr[:200]}')
             except subprocess.TimeoutExpired:
+                logger.debug(f'SMART timeout: {" ".join(cmd)}')
                 continue
 
         if not output:
