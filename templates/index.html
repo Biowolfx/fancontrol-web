@@ -362,7 +362,10 @@
             <!-- Header -->
             <div class="p-3 border-b border-cyber-accent">
                 <div class="flex items-center justify-between">
-                    <h1 class="text-sm font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
+                    <div class="flex items-center gap-1.5">
+                        <h1 class="text-sm font-bold glow-cyan" data-i18n="app.title">FanControl</h1>
+                        <button onclick="openServerNameEdit()" class="text-gray-500 hover:text-neon-cyan transition-colors text-xs" title="Rename server">✎</button>
+                    </div>
                     <div class="flex items-center gap-1">
                         <span id="header-version" class="text-xs bg-neon-purple bg-opacity-20 text-neon-purple px-1.5 py-0.5 rounded"></span>
                         <button onclick="toggleSettings()" class="relative text-gray-400 hover:text-neon-cyan transition-colors p-1 text-sm">
@@ -1015,6 +1018,32 @@
                     Save
                 </button>
                 <button onclick="hideNodeSettings()"
+                    class="py-2 px-4 bg-cyber-accent hover:bg-gray-700 rounded-lg text-gray-400 transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Name Edit Modal -->
+    <div id="server-name-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center bg-black bg-opacity-70">
+        <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 class="text-lg font-bold text-white mb-4">Server Name</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-gray-400 block mb-1">Name</label>
+                    <input id="server-name-input" type="text" maxlength="64"
+                           class="w-full bg-cyber-bg border border-cyber-accent rounded px-3 py-2 text-sm text-white focus:border-neon-cyan focus:outline-none"
+                           placeholder="FanControl Server"
+                           onkeydown="if(event.key==='Enter')saveServerName()">
+                </div>
+            </div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="saveServerName()"
+                    class="flex-1 py-2 px-4 bg-neon-cyan bg-opacity-20 text-neon-cyan rounded-lg font-semibold transition-all hover:bg-opacity-40">
+                    Save
+                </button>
+                <button onclick="hideServerNameModal()"
                     class="py-2 px-4 bg-cyber-accent hover:bg-gray-700 rounded-lg text-gray-400 transition-all">
                     Cancel
                 </button>

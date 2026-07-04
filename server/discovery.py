@@ -2,10 +2,12 @@
 
 import logging
 import socket
+import struct
 import threading
 import time
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Callable, Dict, List
 
@@ -255,4 +257,107 @@ def probe_known_agents(timeout: int = 2) -> List[Dict]:
                 'status': 'online',
                 'info': info,
             })
+    return results
+
+
+# ============================================================================
+# Subnet Scan — fast TCP probe of all IPs in local subnet
+# ============================================================================
+
+def _get_local_subnet() -> tuple:
+    """Detect local IP and calculate subnet CIDR. Returns (ip, mask, prefix_len)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        return '127.0.0.1', '255.255.255.0', 24
+
+    # Try to read netmask from /proc/net/if_inet6 or ip addr
+    try:
+        import fcntl
+        import struct
+        SIOCGIFNETMASK = 0x891b
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Get first non-loopback interface name
+        with open('/proc/net/dev') as f:
+            for line in f:
+                if ':' in line and not line.strip().startswith('lo'):
+                    iface = line.split(':')[0].strip()
+                    break
+            else:
+                iface = 'eth0'
+        mask_bytes = fcntl.ioctl(sock.fileno(), SIOCGIFNETMASK, struct.pack('256s', iface.encode()[:15]))
+        mask = socket.inet_ntoa(mask_bytes[20:24])
+        sock.close()
+        prefix = sum(bin(int(b)).count('1') for b in mask.split('.'))
+        return ip, mask, prefix
+    except Exception:
+        # Fallback: assume /24
+        parts = ip.split('.')
+        mask = f'{parts[0]}.{parts[1]}.{parts[2]}.0'
+        return ip, mask, 24
+
+
+def _tcp_probe(ip: str, port: int = 5059, timeout: float = 0.3) -> bool:
+    """Quick TCP connect check — returns True if port is open."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+def scan_subnet(port: int = 5059, timeout: float = 0.3, probe_timeout: int = 2) -> List[Dict]:
+    """Scan local subnet for FanControl agents via TCP connect + HTTP probe.
+
+    Returns list of dicts: {ip, name, node_id, api_token, ...}
+    """
+    ip, mask, prefix = _get_local_subnet()
+    logger.info(f'Subnet scan: local IP={ip}, mask={mask}, /{prefix}')
+
+    # Generate all IPs in subnet
+    ip_int = struct.unpack('!I', socket.inet_aton(ip))[0]
+    mask_int = struct.unpack('!I', socket.inet_aton(mask))[0]
+    network = ip_int & mask_int
+    broadcast = network | (~mask_int & 0xFFFFFFFF)
+
+    # For /24, skip network and broadcast addresses. For larger subnets, limit scan.
+    hosts = []
+    addr = network + 1
+    while addr < broadcast:
+        if addr != ip_int:  # skip self
+            hosts.append(socket.inet_ntoa(struct.pack('!I', addr)))
+        addr += 1
+        if len(hosts) > 1024:  # safety limit
+            break
+
+    logger.info(f'Scanning {len(hosts)} hosts on port {port}...')
+
+    # Parallel TCP connect scan
+    found_ips = []
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        futures = {pool.submit(_tcp_probe, h, port, timeout): h for h in hosts}
+        for future in as_completed(futures):
+            ip_addr = futures[future]
+            try:
+                if future.result():
+                    found_ips.append(ip_addr)
+            except Exception:
+                pass
+
+    logger.info(f'TCP scan found {len(found_ips)} hosts with open port {port}: {found_ips}')
+
+    # HTTP probe each found IP
+    results = []
+    for ip_addr in found_ips:
+        info = probe_agent(ip_addr, port=port, timeout=probe_timeout)
+        if info:
+            results.append(info)
+
+    logger.info(f'Subnet scan complete: {len(results)} agents found')
     return results

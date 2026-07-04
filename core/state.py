@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.11.0"
+CONFIG_VERSION = "3.12.0"
 
 state_lock = threading.RLock()
 
@@ -25,6 +25,7 @@ state: Dict[str, Any] = {
     'initialized': False,
     'hardware_scanned': False,
     'config_version': CONFIG_VERSION,
+    'server_name': 'FanControl Server',
     'nodes': {},  # Runtime state for connected agents
     'dashboard': {'groups': [], 'cards': [], 'hiddenSensors': []},
 }
@@ -53,6 +54,7 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'hardware_scanned': state.get('hardware_scanned', False),
         'config_version': CONFIG_VERSION,
         'language': state.get('language', 'en'),
+        'server_name': state.get('server_name', 'FanControl Server'),
         'nodes': dict(state.get('nodes', {})),
         'agent_mode': state.get('server_url') is not None,
         'api_token': state.get('api_token', ''),

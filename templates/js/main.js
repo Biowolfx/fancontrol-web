@@ -535,7 +535,7 @@ function renderLocalServerTree() {
             <div class="flex items-center gap-2 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
                  onclick="toggleNodeGroup('local')">
                 <span class="text-neon-cyan text-xs">▼</span>
-                <span class="text-sm font-semibold text-white">🖥 ${t('nodes.local_server', 'My Server')}</span>
+                <span class="text-sm font-semibold text-white">🖥 ${escapeHtml(currentState.server_name || t('nodes.local_server', 'My Server'))}</span>
                 <span class="ml-auto text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded">${visibleFans.length} ${t('nodes.fans', 'fans')}</span>
             </div>
             <div class="node-children ml-4 space-y-px" id="node-children-local">
@@ -5061,6 +5061,41 @@ function hideNodeSettings() {
     document.getElementById('node-settings-modal').classList.add('hidden');
 }
 
+function openServerNameEdit() {
+    const input = document.getElementById('server-name-input');
+    input.value = currentState.server_name || '';
+    document.getElementById('server-name-modal').classList.remove('hidden');
+    input.focus();
+    input.select();
+}
+
+function hideServerNameModal() {
+    document.getElementById('server-name-modal').classList.add('hidden');
+}
+
+async function saveServerName() {
+    const name = document.getElementById('server-name-input').value.trim();
+    if (!name) { showToast('Name required', 'error'); return; }
+
+    try {
+        const resp = await fetch('/api/server-name', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (resp.ok) {
+            hideServerNameModal();
+            currentState.server_name = name;
+            showToast('Server renamed', 'success');
+        } else {
+            const err = await resp.json().catch(() => ({}));
+            showToast(err.error || 'Save failed', 'error');
+        }
+    } catch (e) {
+        showToast('Save failed: ' + e.message, 'error');
+    }
+}
+
 async function saveNodeSettings() {
     const nodeId = document.getElementById('node-settings-id').value;
     const name = document.getElementById('node-settings-name').value.trim();
@@ -5097,19 +5132,31 @@ async function scanForAgents() {
     list.innerHTML = '<div class="text-gray-500 text-xs py-1">Scanning network...</div>';
 
     try {
-        const [discoverResp, discoveredResp] = await Promise.all([
+        const [discoverResp, discoveredResp, subnetResp] = await Promise.all([
             fetch('/api/nodes/discover'),
-            fetch('/api/discovered')
+            fetch('/api/discovered'),
+            fetch('/api/nodes/scan-subnet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
         ]);
 
         const scanResults = await discoverResp.json();
         const pendingAgents = await discoveredResp.json();
+        const subnetResults = await subnetResp.json();
+
+        // Merge results: SSDP + subnet scan, deduplicate by IP
+        const merged = new Map();
+        for (const a of (Array.isArray(scanResults) ? scanResults : [])) {
+            if (a.ip) merged.set(a.ip, a);
+        }
+        for (const a of (Array.isArray(subnetResults) ? subnetResults : [])) {
+            if (a.ip && !merged.has(a.ip)) merged.set(a.ip, a);
+        }
+        const allAgents = [...merged.values()];
 
         let html = '';
 
-        // Show scan results (SSDP + HTTP probe)
-        if (scanResults && scanResults.length > 0) {
-            for (const agent of scanResults) {
+        // Show merged scan results
+        if (allAgents.length > 0) {
+            for (const agent of allAgents) {
                 const label = agent.already_registered
                     ? `<span class="text-neon-green">online</span> ${escapeHtml(agent.name || agent.node_id)}`
                     : escapeHtml(agent.name || agent.node_id);
@@ -5129,7 +5176,7 @@ async function scanForAgents() {
         // Also show pending discovered agents
         if (pendingAgents && pendingAgents.length > 0) {
             for (const agent of pendingAgents) {
-                if (!scanResults || !scanResults.find(a => a.node_id === agent.node_id)) {
+                if (!allAgents.find(a => a.node_id === agent.node_id)) {
                     html += `
                         <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
                             <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
@@ -5240,6 +5287,13 @@ socket.on('node:discovered', (data) => {
         { label: 'Добавить', onclick: `acceptDiscoveredAgent('${data.node_id}')` },
         { label: 'Игнорировать', onclick: 'this.closest(".toast").remove()', secondary: true },
     ]);
+});
+
+socket.on('server:name_changed', (data) => {
+    if (data.name) {
+        currentState.server_name = data.name;
+        buildServerTree();
+    }
 });
 
 async function acceptDiscoveredAgent(nodeId) {

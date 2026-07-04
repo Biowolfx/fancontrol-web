@@ -159,3 +159,16 @@ def register_handlers(socketio):
 
     from server.agent_handlers import register_agent_handlers
     register_agent_handlers(socketio, on_connect=_on_ws_connect, on_disconnect=_on_ws_disconnect)
+
+
+def _restart_ssdp_announcer():
+    """Stop old SSDP threads and start new ones with current server_name."""
+    from server.announcer import stop_announcers, start_announcer
+    from core.state import state, state_lock
+    stop_announcers()
+    if state.get('ssdp_enabled', True):
+        with state_lock:
+            name = state.get('server_name', 'FanControl Server')
+            port = state.get('port', 5059)
+        start_announcer(name, port)
+        logger.info(f'SSDP announcer restarted with name: {name}')

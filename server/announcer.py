@@ -12,6 +12,9 @@ SSDP_ADDR = '239.255.255.250'
 SSDP_PORT = 1900
 SSDP_INTERVAL = 60
 
+# Track active stop events so we can restart announcer
+_active_stop_events: list[threading.Event] = []
+
 
 def _build_ssdp_response(server_name: str, port: int = 5059) -> str:
     ip = _get_local_ip()
@@ -40,8 +43,18 @@ def _get_local_ip() -> str:
         return '127.0.0.1'
 
 
+def stop_announcers():
+    """Signal all active announcer threads to stop."""
+    for evt in _active_stop_events:
+        evt.set()
+    _active_stop_events.clear()
+
+
 def start_announcer(server_name: str, port: int = 5059) -> Optional[threading.Thread]:
     """Start SSDP broadcast for server discovery by agents."""
+    stop_event = threading.Event()
+    _active_stop_events.append(stop_event)
+
     def _announce_loop():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -50,12 +63,12 @@ def start_announcer(server_name: str, port: int = 5059) -> Optional[threading.Th
 
             logger.info(f'SSDP server announcer started: {server_name}')
 
-            while True:
+            while not stop_event.is_set():
                 try:
                     sock.sendto(response.encode(), (SSDP_ADDR, SSDP_PORT))
                 except Exception as e:
                     logger.debug(f'SSDP server announce failed: {e}')
-                time.sleep(SSDP_INTERVAL)
+                stop_event.wait(SSDP_INTERVAL)
         except Exception as e:
             logger.error(f'SSDP server announcer error: {e}')
 
@@ -63,13 +76,16 @@ def start_announcer(server_name: str, port: int = 5059) -> Optional[threading.Th
     thread.start()
 
     # Also start M-SEARCH responder so wizard/agents can actively discover this server
-    _start_msearch_responder(server_name, port)
+    _start_msearch_responder(server_name, port, stop_event)
 
     return thread
 
 
-def _start_msearch_responder(server_name: str, port: int = 5059):
+def _start_msearch_responder(server_name: str, port: int = 5059, stop_event: Optional[threading.Event] = None):
     """Listen for M-SEARCH queries and respond with server info."""
+    if stop_event is None:
+        stop_event = threading.Event()
+
     def _respond_loop():
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -87,7 +103,7 @@ def _start_msearch_responder(server_name: str, port: int = 5059):
             response = _build_ssdp_response(server_name, port)
             logger.info('SSDP M-SEARCH responder started for server')
 
-            while True:
+            while not stop_event.is_set():
                 try:
                     data, addr = sock.recvfrom(1024)
                     decoded = data.decode(errors='ignore')

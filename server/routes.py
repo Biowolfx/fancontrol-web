@@ -106,6 +106,40 @@ def api_set_language():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@routes.route('/api/server-name', methods=['PUT'])
+def api_update_server_name():
+    """Update server name and push to all connected clients."""
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Name required'}), 400
+        if len(name) > 64:
+            return jsonify({'error': 'Name too long (max 64)'}), 400
+
+        from core.config import save_config
+        with state_lock:
+            state['server_name'] = name
+
+        save_config()
+
+        # Push to all connected clients so UI updates instantly
+        from app import socketio
+        socketio.emit('server:name_changed', {'name': name})
+
+        # Restart SSDP announcer with new name
+        try:
+            from server.socket_handlers import _restart_ssdp_announcer
+            _restart_ssdp_announcer()
+        except Exception as e:
+            logger.warning(f'SSDP restart after rename failed: {e}')
+
+        return jsonify({'status': 'ok', 'name': name})
+    except Exception as e:
+        logger.error(f'Server rename error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 @routes.route('/api/discover', methods=['POST'])
 def api_discover():
     """Scan hardware for fans, sensors, and disks"""
@@ -880,6 +914,34 @@ def api_discover_nodes():
         if p['node_id'] not in found_ids:
             nodes.append(p)
     return jsonify(nodes)
+
+
+@routes.route('/api/nodes/scan-subnet', methods=['POST'])
+def api_scan_subnet():
+    """Fast TCP scan of local subnet for FanControl agents on port 5059."""
+    from server.discovery import scan_subnet
+    from server.node_registry import list_nodes
+    try:
+        data = request.get_json(silent=True) or {}
+        port = int(data.get('port', 5059))
+        results = scan_subnet(port=port)
+
+        # Mark already-registered agents
+        existing_nodes = list_nodes()
+        existing_ips = {n['ip']: n for n in existing_nodes if n.get('ip')}
+        for r in results:
+            ip = r.get('ip', '')
+            if ip in existing_ips:
+                r['already_registered'] = True
+                r['node_id'] = existing_ips[ip]['node_id']
+                r['name'] = existing_ips[ip]['name']
+            else:
+                r['already_registered'] = False
+
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f'Subnet scan error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @routes.route('/api/nodes/probe', methods=['POST'])
