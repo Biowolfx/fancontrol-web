@@ -3531,7 +3531,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                 container.innerHTML = '<div class="text-red-400 text-center py-8">Node not found</div>';
                 return;
             }
-            schemesData = { status: 'ok', schemes: node.config?.dsm_schemes || node.dsm_schemes || [] };
+            schemesData = { status: 'ok', schemes: node.telemetry?.dsm_schemes || node.config?.dsm_schemes || node.dsm_schemes || [] };
             activeData = { active_scheme: null };
         } else {
             // Local server
@@ -3703,7 +3703,7 @@ async function applyDsmScheme(schemeType) {
         if (_currentRemoteNodeId) {
             // Remote node — push scheme via WebSocket
             const node = nodesData.find(n => n.node_id === _currentRemoteNodeId);
-            const scheme = (node?.config?.dsm_schemes || node?.dsm_schemes || []).find(s => s.type === schemeType);
+            const scheme = (node?.telemetry?.dsm_schemes || node?.config?.dsm_schemes || node?.dsm_schemes || []).find(s => s.type === schemeType);
             if (!scheme) {
                 showToast('Scheme not found', 'error');
                 return;
