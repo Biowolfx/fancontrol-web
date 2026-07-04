@@ -32,9 +32,12 @@ DISK_POLL_COOLDOWN = 15
 
 
 def get_db_connection() -> sqlite3.Connection:
-    """Get a SQLite connection with WAL mode for better concurrency."""
+    """Get a SQLite connection with WAL mode and optimized PRAGMAs."""
     conn = sqlite3.connect(DB_FILE, timeout=5)
     conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA journal_size_limit=10485760')  # 10MB max WAL
+    conn.execute('PRAGMA synchronous=NORMAL')
+    conn.execute('PRAGMA busy_timeout=5000')
     return conn
 
 
