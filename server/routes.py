@@ -649,37 +649,44 @@ def api_update_agents():
     """Send update command to all online agents via WebSocket."""
     from server.agent_handlers import _emit_to_node, _node_to_sid
 
+    logger.info('[AGENTS-UPDATE] Endpoint called')
+
     data = request.get_json(silent=True) or {}
     node_ids = data.get('node_ids')  # Optional: specific nodes, or None for all
 
     with state_lock:
-        nodes = state.get('nodes', {})
+        nodes = dict(state.get('nodes', {}))
+
+    logger.info(f'[AGENTS-UPDATE] state[nodes] has {len(nodes)} entries, '
+                f'_node_to_sid has {len(_node_to_sid)} entries')
 
     updated = []
     skipped = []
     no_sid = []
     for nid, node in nodes.items():
+        status = node.get('status', '?')
+        has_sid = nid in _node_to_sid
+        logger.info(f'[AGENTS-UPDATE] node={nid} status={status} has_sid={has_sid}')
         if node_ids and nid not in node_ids:
             continue
-        if node.get('status') != 'online':
+        if status != 'online':
             skipped.append(nid)
             continue
-        if nid not in _node_to_sid:
+        if not has_sid:
             no_sid.append(nid)
-            logger.warning(f'Agent {nid} has no SID — cannot send update')
+            logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — cannot send update')
             continue
         _emit_to_node(socketio, 'server:update', {}, nid)
         updated.append(nid)
-        logger.info(f'Sent update command to agent {nid} ({node.get("name")})')
+        logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
     if updated:
-        # Wait for Socket.IO to flush events and agents to start processing.
-        # The actual git pull + restart happens in agent background threads.
-        logger.info(f'[UPDATE] Waiting 10s for {len(updated)} agent(s) to receive update event...')
+        logger.info(f'[AGENTS-UPDATE] Waiting 10s for {len(updated)} agent(s)...')
         import time
         time.sleep(10)
-        logger.info('[UPDATE] Agent update wait complete, proceeding with server update')
+        logger.info('[AGENTS-UPDATE] Wait complete')
 
+    logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, no_sid={no_sid}')
     return jsonify({
         'status': 'ok',
         'updated': updated,

@@ -59,9 +59,10 @@ def _emit_to_node(socketio, event, data, node_id):
     """Emit event to a specific agent by node_id via its SID."""
     sid = _node_to_sid.get(node_id)
     if sid:
+        logger.info(f'[_emit] {event} → node={node_id} sid={sid[:8]}...')
         socketio.emit(event, data, room=sid)
     else:
-        logger.debug(f'No SID for node {node_id}, emit {event} skipped')
+        logger.warning(f'[_emit] No SID for node {node_id}, emit {event} skipped')
 
 
 def _start_ping_loop(socketio):
