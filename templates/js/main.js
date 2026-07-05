@@ -405,7 +405,7 @@ function buildFanList(fans) {
         
         html += `
             <div id="fan-card-${escapeHtml(fanId)}" 
-                 class="fan-card ${bgColor} border ${borderColor} rounded-lg p-3 cursor-pointer 
+                 class="fan-card ${bgColor} border ${borderColor} rounded-lg px-3 py-3 pb-4 cursor-pointer 
                         hover:border-neon-purple transition-all duration-200"
                  onclick="selectFan('${escapeHtml(fanId)}')">
                 <div class="flex items-center justify-between mb-1">
