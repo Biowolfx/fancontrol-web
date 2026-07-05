@@ -58,19 +58,22 @@ def _telemetry_loop():
 
 
 def _update_check_loop():
-    """Poll server for updates every 5 minutes via HTTP."""
+    """Poll server for updates via HTTP."""
     import urllib.request
     import json as _json
     import os
     import subprocess
 
-    POLL_INTERVAL = 300  # 5 minutes
+    POLL_INTERVAL = 60  # check every 60 seconds
 
     # Convert ws:// to http:// for HTTP requests
     http_url = SERVER_URL.replace('ws://', 'http://').replace('wss://', 'https://')
 
+    first_run = True
     while True:
-        time.sleep(POLL_INTERVAL)
+        # First poll 10s after connect, then every POLL_INTERVAL
+        time.sleep(10 if first_run else POLL_INTERVAL)
+        first_run = False
         try:
             if not state.get('server_connected'):
                 continue
@@ -99,7 +102,6 @@ def _update_check_loop():
                     logger.warning('[update-check] /repo has no .git — cannot auto-update')
                     continue
 
-                # git fetch + reset
                 fetch = subprocess.run(
                     ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
                     capture_output=True, text=True, timeout=30,
@@ -120,7 +122,7 @@ def _update_check_loop():
 
                 logger.info(f'[update-check] Updated /repo to {server_ver}, restarting...')
                 threading.Timer(1.0, os._exit, args=[0]).start()
-                break  # exit loop, process is dying
+                break
 
             else:
                 logger.debug(f'[update-check] Up to date: {CONFIG_VERSION}')
