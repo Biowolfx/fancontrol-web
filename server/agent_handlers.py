@@ -11,6 +11,7 @@ from server.node_registry import (
     update_node_status,
     update_node_config,
     update_node_control_mode,
+    update_node_version,
     get_node,
     save_agent_snapshot,
 )
@@ -115,6 +116,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # so telemetry updates don't overwrite it
         update_node_config(node_id, agent_config)
 
+        agent_version = data.get('version', '') or agent_config.get('config_version', '')
+        if agent_version:
+            update_node_version(node_id, agent_version)
+
         if on_connect:
             on_connect(node_id)
 
@@ -133,6 +138,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'config': agent_config,
                 'dsm_schemes': agent_config.get('dsm_schemes', []),
                 'kernel_info': agent_config.get('kernel_info', {}),
+                'agent_version': agent_version,
             }
         invalidate_state_cache()
 

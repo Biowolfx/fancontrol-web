@@ -2,7 +2,7 @@
 
 import logging
 
-from core.state import state, state_lock, invalidate_state_cache
+from core.state import state, state_lock, invalidate_state_cache, CONFIG_VERSION
 from agent.telemetry import get_local_config, apply_server_config
 from agent.config import save_local_config, persist_node_id
 
@@ -26,6 +26,7 @@ def make_handlers(sio_ref):
             'api_token': state.get('api_token'),
             'control_mode': state['control_mode'],
             'config': get_local_config(),
+            'version': CONFIG_VERSION,
         })
 
     def _on_disconnect():

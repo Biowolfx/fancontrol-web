@@ -64,6 +64,8 @@ def init_nodes_table():
                 conn.execute("ALTER TABLE nodes ADD COLUMN ip TEXT DEFAULT ''")
             if 'port' not in cols:
                 conn.execute("ALTER TABLE nodes ADD COLUMN port INTEGER DEFAULT 5059")
+            if 'agent_version' not in cols:
+                conn.execute("ALTER TABLE nodes ADD COLUMN agent_version TEXT DEFAULT ''")
             conn.commit()
         finally:
             conn.close()
@@ -202,6 +204,20 @@ def update_node_control_mode(node_id: str, mode: str) -> bool:
             conn.execute(
                 'UPDATE nodes SET control_mode = ? WHERE node_id = ?',
                 (mode, node_id)
+            )
+            conn.commit()
+            return conn.execute('SELECT changes()').fetchone()[0] > 0
+        finally:
+            conn.close()
+
+
+def update_node_version(node_id: str, version: str) -> bool:
+    with _lock:
+        conn = _get_conn()
+        try:
+            conn.execute(
+                'UPDATE nodes SET agent_version = ? WHERE node_id = ?',
+                (version, node_id)
             )
             conn.commit()
             return conn.execute('SELECT changes()').fetchone()[0] > 0

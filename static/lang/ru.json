@@ -197,6 +197,13 @@
   "nodes.total_rpm": "Общий RPM",
   "nodes.fans": "Вентиляторы",
   "nodes.confirm_delete": "Удалить этот узел?",
+  "nodes.update_agents": "Обновить агенты",
+  "nodes.update_n_agents": "Обновить {count} агент(ов) до версии {version}?",
+  "nodes.updating_agents": "Отправка обновления агентам...",
+  "nodes.agents_update_sent": "Обновление отправлено {count} агент(ам)",
+  "nodes.all_up_to_date": "Все агенты обновлены",
+  "nodes.agent_version": "Версия",
+  "nodes.click_to_update": "нажмите для обновления",
   "node.temperatures": "Температуры",
   "node.manual_mode": "Ручной режим",
 

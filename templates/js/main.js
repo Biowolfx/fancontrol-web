@@ -224,6 +224,18 @@ socket.on('update', (data) => {
     if (agentUpdateSection) {
         agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
     }
+    // Show "Update Agents" button if any agent has outdated version (server mode only)
+    const updateAgentsOutdated = document.getElementById('update-agents-outdated-section');
+    if (updateAgentsOutdated && !data.agent_mode) {
+        const serverVer = data.config_version || '';
+        const outdatedCount = Object.values(data.nodes || {})
+            .filter(n => n.status === 'online' && n.agent_version && n.agent_version !== serverVer).length;
+        updateAgentsOutdated.classList.toggle('hidden', outdatedCount === 0);
+        const countEl = document.getElementById('outdated-agents-count');
+        if (countEl) {
+            countEl.textContent = outdatedCount > 0 ? outdatedCount : '';
+        }
+    }
     // Hide "Add Node" section in agent mode (no server features)
     const addNodeSection = document.getElementById('add-node-section');
     if (addNodeSection) {
@@ -647,6 +659,16 @@ function renderRemoteNodeTree(node) {
                 <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
                 <span class="text-sm font-semibold text-white truncate flex-1">🖥 ${escapeHtml(node.name)}</span>
                 <span class="text-xs ${statusColor} flex-shrink-0">${node.status}</span>
+                ${(() => {
+                    const serverVer = currentState?.config_version || '';
+                    const agentVer = node.agent_version || '';
+                    if (agentVer && serverVer && agentVer !== serverVer) {
+                        return `<span class="text-[10px] px-1 py-0.5 rounded bg-orange-900/50 text-orange-400 border border-orange-700/50 flex-shrink-0 cursor-pointer hover:bg-orange-800/50" onclick="event.stopPropagation(); updateSingleAgent('${escapeHtml(node.node_id)}')" title="Server: ${escapeHtml(serverVer)} — ${t('nodes.click_to_update', 'click to update')}">↑ ${escapeHtml(agentVer)}</span>`;
+                    } else if (agentVer) {
+                        return `<span class="text-[10px] text-gray-600 flex-shrink-0" title="${escapeHtml(agentVer)}">${escapeHtml(agentVer)}</span>`;
+                    }
+                    return '';
+                })()}
                 <button onclick="event.stopPropagation(); showNodeSettings('${escapeHtml(node.node_id)}')"
                         class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Settings">&#9881;</button>
                 <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
@@ -4819,6 +4841,54 @@ async function startUpdate() {
         closeBtn.classList.remove('hidden');
     }
 }
+
+function openUpdateAgentsModal() {
+    const serverVer = currentState?.config_version || '?';
+    const outdated = nodesData.filter(n =>
+        n.status === 'online' && n.agent_version && n.agent_version !== serverVer);
+
+    if (outdated.length === 0) {
+        showToast(t('nodes.all_up_to_date', 'All agents are up to date'), 'info');
+        return;
+    }
+
+    const names = outdated.map(n => `${n.name} (${n.agent_version})`).join(', ');
+    const msg = t('nodes.update_n_agents', 'Update {count} agent(s) to version {version}?')
+        .replace('{count}', outdated.length)
+        .replace('{version}', serverVer)
+        + '\n\n' + names;
+
+    if (confirm(msg)) {
+        updateAgentsNow(outdated.map(n => n.node_id));
+    }
+}
+
+async function updateAgentsNow(nodeIds) {
+    try {
+        showToast(t('nodes.updating_agents', 'Sending update to agents...'), 'info');
+        const resp = await fetch('/api/update/agents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ node_ids: nodeIds })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            showToast(
+                t('nodes.agents_update_sent', 'Update sent to {count} agent(s)').replace('{count}', data.updated.length),
+                'success'
+            );
+        } else {
+            showToast(data.message || 'Update failed', 'error');
+        }
+    } catch (e) {
+        showToast('Failed: ' + e.message, 'error');
+    }
+}
+
+function updateSingleAgent(nodeId) {
+    updateAgentsNow([nodeId]);
+}
+
 async function autoCheckUpdate() {
     if (_updateChecked) return;
     _updateChecked = true;
@@ -5157,6 +5227,16 @@ function showNodeSettings(nodeId) {
     document.getElementById('node-settings-name').value = node.name || '';
     document.getElementById('node-settings-ip').value = node.ip || '';
     document.getElementById('node-settings-port').value = node.port || 5059;
+    const versionEl = document.getElementById('node-settings-version');
+    if (versionEl) {
+        const serverVer = currentState?.config_version || '?';
+        const agentVer = node.agent_version || '—';
+        const needsUpdate = agentVer !== '—' && serverVer !== '?' && agentVer !== serverVer;
+        versionEl.textContent = agentVer;
+        versionEl.className = needsUpdate
+            ? 'text-sm text-orange-400'
+            : agentVer !== '—' ? 'text-sm text-neon-green' : 'text-sm text-gray-500';
+    }
     document.getElementById('node-settings-modal').classList.remove('hidden');
 }
 

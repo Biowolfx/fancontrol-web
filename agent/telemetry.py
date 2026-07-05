@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, Any
 
-from core.state import state, state_lock
+from core.state import state, state_lock, CONFIG_VERSION
 
 logger = logging.getLogger('fancontrol')
 
@@ -12,6 +12,7 @@ def get_local_config() -> Dict[str, Any]:
     """Get current local fan config including kernel info and DSM schemes."""
     with state_lock:
         config = {
+            'config_version': CONFIG_VERSION,
             'fans': {k: {kk: vv for kk, vv in v.items()
                          if kk not in ('rpm', 'pwm_value')}
                      for k, v in state['fans'].items()},

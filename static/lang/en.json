@@ -197,6 +197,13 @@
   "nodes.total_rpm": "Total RPM",
   "nodes.fans": "Fans",
   "nodes.confirm_delete": "Delete this node?",
+  "nodes.update_agents": "Update Agents",
+  "nodes.update_n_agents": "Update {count} agent(s) to version {version}?",
+  "nodes.updating_agents": "Sending update to agents...",
+  "nodes.agents_update_sent": "Update sent to {count} agent(s)",
+  "nodes.all_up_to_date": "All agents are up to date",
+  "nodes.agent_version": "Version",
+  "nodes.click_to_update": "click to update",
   "node.temperatures": "Temperatures",
   "node.manual_mode": "Manual Mode",
 
