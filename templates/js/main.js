@@ -4869,8 +4869,15 @@ async function updateAgentsNow(nodeIds) {
         const resp = await fetch('/api/update/agents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ node_ids: nodeIds })
+            body: JSON.stringify({ node_ids: nodeIds }),
+            signal: AbortSignal.timeout(30000),
         });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            const msg = text.includes('<!doctype') ? `Server error (${resp.status})` : text;
+            showToast(msg || `HTTP ${resp.status}`, 'error');
+            return;
+        }
         const data = await resp.json();
         if (data.status === 'ok') {
             showToast(
