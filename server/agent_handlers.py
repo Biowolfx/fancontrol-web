@@ -28,6 +28,32 @@ import time as _time
 _startup_time = _time.monotonic()
 _GRACE_PERIOD = 30
 
+# Conflict comparison: only meaningful keys, strip runtime fields
+_CMP_KEYS = {'fans', 'temp_sensors', 'hdd_sensors', 'kernel_info', 'dsm_schemes', 'control_mode'}
+_RUNTIME_FAN_KEYS = {'rpm', 'pwm_value', 'raw_pwm', 'last_update', 'current_pct', 'target_pwm'}
+_RUNTIME_SENSOR_KEYS = {'value', 'temp', 'standby', 'last_update', 'pct_fill', 'color_zone', 'health_status'}
+
+
+def _strip_runtime(cfg):
+    """Remove metadata and runtime-only fields for config comparison."""
+    result = {}
+    for k, v in (cfg or {}).items():
+        if k not in _CMP_KEYS:
+            continue
+        if k == 'fans' and isinstance(v, dict):
+            result[k] = {
+                fid: {fk: fv for fk, fv in fval.items() if fk not in _RUNTIME_FAN_KEYS}
+                for fid, fval in v.items()
+            }
+        elif k in ('temp_sensors', 'hdd_sensors') and isinstance(v, dict):
+            result[k] = {
+                sid: {sk: sv for sk, sv in sval.items() if sk not in _RUNTIME_SENSOR_KEYS}
+                for sid, sval in v.items()
+            }
+        else:
+            result[k] = v
+    return result
+
 
 def _emit_to_node(socketio, event, data, node_id):
     """Emit event to a specific agent by node_id via its SID."""
@@ -150,8 +176,16 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             }, node_id)
             logger.info(f'Pushed config to {node["name"]}')
 
-            # Check for conflict on reconnect
-            if agent_config and server_config != agent_config:
+            # Check for conflict on reconnect (strip metadata + runtime fields)
+            server_cmp = _strip_runtime(server_config)
+            agent_cmp = _strip_runtime(agent_config)
+            if server_cmp and agent_cmp and server_cmp != agent_cmp:
+                diff_keys = [k for k in set(list(server_cmp) + list(agent_cmp))
+                             if server_cmp.get(k) != agent_cmp.get(k)]
+                logger.info(f'Config conflict on reconnect for {node["name"]}: {diff_keys}')
+                for k in diff_keys:
+                    logger.info(f'  field={k} server={repr(server_cmp.get(k))[:200]} '
+                                f'agent={repr(agent_cmp.get(k))[:200]}')
                 save_agent_snapshot(node_id, agent_config)
                 socketio.emit('node:conflict', {
                     'node_id': node_id,
@@ -159,7 +193,6 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                     'server_config': server_config,
                     'agent_config': agent_config,
                 })
-                logger.info(f'Config conflict on reconnect for {node["name"]}')
 
         socketio.emit('update', {'nodes': dict(state['nodes'])})
         logger.info(f'Agent connected: {node_id} ({node["name"]})')
@@ -224,31 +257,6 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             return
 
         # Check for conflict: agent config differs from server config
-        # Compare only meaningful fields, ignore metadata and runtime values
-        _cmp_keys = {'fans', 'temp_sensors', 'hdd_sensors', 'kernel_info', 'dsm_schemes', 'control_mode'}
-        _runtime_fan_keys = {'rpm', 'pwm_value', 'raw_pwm', 'last_update', 'current_pct', 'target_pwm'}
-        _runtime_sensor_keys = {'value', 'temp', 'standby', 'last_update', 'pct_fill', 'color_zone', 'health_status'}
-
-        def _strip_runtime(cfg):
-            """Remove runtime-only fields for comparison."""
-            result = {}
-            for k, v in (cfg or {}).items():
-                if k not in _cmp_keys:
-                    continue
-                if k == 'fans' and isinstance(v, dict):
-                    result[k] = {
-                        fid: {fk: fv for fk, fv in fval.items() if fk not in _runtime_fan_keys}
-                        for fid, fval in v.items()
-                    }
-                elif k in ('temp_sensors', 'hdd_sensors') and isinstance(v, dict):
-                    result[k] = {
-                        sid: {sk: sv for sk, sv in sval.items() if sk not in _runtime_sensor_keys}
-                        for sid, sval in v.items()
-                    }
-                else:
-                    result[k] = v
-            return result
-
         server_cmp = _strip_runtime(server_config)
         agent_cmp = _strip_runtime(agent_config)
 
