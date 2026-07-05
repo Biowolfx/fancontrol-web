@@ -135,6 +135,8 @@
   "settings.up_to_date": "System is up to date",
   "settings.update_error": "Failed to check for updates",
   "settings.apply_update": "Apply Update & Restart",
+  "settings.update_agents": "Also update all connected agents",
+  "settings.update_agents_hint": "Recommended: update all nodes to the same version to avoid config conflicts.",
   "settings.updating": "Updating...",
   "settings.update_applied": "Update applied. Container will restart...",
   "settings.update_failed": "Update failed",

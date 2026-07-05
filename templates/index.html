@@ -955,7 +955,15 @@
             </div>
             
             <div id="update-modal-result" class="hidden text-sm mb-4 p-3 rounded-lg"></div>
-            
+
+            <div id="update-modal-agents" class="hidden mb-4 p-3 rounded-lg bg-cyber-accent border border-gray-700">
+                <div class="flex items-center gap-2 mb-2">
+                    <input type="checkbox" id="update-agents-check" class="accent-neon-cyan">
+                    <label for="update-agents-check" class="text-sm text-gray-300" data-i18n="settings.update_agents">Also update all connected agents</label>
+                </div>
+                <p class="text-xs text-gray-500 ml-6" data-i18n="settings.update_agents_hint">Recommended: update all nodes to the same version to avoid config conflicts.</p>
+            </div>
+
             <div class="flex gap-3">
                 <button id="update-modal-close" onclick="closeUpdateModal()" class="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold bg-cyber-accent text-gray-400 border border-gray-700 hover:text-white transition-all">
                     <span data-i18n="common.cancel">Cancel</span>

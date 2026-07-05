@@ -4677,6 +4677,17 @@ function openUpdateModal() {
             <span class="text-gray-300">${t('settings.step_restart', 'Restarting container...')}</span>
         </div>
     `;
+
+    // Show agents checkbox if there are online agents
+    const agentsSection = document.getElementById('update-modal-agents');
+    const onlineAgents = nodesData.filter(n => n.status === 'online');
+    if (agentsSection) {
+        if (onlineAgents.length > 0) {
+            agentsSection.classList.remove('hidden');
+        } else {
+            agentsSection.classList.add('hidden');
+        }
+    }
     
     progress.classList.add('hidden');
     result.classList.add('hidden');
@@ -4716,20 +4727,33 @@ async function startUpdate() {
     const bar = document.getElementById('update-modal-bar');
     const result = document.getElementById('update-modal-result');
     const closeBtn = document.getElementById('update-modal-close');
-    
+    const agentsCheck = document.getElementById('update-agents-check');
+    const updateAgents = agentsCheck && agentsCheck.checked;
+
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
     progress.classList.remove('hidden');
     bar.style.width = '10%';
-    
-    // Step 1: Git pull
+
+    // Step 0: Send update to agents first (while server is still running)
+    if (updateAgents) {
+        setStepState('pull', 'active');
+        bar.style.width = '15%';
+        try {
+            await fetch('/api/update/agents', { method: 'POST' });
+        } catch (e) {
+            console.error('Failed to notify agents:', e);
+        }
+    }
+
+    // Step 1: Git pull on server
     setStepState('pull', 'active');
-    bar.style.width = '20%';
-    
+    bar.style.width = '30%';
+
     try {
         const resp = await fetch('/api/update/apply', { method: 'POST' });
         const data = await resp.json();
-        
+
         if (data.status === 'error') {
             setStepState('pull', 'error');
             bar.style.width = '100%';
@@ -4742,29 +4766,33 @@ async function startUpdate() {
             closeBtn.classList.remove('hidden');
             return;
         }
-        
+
         // Step 1 done
         setStepState('pull', 'done');
-        bar.style.width = '50%';
-        
+        bar.style.width = '60%';
+
         // Step 2: Restart (entrypoint syncs code from /repo)
         setStepState('restart', 'active');
         bar.style.width = '80%';
-        
+
         // Show restart notification
         result.classList.remove('hidden');
         result.className = 'text-sm mb-4 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
+        const agentMsg = updateAgents
+            ? `<div class="text-gray-400 mt-1">Agents will restart automatically after server comes back online.</div>`
+            : '';
         result.innerHTML = `
             <div class="font-semibold mb-1">${t('settings.update_success', 'Update complete!')}</div>
             <div class="text-gray-400">${t('settings.restart_notice', 'Container is restarting. Page will reload in 10 seconds...')}</div>
+            ${agentMsg}
         `;
-        
+
         bar.style.width = '100%';
         setStepState('restart', 'done');
-        
+
         // Reload after delay
         setTimeout(() => { window.location.reload(); }, RELOAD_DELAY);
-        
+
     } catch (e) {
         setStepState('pull', 'error');
         bar.style.width = '100%';

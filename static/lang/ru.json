@@ -135,6 +135,8 @@
   "settings.up_to_date": "Система обновлена",
   "settings.update_error": "Не удалось проверить обновления",
   "settings.apply_update": "Применить и перезапустить",
+  "settings.update_agents": "Также обновить всех подключённых агентов",
+  "settings.update_agents_hint": "Рекомендуется: обновить все узлы до одной версии для избежания конфликтов конфигураций.",
   "settings.updating": "Обновление...",
   "settings.update_applied": "Обновление применено. Контейнер перезапускается...",
   "settings.update_failed": "Обновление не удалось",

@@ -101,6 +101,34 @@ def make_handlers(sio_ref):
         except Exception as e:
             logger.error(f'Failed to apply DSM scheme: {e}')
 
+    def _on_update(data):
+        """Server requests agent to update itself — git pull + restart."""
+        logger.info('Received update command from server')
+        import subprocess
+        import threading
+
+        def _do_update():
+            try:
+                # Pull latest code
+                result = subprocess.run(
+                    ['git', '-C', '/repo', 'pull'],
+                    capture_output=True, text=True, timeout=30,
+                    env={**__import__('os').environ, 'GIT_TERMINAL_PROMPT': '0'}
+                )
+                logger.info(f'Git pull: {result.stdout.strip()}')
+                if result.returncode != 0:
+                    logger.error(f'Git pull failed: {result.stderr[:200]}')
+                    return
+
+                # Sync to /app (entrypoint handles this on restart)
+                # Exit container so Docker restarts it with new code
+                logger.info('Update complete, restarting container...')
+                __import__('os')._exit(0)
+            except Exception as e:
+                logger.error(f'Update failed: {e}')
+
+        threading.Thread(target=_do_update, daemon=True).start()
+
     return {
         'connect': _on_connect,
         'disconnect': _on_disconnect,
@@ -109,4 +137,5 @@ def make_handlers(sio_ref):
         'server:command': _on_command,
         'server:node_id_push': _on_node_id_push,
         'server:dsm:apply': _on_dsm_apply,
+        'server:update': _on_update,
     }
