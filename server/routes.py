@@ -648,6 +648,7 @@ def api_update_apply():
 def api_update_agents():
     """Send update command to all online agents via WebSocket."""
     from server.agent_handlers import _emit_to_node, _node_to_sid
+    from app import socketio
 
     logger.info('[AGENTS-UPDATE] Endpoint called')
 
