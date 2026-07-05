@@ -678,6 +678,8 @@ def api_update_agents():
             logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — cannot send update')
             continue
         _emit_to_node(socketio, 'server:update', {}, nid)
+        with state_lock:
+            state['nodes'].get(nid, {})['pending_update'] = True
         updated.append(nid)
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
@@ -699,23 +701,50 @@ def api_update_agents():
 
 @routes.route('/api/update/poll', methods=['POST'])
 def api_update_poll():
-    """Agent polls this endpoint to check if an update is needed.
+    """Agent polls to check if an update is needed.
 
-    Agent sends {agent_version: "3.12.32", node_id: "..."}.
-    Server responds with {update_available: true/false, server_version: "..."}.
+    Agent sends {agent_version, node_id}.
+    Server responds with {update_available, server_version, should_update}.
+    should_update = update_available AND (auto_update OR pending_update).
     """
     from core.state import CONFIG_VERSION
     data = request.get_json(silent=True) or {}
     agent_version = data.get('agent_version', '')
     node_id = data.get('node_id', '')
 
-    needs_update = agent_version and agent_version != CONFIG_VERSION
-    logger.info(f'[POLL] node={node_id} agent_version={agent_version} '
-                f'server_version={CONFIG_VERSION} needs_update={needs_update}')
+    with state_lock:
+        node = state.get('nodes', {}).get(node_id, {})
+
+    auto_update = node.get('auto_update', False)
+    pending = node.get('pending_update', False)
+    version_mismatch = agent_version and agent_version != CONFIG_VERSION
+    should_update = version_mismatch and (auto_update or pending)
+
+    if pending:
+        with state_lock:
+            state['nodes'].get(node_id, {})['pending_update'] = False
+        logger.info(f'[POLL] node={node_id} pending_update consumed')
+
+    logger.info(f'[POLL] node={node_id} v={agent_version}→{CONFIG_VERSION} '
+                f'mismatch={version_mismatch} auto={auto_update} pending={pending} '
+                f'should_update={should_update}')
     return jsonify({
-        'update_available': needs_update,
+        'update_available': version_mismatch,
+        'should_update': should_update,
         'server_version': CONFIG_VERSION,
     })
+
+
+@routes.route('/api/nodes/<node_id>/auto-update', methods=['POST'])
+def toggle_auto_update(node_id):
+    """Toggle auto-update for a specific agent node."""
+    data = request.get_json(silent=True) or {}
+    enabled = data.get('enabled', False)
+    with state_lock:
+        if node_id in state.get('nodes', {}):
+            state['nodes'][node_id]['auto_update'] = enabled
+    logger.info(f'[AUTO-UPDATE] node={node_id} auto_update={enabled}')
+    return jsonify({'status': 'ok', 'node_id': node_id, 'auto_update': enabled})
 
 
 @routes.route('/api/control', methods=['POST'])

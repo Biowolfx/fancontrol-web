@@ -5244,6 +5244,21 @@ function showNodeSettings(nodeId) {
             ? 'text-sm text-orange-400'
             : agentVer !== '—' ? 'text-sm text-neon-green' : 'text-sm text-gray-500';
     }
+    const autoUpdateCb = document.getElementById('node-settings-auto-update');
+    if (autoUpdateCb) {
+        autoUpdateCb.checked = !!node.auto_update;
+        autoUpdateCb.onchange = async () => {
+            try {
+                await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/auto-update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: autoUpdateCb.checked }),
+                });
+            } catch (e) {
+                console.error('Failed to toggle auto-update:', e);
+            }
+        };
+    }
     document.getElementById('node-settings-modal').classList.remove('hidden');
 }
 

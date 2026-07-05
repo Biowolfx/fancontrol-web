@@ -203,6 +203,7 @@
   "nodes.agents_update_sent": "Update sent to {count} agent(s)",
   "nodes.all_up_to_date": "All agents are up to date",
   "nodes.agent_version": "Version",
+  "nodes.auto_update": "Auto-update",
   "nodes.click_to_update": "click to update",
   "node.temperatures": "Temperatures",
   "node.manual_mode": "Manual Mode",

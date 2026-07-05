@@ -92,9 +92,9 @@ def _update_check_loop():
             resp = urllib.request.urlopen(req, timeout=10)
             result = _json.loads(resp.read())
 
-            if result.get('update_available'):
+            if result.get('should_update'):
                 server_ver = result.get('server_version', '?')
-                logger.info(f'[update-check] Update available: {CONFIG_VERSION} → {server_ver}')
+                logger.info(f'[update-check] Server requests update: {CONFIG_VERSION} → {server_ver}')
 
                 repo_dir = '/repo'
                 git_dir = os.path.join(repo_dir, '.git')

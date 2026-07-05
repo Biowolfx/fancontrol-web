@@ -203,6 +203,7 @@
   "nodes.agents_update_sent": "Обновление отправлено {count} агент(ам)",
   "nodes.all_up_to_date": "Все агенты обновлены",
   "nodes.agent_version": "Версия",
+  "nodes.auto_update": "Автообновление",
   "nodes.click_to_update": "нажмите для обновления",
   "node.temperatures": "Температуры",
   "node.manual_mode": "Ручной режим",
