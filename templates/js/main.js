@@ -964,7 +964,7 @@ function renderPickerCard(card) {
     el.setAttribute('data-card-id', id);
     el.innerHTML = `
         <div class="card-content overflow-hidden h-full">
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-1">
                 <div class="flex items-center gap-2">
                     <span class="text-gray-600 text-xs select-none">⠿</span>
                     <span class="text-lg">${icon}</span>
