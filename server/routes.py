@@ -647,8 +647,7 @@ def api_update_apply():
 @routes.route('/api/update/agents', methods=['POST'])
 def api_update_agents():
     """Send update command to all online agents via WebSocket."""
-    from server.socket_handlers import _node_to_sid
-    from server.agent_handlers import _emit_to_node
+    from server.agent_handlers import _emit_to_node, _node_to_sid
 
     data = request.get_json(silent=True) or {}
     node_ids = data.get('node_ids')  # Optional: specific nodes, or None for all
@@ -658,11 +657,16 @@ def api_update_agents():
 
     updated = []
     skipped = []
+    no_sid = []
     for nid, node in nodes.items():
         if node_ids and nid not in node_ids:
             continue
         if node.get('status') != 'online':
             skipped.append(nid)
+            continue
+        if nid not in _node_to_sid:
+            no_sid.append(nid)
+            logger.warning(f'Agent {nid} has no SID — cannot send update')
             continue
         _emit_to_node(socketio, 'server:update', {}, nid)
         updated.append(nid)
@@ -672,7 +676,8 @@ def api_update_agents():
         'status': 'ok',
         'updated': updated,
         'skipped': skipped,
-        'message': f'Update sent to {len(updated)} agent(s)'
+        'no_sid': no_sid,
+        'message': f'Update sent to {len(updated)} agent(s), {len(skipped)} offline, {len(no_sid)} no SID'
     })
 
 

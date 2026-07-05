@@ -103,30 +103,59 @@ def make_handlers(sio_ref):
 
     def _on_update(data):
         """Server requests agent to update itself — git pull + restart."""
-        logger.info('Received update command from server')
+        logger.info('=== AGENT UPDATE RECEIVED ===')
         import subprocess
-        import threading
+        import os
+        import time
+
+        repo_dir = '/repo'
+
+        # Check if /repo is a git repo
+        git_dir = os.path.join(repo_dir, '.git')
+        if not os.path.isdir(git_dir):
+            logger.warning(f'Agent /repo is not a git repo (no .git). Cannot auto-update.')
+            logger.warning(f'Clone the repo manually: git clone <url> {repo_dir}')
+            return
 
         def _do_update():
             try:
-                # Pull latest code
+                logger.info('[agent-update] Starting git pull...')
+                # Fetch + reset to match remote (same as server update logic)
                 result = subprocess.run(
-                    ['git', '-C', '/repo', 'pull'],
+                    ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
                     capture_output=True, text=True, timeout=30,
-                    env={**__import__('os').environ, 'GIT_TERMINAL_PROMPT': '0'}
+                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
                 )
-                logger.info(f'Git pull: {result.stdout.strip()}')
-                if result.returncode != 0:
-                    logger.error(f'Git pull failed: {result.stderr[:200]}')
+                logger.info(f'[agent-update] fetch: rc={result.returncode} {result.stdout.strip()[:200]}')
+
+                reset = subprocess.run(
+                    ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
+                    capture_output=True, text=True, timeout=15,
+                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
+                )
+                logger.info(f'[agent-update] reset: rc={reset.returncode} {reset.stdout.strip()[:200]}')
+
+                if reset.returncode != 0:
+                    logger.error(f'[agent-update] Git reset failed: {reset.stderr[:200]}')
                     return
 
-                # Sync to /app (entrypoint handles this on restart)
-                # Exit container so Docker restarts it with new code
-                logger.info('Update complete, restarting container...')
-                __import__('os')._exit(0)
-            except Exception as e:
-                logger.error(f'Update failed: {e}')
+                # Verify new version
+                try:
+                    with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
+                        for line in f:
+                            if 'CONFIG_VERSION' in line:
+                                logger.info(f'[agent-update] New version: {line.strip()}')
+                                break
+                except Exception:
+                    pass
 
+                logger.info('[agent-update] Update complete, restarting container in 1s...')
+                time.sleep(1)
+                os._exit(0)
+            except Exception as e:
+                logger.error(f'[agent-update] Failed: {e}', exc_info=True)
+
+        import threading
         threading.Thread(target=_do_update, daemon=True).start()
 
     return {
