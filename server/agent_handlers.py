@@ -21,6 +21,12 @@ logger = logging.getLogger('fancontrol')
 _sid_to_node: dict = {}
 _node_to_sid: dict = {}
 
+# Grace period: skip conflict detection for 30s after server startup
+# to avoid false conflicts when agents reconnect during restart
+import time as _time
+_startup_time = _time.monotonic()
+_GRACE_PERIOD = 30
+
 
 def _emit_to_node(socketio, event, data, node_id):
     """Emit event to a specific agent by node_id via its SID."""
@@ -205,6 +211,11 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # Get server's authoritative config for this node
         node = get_node(node_id)
         server_config = node.get('config', {}) if node else {}
+
+        # Skip conflict detection during grace period after server startup
+        if _time.monotonic() - _startup_time < _GRACE_PERIOD:
+            logger.debug(f'Grace period active, skipping conflict check for {node_id}')
+            return
 
         # Check for conflict: agent config differs from server config
         # Compare only meaningful fields, ignore metadata and runtime values

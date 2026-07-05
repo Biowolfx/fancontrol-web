@@ -106,27 +106,23 @@ def make_handlers(sio_ref):
         logger.info('=== AGENT UPDATE RECEIVED ===')
         import subprocess
         import os
-        import time
 
         repo_dir = '/repo'
 
-        # Check if /repo is a git repo
         git_dir = os.path.join(repo_dir, '.git')
         if not os.path.isdir(git_dir):
-            logger.warning(f'Agent /repo is not a git repo (no .git). Cannot auto-update.')
-            logger.warning(f'Clone the repo manually: git clone <url> {repo_dir}')
+            logger.warning(f'Agent /repo is not a git repo. Cannot auto-update.')
             return
 
         def _do_update():
             try:
-                logger.info('[agent-update] Starting git pull...')
-                # Fetch + reset to match remote (same as server update logic)
+                logger.info('[agent-update] Fetching latest code...')
                 result = subprocess.run(
                     ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
                     capture_output=True, text=True, timeout=30,
                     env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
                 )
-                logger.info(f'[agent-update] fetch: rc={result.returncode} {result.stdout.strip()[:200]}')
+                logger.info(f'[agent-update] fetch: rc={result.returncode}')
 
                 reset = subprocess.run(
                     ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
@@ -149,9 +145,32 @@ def make_handlers(sio_ref):
                 except Exception:
                     pass
 
-                logger.info('[agent-update] Update complete, restarting container in 1s...')
-                time.sleep(1)
-                os._exit(0)
+                logger.info('[agent-update] Restarting container...')
+                # Multiple restart methods for reliability
+                try:
+                    # Method 1: Docker API (if docker.sock mounted)
+                    import urllib.request
+                    import json as _json
+                    container_id = open('/proc/self/cgroup').read().split('/')[-1].strip()
+                    req = urllib.request.Request(
+                        f'http://unix/containers/{container_id}/restart',
+                        method='POST',
+                        data=_json.dumps({'t': 1}).encode(),
+                    )
+                    import socket
+                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    sock.connect('/var/run/docker.sock')
+                    sock.send(req.to_bytes())
+                    sock.recv(4096)
+                    sock.close()
+                    logger.info('[agent-update] Restarted via Docker API')
+                    return
+                except Exception as e:
+                    logger.debug(f'[agent-update] Docker API restart failed: {e}')
+
+                # Method 2: Kill own process
+                import signal
+                os.kill(os.getpid(), signal.SIGTERM)
             except Exception as e:
                 logger.error(f'[agent-update] Failed: {e}', exc_info=True)
 
