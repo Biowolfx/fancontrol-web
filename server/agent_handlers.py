@@ -210,6 +210,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # Compare only meaningful fields, ignore metadata and runtime values
         _cmp_keys = {'fans', 'temp_sensors', 'hdd_sensors', 'kernel_info', 'dsm_schemes', 'control_mode'}
         _runtime_fan_keys = {'rpm', 'pwm_value', 'raw_pwm', 'last_update', 'current_pct', 'target_pwm'}
+        _runtime_sensor_keys = {'value', 'temp', 'standby', 'last_update', 'pct_fill', 'color_zone', 'health_status'}
 
         def _strip_runtime(cfg):
             """Remove runtime-only fields for comparison."""
@@ -222,6 +223,11 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                         fid: {fk: fv for fk, fv in fval.items() if fk not in _runtime_fan_keys}
                         for fid, fval in v.items()
                     }
+                elif k in ('temp_sensors', 'hdd_sensors') and isinstance(v, dict):
+                    result[k] = {
+                        sid: {sk: sv for sk, sv in sval.items() if sk not in _runtime_sensor_keys}
+                        for sid, sval in v.items()
+                    }
                 else:
                     result[k] = v
             return result
@@ -230,6 +236,16 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         agent_cmp = _strip_runtime(agent_config)
 
         if server_cmp and agent_cmp and server_cmp != agent_cmp:
+            # Log what actually differs for debugging
+            diff_keys = []
+            all_keys = set(list(server_cmp.keys()) + list(agent_cmp.keys()))
+            for k in all_keys:
+                sv = server_cmp.get(k)
+                av = agent_cmp.get(k)
+                if sv != av:
+                    diff_keys.append(k)
+                    logger.info(f'[CONFLICT] field={k} server={repr(sv)[:200]} agent={repr(av)[:200]}')
+            logger.warning(f'Config conflict for {node_id}: differing fields = {diff_keys}')
             # Save agent's config as snapshot for revert
             save_agent_snapshot(node_id, agent_config)
 
