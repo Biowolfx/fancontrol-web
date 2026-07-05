@@ -697,6 +697,27 @@ def api_update_agents():
     })
 
 
+@routes.route('/api/update/poll', methods=['POST'])
+def api_update_poll():
+    """Agent polls this endpoint to check if an update is needed.
+
+    Agent sends {agent_version: "3.12.32", node_id: "..."}.
+    Server responds with {update_available: true/false, server_version: "..."}.
+    """
+    from core.state import CONFIG_VERSION
+    data = request.get_json(silent=True) or {}
+    agent_version = data.get('agent_version', '')
+    node_id = data.get('node_id', '')
+
+    needs_update = agent_version and agent_version != CONFIG_VERSION
+    logger.info(f'[POLL] node={node_id} agent_version={agent_version} '
+                f'server_version={CONFIG_VERSION} needs_update={needs_update}')
+    return jsonify({
+        'update_available': needs_update,
+        'server_version': CONFIG_VERSION,
+    })
+
+
 @routes.route('/api/control', methods=['POST'])
 def handle_control():
     """Handle fan control commands with validation"""

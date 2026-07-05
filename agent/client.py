@@ -57,6 +57,78 @@ def _telemetry_loop():
                 logger.error(f'Telemetry send failed: {e}')
 
 
+def _update_check_loop():
+    """Poll server for updates every 5 minutes via HTTP."""
+    import urllib.request
+    import json as _json
+    import os
+    import subprocess
+
+    POLL_INTERVAL = 300  # 5 minutes
+
+    # Convert ws:// to http:// for HTTP requests
+    http_url = SERVER_URL.replace('ws://', 'http://').replace('wss://', 'https://')
+
+    while True:
+        time.sleep(POLL_INTERVAL)
+        try:
+            if not state.get('server_connected'):
+                continue
+
+            from core.state import CONFIG_VERSION
+            payload = _json.dumps({
+                'agent_version': CONFIG_VERSION,
+                'node_id': NODE_ID,
+            }).encode()
+
+            req = urllib.request.Request(
+                f'{http_url}/api/update/poll',
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+            )
+            resp = urllib.request.urlopen(req, timeout=10)
+            result = _json.loads(resp.read())
+
+            if result.get('update_available'):
+                server_ver = result.get('server_version', '?')
+                logger.info(f'[update-check] Update available: {CONFIG_VERSION} → {server_ver}')
+
+                repo_dir = '/repo'
+                git_dir = os.path.join(repo_dir, '.git')
+                if not os.path.isdir(git_dir):
+                    logger.warning('[update-check] /repo has no .git — cannot auto-update')
+                    continue
+
+                # git fetch + reset
+                fetch = subprocess.run(
+                    ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
+                    capture_output=True, text=True, timeout=30,
+                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'},
+                )
+                if fetch.returncode != 0:
+                    logger.error(f'[update-check] git fetch failed: {fetch.stderr[:200]}')
+                    continue
+
+                reset = subprocess.run(
+                    ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
+                    capture_output=True, text=True, timeout=15,
+                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'},
+                )
+                if reset.returncode != 0:
+                    logger.error(f'[update-check] git reset failed: {reset.stderr[:200]}')
+                    continue
+
+                logger.info(f'[update-check] Updated /repo to {server_ver}, restarting...')
+                threading.Timer(1.0, os._exit, args=[0]).start()
+                break  # exit loop, process is dying
+
+            else:
+                logger.debug(f'[update-check] Up to date: {CONFIG_VERSION}')
+
+        except Exception as e:
+            logger.warning(f'[update-check] Poll failed: {e}')
+
+
 def start_client():
     """Start the WebSocket client connection to server."""
     global _sio, _telemetry_thread
@@ -88,8 +160,10 @@ def start_client():
 
     # Register event handlers
     from agent.handlers import make_handlers
-    for event, handler in make_handlers(_sio).items():
+    handlers = make_handlers(_sio)
+    for event, handler in handlers.items():
         _sio.on(event, handler)
+    logger.info(f'[agent] Registered handlers: {list(handlers.keys())}')
 
     try:
         _sio.connect(SERVER_URL)
@@ -98,3 +172,7 @@ def start_client():
 
     _telemetry_thread = threading.Thread(target=_telemetry_loop, daemon=True)
     _telemetry_thread.start()
+
+    _update_thread = threading.Thread(target=_update_check_loop, daemon=True)
+    _update_thread.start()
+    logger.info('[agent] Update check loop started (every 5 minutes)')
