@@ -103,7 +103,7 @@ def make_handlers(sio_ref):
 
     def _on_update(data):
         """Server requests agent to update itself — git pull + restart."""
-        logger.info('=== AGENT UPDATE RECEIVED ===')
+        logger.info('=== AGENT UPDATE RECEIVED from server ===')
         import subprocess
         import os
 
@@ -111,25 +111,40 @@ def make_handlers(sio_ref):
 
         git_dir = os.path.join(repo_dir, '.git')
         if not os.path.isdir(git_dir):
-            logger.warning(f'Agent /repo is not a git repo. Cannot auto-update.')
+            logger.error(f'[agent-update] /repo has no .git directory — cannot auto-update')
             return
 
         def _do_update():
             try:
-                logger.info('[agent-update] Fetching latest code...')
+                # Log current version before update
+                try:
+                    with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
+                        for line in f:
+                            if 'CONFIG_VERSION' in line:
+                                logger.info(f'[agent-update] Current version: {line.strip()}')
+                                break
+                except Exception:
+                    pass
+
+                logger.info('[agent-update] Step 1: git fetch origin main...')
                 result = subprocess.run(
                     ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
                     capture_output=True, text=True, timeout=30,
                     env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
                 )
-                logger.info(f'[agent-update] fetch: rc={result.returncode}')
+                logger.info(f'[agent-update] fetch: rc={result.returncode}, stderr={result.stderr.strip()[:200]}')
 
+                if result.returncode != 0:
+                    logger.error(f'[agent-update] Git fetch failed, aborting update')
+                    return
+
+                logger.info('[agent-update] Step 2: git reset --hard origin/main...')
                 reset = subprocess.run(
                     ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
                     capture_output=True, text=True, timeout=15,
                     env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
                 )
-                logger.info(f'[agent-update] reset: rc={reset.returncode} {reset.stdout.strip()[:200]}')
+                logger.info(f'[agent-update] reset: rc={reset.returncode}, output={reset.stdout.strip()[:200]}')
 
                 if reset.returncode != 0:
                     logger.error(f'[agent-update] Git reset failed: {reset.stderr[:200]}')
@@ -140,37 +155,47 @@ def make_handlers(sio_ref):
                     with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
                         for line in f:
                             if 'CONFIG_VERSION' in line:
-                                logger.info(f'[agent-update] New version: {line.strip()}')
+                                logger.info(f'[agent-update] New version after pull: {line.strip()}')
                                 break
                 except Exception:
                     pass
 
-                logger.info('[agent-update] Restarting container...')
-                # Multiple restart methods for reliability
-                try:
-                    # Method 1: Docker API (if docker.sock mounted)
-                    import urllib.request
-                    import json as _json
-                    container_id = open('/proc/self/cgroup').read().split('/')[-1].strip()
-                    req = urllib.request.Request(
-                        f'http://unix/containers/{container_id}/restart',
-                        method='POST',
-                        data=_json.dumps({'t': 1}).encode(),
-                    )
-                    import socket
-                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    sock.connect('/var/run/docker.sock')
-                    sock.send(req.to_bytes())
-                    sock.recv(4096)
-                    sock.close()
-                    logger.info('[agent-update] Restarted via Docker API')
-                    return
-                except Exception as e:
-                    logger.debug(f'[agent-update] Docker API restart failed: {e}')
+                logger.info('[agent-update] Step 3: syncing /repo → /app...')
+                import shutil
+                synced = []
+                for item in os.listdir(repo_dir):
+                    if item.endswith('.py') or item.endswith('.txt') or item in ('Dockerfile', 'docker-compose.yml'):
+                        src = os.path.join(repo_dir, item)
+                        dst = os.path.join('/app', item)
+                        if os.path.isfile(src):
+                            shutil.copy2(src, dst)
+                            synced.append(item)
+                for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
+                    src = os.path.join(repo_dir, d)
+                    dst = os.path.join('/app', d)
+                    if os.path.isdir(src):
+                        if os.path.exists(dst):
+                            shutil.rmtree(dst)
+                        shutil.copytree(src, dst)
+                        synced.append(f'{d}/')
+                logger.info(f'[agent-update] synced {len(synced)} items: {", ".join(synced[:15])}')
 
-                # Method 2: Kill own process
-                import signal
-                os.kill(os.getpid(), signal.SIGTERM)
+                # Verify /app version
+                try:
+                    with open('/app/core/state.py') as f:
+                        for line in f:
+                            if 'CONFIG_VERSION' in line:
+                                logger.info(f'[agent-update] /app version: {line.strip()}')
+                                break
+                except Exception:
+                    pass
+
+                logger.info('[agent-update] Step 4: restarting container...')
+                # os._exit(0) triggers Docker restart (restart: unless-stopped policy)
+                # Schedule with small delay to ensure log messages are flushed
+                import threading as _threading
+                _threading.Timer(1.0, os._exit, args=[0]).start()
+                logger.info('[agent-update] os._exit(0) scheduled in 1s')
             except Exception as e:
                 logger.error(f'[agent-update] Failed: {e}', exc_info=True)
 

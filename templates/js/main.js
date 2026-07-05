@@ -4667,13 +4667,23 @@ function openUpdateModal() {
     const applyBtn = document.getElementById('update-modal-apply');
     const closeBtn = document.getElementById('update-modal-close');
     
+    const onlineAgentCount = nodesData.filter(n => n.status === 'online').length;
+    const agentStep = onlineAgentCount > 0
+        ? `<div id="upd-step-agents" class="flex items-center gap-3 text-sm opacity-40">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-agents-icon">1</span>
+            <span class="text-gray-300">${t('settings.step_agents', 'Updating agents...')}</span>
+        </div>`
+        : '';
+    const serverStepNum = onlineAgentCount > 0 ? '2' : '1';
+    const restartStepNum = onlineAgentCount > 0 ? '3' : '2';
     steps.innerHTML = `
-        <div id="upd-step-pull" class="flex items-center gap-3 text-sm">
-            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-pull-icon">1</span>
+        ${agentStep}
+        <div id="upd-step-pull" class="flex items-center gap-3 text-sm ${onlineAgentCount > 0 ? 'opacity-40' : ''}">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-pull-icon">${serverStepNum}</span>
             <span class="text-gray-300">${t('settings.step_pull', 'Pulling latest code...')}</span>
         </div>
         <div id="upd-step-restart" class="flex items-center gap-3 text-sm opacity-40">
-            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-restart-icon">2</span>
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-restart-icon">${restartStepNum}</span>
             <span class="text-gray-300">${t('settings.step_restart', 'Restarting container...')}</span>
         </div>
     `;
@@ -4737,18 +4747,22 @@ async function startUpdate() {
 
     // Step 0: Send update to agents first (while server is still running)
     if (updateAgents) {
-        setStepState('pull', 'active');
-        bar.style.width = '15%';
+        setStepState('agents', 'active');
+        bar.style.width = '5%';
         try {
-            await fetch('/api/update/agents', { method: 'POST' });
+            const agentResp = await fetch('/api/update/agents', { method: 'POST' });
+            const agentData = await agentResp.json();
+            setStepState('agents', 'done');
+            bar.style.width = '35%';
         } catch (e) {
             console.error('Failed to notify agents:', e);
+            setStepState('agents', 'error');
         }
     }
 
     // Step 1: Git pull on server
     setStepState('pull', 'active');
-    bar.style.width = '30%';
+    bar.style.width = '40%';
 
     try {
         const resp = await fetch('/api/update/apply', { method: 'POST' });

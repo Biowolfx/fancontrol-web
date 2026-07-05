@@ -147,6 +147,7 @@
   "settings.restarting": "Container is restarting...",
   "settings.rebuilding": "Dependencies changed, rebuilding image...",
   "settings.update_modal_title": "System Update",
+  "settings.step_agents": "Updating agents...",
   "settings.step_pull": "Pulling latest code...",
   "settings.step_deps": "Checking dependencies...",
   "settings.step_deps_ok": "Dependencies unchanged",

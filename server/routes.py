@@ -672,6 +672,15 @@ def api_update_agents():
         updated.append(nid)
         logger.info(f'Sent update command to agent {nid} ({node.get("name")})')
 
+    if updated:
+        # Wait for agents to receive the event, do git pull, and restart.
+        # Server must stay alive long enough for Socket.IO to deliver the event
+        # and for agents to finish their update before the server restarts itself.
+        logger.info(f'[UPDATE] Waiting 15s for {len(updated)} agent(s) to process update...')
+        import time
+        time.sleep(15)
+        logger.info('[UPDATE] Agent update wait complete, proceeding with server update')
+
     return jsonify({
         'status': 'ok',
         'updated': updated,

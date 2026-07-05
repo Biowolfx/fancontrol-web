@@ -147,6 +147,7 @@
   "settings.restarting": "Контейнер перезапускается...",
   "settings.rebuilding": "Зависимости изменились, пересборка образа...",
   "settings.update_modal_title": "Обновление системы",
+  "settings.step_agents": "Обновление агентов...",
   "settings.step_pull": "Загрузка последних изменений...",
   "settings.step_deps": "Проверка зависимостей...",
   "settings.step_deps_ok": "Зависимости не изменились",
