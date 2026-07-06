@@ -159,9 +159,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         with state_lock:
             prev = state['nodes'].get(node_id, {})
             from core.state import CONFIG_VERSION as _srv_ver
-            # Use DB values (survive restart) or state values (runtime)
-            db_pending = bool(node.get('pending_update', 0))
-            db_auto = bool(node.get('auto_update', 0))
+            try:
+                db_pending = bool(node.get('pending_update', 0))
+                db_auto = bool(node.get('auto_update', 0))
+            except Exception as e:
+                logger.error(f'[connect] Error reading flags: {e}')
+                db_pending = False
+                db_auto = False
             update_done = (agent_version and agent_version == _srv_ver and db_pending)
             if update_done:
                 logger.info(f'[connect] Agent {node_id} updated successfully: '
@@ -181,6 +185,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'pending_update': False if update_done else db_pending,
                 'update_started': None,
             }
+            state['nodes'][node_id] = new_node
         invalidate_state_cache()
 
         # Push server config to agent if in server mode
