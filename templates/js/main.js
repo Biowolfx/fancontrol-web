@@ -149,6 +149,19 @@ function escapeHtml(str) {
     }[c]));
 }
 
+function fanIcon(fan, size = 'xs') {
+    const sizeClass = size === 'xs' ? 'w-3 h-3' : 'w-4 h-4';
+    const rpm = fan.rpm || 0;
+    const isDsm = fan.control_method === 'dsm_scemd';
+    if (isDsm) {
+        return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
+    }
+    const color = rpm > 0 ? '#22d3ee' : '#4b5563';
+    const dur = rpm > 0 ? Math.max(0.3, 3 - rpm / 500) : 0;
+    const anim = rpm > 0 ? `style="animation: fan-spin ${dur}s linear infinite"` : '';
+    return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 100 100" ${anim}><g fill="${color}" opacity="0.9"><path d="M50 50 Q30 20 50 5 Q70 20 50 50"/><path d="M50 50 Q80 30 95 50 Q80 70 50 50"/><path d="M50 50 Q70 80 50 95 Q30 80 50 50"/><path d="M50 50 Q20 70 5 50 Q20 30 50 50"/></g><circle cx="50" cy="50" r="6" fill="${color}" opacity="0.6"/></svg>`;
+}
+
 function show(el) { if (el) el.classList.remove('hidden'); }
 function hide(el) { if (el) el.classList.add('hidden'); }
 function toggle(el, visible) { if (el) el.classList.toggle('hidden', !visible); }
@@ -571,7 +584,7 @@ function renderLocalServerTree() {
         html += `
             <div data-sensor-id="fan:${escapeHtml(fanId)}" class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
                  onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
-                <span class="text-xs">🌀</span>
+                ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(fan.label)}</span>
                 <span class="ml-auto text-xs font-mono text-neon-cyan" id="tree-fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0}</span>
                 <button onclick="event.stopPropagation(); hideSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
@@ -619,7 +632,7 @@ function renderLocalServerTree() {
         for (const [fanId, fan] of hiddenFans) {
             html += `
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
-                    <span class="text-xs opacity-50">🌀</span>
+                    <span class="opacity-50">${fanIcon(fan)}</span>
                     <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(fan.label)}</span>
                     <button onclick="restoreSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
                 </div>
@@ -701,7 +714,7 @@ function renderRemoteNodeTree(node) {
         html += `
             <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-cyber-accent"
                  onclick="selectNodeFan('${escapeHtml(node.node_id)}', '${escapeHtml(fanId)}')">
-                <span class="text-xs">🌀</span>
+                ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(cleanLabel)}${isDsm ? ' <span class="text-blue-400 text-[10px]">DSM</span>' : ''}</span>
                 <span class="ml-auto text-xs font-mono text-neon-cyan">${fan.rpm || 0}</span>
             </div>
