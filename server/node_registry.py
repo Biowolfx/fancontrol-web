@@ -66,6 +66,10 @@ def init_nodes_table():
                 conn.execute("ALTER TABLE nodes ADD COLUMN port INTEGER DEFAULT 5059")
             if 'agent_version' not in cols:
                 conn.execute("ALTER TABLE nodes ADD COLUMN agent_version TEXT DEFAULT ''")
+            if 'pending_update' not in cols:
+                conn.execute("ALTER TABLE nodes ADD COLUMN pending_update INTEGER DEFAULT 0")
+            if 'auto_update' not in cols:
+                conn.execute("ALTER TABLE nodes ADD COLUMN auto_update INTEGER DEFAULT 0")
             conn.commit()
         finally:
             conn.close()
@@ -204,6 +208,32 @@ def update_node_control_mode(node_id: str, mode: str) -> bool:
             conn.execute(
                 'UPDATE nodes SET control_mode = ? WHERE node_id = ?',
                 (mode, node_id)
+            )
+            conn.commit()
+            return conn.execute('SELECT changes()').fetchone()[0] > 0
+        finally:
+            conn.close()
+
+
+def update_node_flags(node_id: str, pending_update: Optional[bool] = None,
+                      auto_update: Optional[bool] = None) -> bool:
+    with _lock:
+        conn = _get_conn()
+        try:
+            updates = []
+            params = []
+            if pending_update is not None:
+                updates.append('pending_update = ?')
+                params.append(1 if pending_update else 0)
+            if auto_update is not None:
+                updates.append('auto_update = ?')
+                params.append(1 if auto_update else 0)
+            if not updates:
+                return False
+            params.append(node_id)
+            conn.execute(
+                f'UPDATE nodes SET {", ".join(updates)} WHERE node_id = ?',
+                params
             )
             conn.commit()
             return conn.execute('SELECT changes()').fetchone()[0] > 0

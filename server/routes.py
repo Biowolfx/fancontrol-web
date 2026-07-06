@@ -682,6 +682,8 @@ def api_update_agents():
         with state_lock:
             state['nodes'].get(nid, {})['pending_update'] = True
             state['nodes'].get(nid, {})['update_started'] = _time.time()
+        from server.node_registry import update_node_flags
+        update_node_flags(nid, pending_update=True)
         updated.append(nid)
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
@@ -725,6 +727,8 @@ def api_update_poll():
     if pending:
         with state_lock:
             state['nodes'].get(node_id, {})['pending_update'] = False
+        from server.node_registry import update_node_flags
+        update_node_flags(node_id, pending_update=False)
         logger.info(f'[POLL] node={node_id} pending_update consumed')
 
     logger.info(f'[POLL] node={node_id} v={agent_version}→{CONFIG_VERSION} '
@@ -745,6 +749,8 @@ def toggle_auto_update(node_id):
     with state_lock:
         if node_id in state.get('nodes', {}):
             state['nodes'][node_id]['auto_update'] = enabled
+    from server.node_registry import update_node_flags
+    update_node_flags(node_id, auto_update=enabled)
     logger.info(f'[AUTO-UPDATE] node={node_id} auto_update={enabled}')
     return jsonify({'status': 'ok', 'node_id': node_id, 'auto_update': enabled})
 

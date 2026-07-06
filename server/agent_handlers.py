@@ -158,6 +158,16 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
         with state_lock:
             prev = state['nodes'].get(node_id, {})
+            from core.state import CONFIG_VERSION as _srv_ver
+            # Use DB values (survive restart) or state values (runtime)
+            db_pending = bool(node.get('pending_update', 0))
+            db_auto = bool(node.get('auto_update', 0))
+            update_done = (agent_version and agent_version == _srv_ver and db_pending)
+            if update_done:
+                logger.info(f'[connect] Agent {node_id} updated successfully: '
+                            f'{prev.get("agent_version", "?")} → {agent_version}')
+                from server.node_registry import update_node_flags
+                update_node_flags(node_id, pending_update=False)
             new_node = {
                 'node_id': node_id,
                 'name': node['name'],
@@ -167,13 +177,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'dsm_schemes': agent_config.get('dsm_schemes', []),
                 'kernel_info': agent_config.get('kernel_info', {}),
                 'agent_version': agent_version,
-                'auto_update': prev.get('auto_update', False),
+                'auto_update': db_auto,
+                'pending_update': False if update_done else db_pending,
+                'update_started': None,
             }
-            # Clear update tracking if agent reconnected with current server version
-            from core.state import CONFIG_VERSION as _srv_ver
-            if agent_version == _srv_ver and prev.get('pending_update'):
-                logger.info(f'[connect] Agent {node_id} updated successfully: {prev.get("agent_version")} → {agent_version}')
-            state['nodes'][node_id] = new_node
         invalidate_state_cache()
 
         # Push server config to agent if in server mode
