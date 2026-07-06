@@ -1,8 +1,8 @@
 """Control loop — fan temperature evaluation, PWM calculation, and main loop."""
 
-import copy
 import logging
 import sqlite3
+import threading
 import time
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
@@ -31,13 +31,19 @@ LOG_CLEANUP_INTERVAL = 86400
 DISK_POLL_COOLDOWN = 15
 
 
+_db_local = threading.local()
+
+
 def get_db_connection() -> sqlite3.Connection:
-    """Get a SQLite connection with WAL mode and optimized PRAGMAs."""
-    conn = sqlite3.connect(DB_FILE, timeout=5)
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.execute('PRAGMA journal_size_limit=10485760')  # 10MB max WAL
-    conn.execute('PRAGMA synchronous=NORMAL')
-    conn.execute('PRAGMA busy_timeout=5000')
+    """Thread-local persistent SQLite connection with WAL mode."""
+    conn = getattr(_db_local, 'conn', None)
+    if conn is None:
+        conn = sqlite3.connect(DB_FILE, timeout=5)
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA journal_size_limit=10485760')
+        conn.execute('PRAGMA synchronous=NORMAL')
+        conn.execute('PRAGMA busy_timeout=5000')
+        _db_local.conn = conn
     return conn
 
 
@@ -121,7 +127,11 @@ def refresh_disks():
 
 def fan_temp(fan: Dict, override_sensors: Optional[List] = None, 
              override_sensor_mode: Optional[str] = None) -> float:
-    """Calculate effective temperature for a fan based on assigned sensors"""
+    """Calculate effective temperature for a fan based on assigned sensors.
+    
+    Reads sensor values under lock without copying entire dicts —
+    only accesses the specific sensor_ids needed.
+    """
     sensors = override_sensors if override_sensors is not None else fan.get('sensors', [])
     mode = override_sensor_mode if override_sensor_mode is not None else fan.get('sensor_mode', 'max')
     
@@ -131,28 +141,10 @@ def fan_temp(fan: Dict, override_sensors: Optional[List] = None,
     temps = []
     
     with state_lock:
-        hdd_copy = {k: v.copy() for k, v in state['hdd_sensors'].items()}
-        temp_copy = {k: v.copy() for k, v in state['temp_sensors'].items()}
-    
-    for sensor_id in sensors:
-        if sensor_id.startswith('hdd:'):
-            disk_id = sensor_id.split(':', 1)[1]
-            disk = hdd_copy.get(disk_id, {})
-            temp = disk.get('temp', 0)
-        elif sensor_id.startswith('temp:'):
-            temp_id = sensor_id.split(':', 1)[1]
-            sensor = temp_copy.get(temp_id, {})
-            temp = sensor.get('value', 0)
-        else:
-            if sensor_id in hdd_copy:
-                temp = hdd_copy[sensor_id].get('temp', 0)
-            elif sensor_id in temp_copy:
-                temp = temp_copy[sensor_id].get('value', 0)
-            else:
-                temp = 0
-        
-        if temp > 0:
-            temps.append(temp)
+        for sensor_id in sensors:
+            temp = _extract_sensor_temp(sensor_id)
+            if temp > 0:
+                temps.append(temp)
     
     if not temps:
         return SENSOR_FAILURE_TEMP
@@ -163,6 +155,22 @@ def fan_temp(fan: Dict, override_sensors: Optional[List] = None,
         return min(temps)
     else:
         return sum(temps) / len(temps)
+
+
+def _extract_sensor_temp(sensor_id: str) -> float:
+    """Extract temperature for a single sensor_id. Must be called under state_lock."""
+    if sensor_id.startswith('hdd:'):
+        disk_id = sensor_id.split(':', 1)[1]
+        return state['hdd_sensors'].get(disk_id, {}).get('temp', 0)
+    if sensor_id.startswith('temp:'):
+        temp_id = sensor_id.split(':', 1)[1]
+        return state['temp_sensors'].get(temp_id, {}).get('value', 0)
+    # Legacy format — try both
+    if sensor_id in state['hdd_sensors']:
+        return state['hdd_sensors'][sensor_id].get('temp', 0)
+    if sensor_id in state['temp_sensors']:
+        return state['temp_sensors'][sensor_id].get('value', 0)
+    return 0
 
 
 def pwm_from_curve(fan: Dict, target_pct: float) -> int:
@@ -340,27 +348,31 @@ def _evaluate_fan_mode(fan_id: str, fan: Dict, sys_failsafe: bool, sys_standby: 
 
 
 def log_telemetry():
-    """Log telemetry data to SQLite"""
+    """Log telemetry data to SQLite.
+    
+    Reads fan/disk counts directly without state_lock — GIL protects
+    dict iteration. Values may be 1 cycle stale, acceptable for logging.
+    """
     try:
-        with state_lock:
-            fan_count = len(state['fans'])
-            disk_count = len(state['hdd_sensors'])
-            
-            if fan_count > 0:
-                avg_pwm = sum(
-                    f.get('raw_pwm', f.get('pwm_value', 0))
-                    for f in state['fans'].values()
-                ) // fan_count
-                avg_rpm = sum(
-                    f.get('rpm', 0)
-                    for f in state['fans'].values()
-                ) // fan_count
-            else:
-                avg_pwm = 0
-                avg_rpm = 0
-            
-            max_temp = state.get('max_hdd_temp', 0)
-        
+        fans = state.get('fans', {})
+        fan_count = len(fans)
+        disk_count = len(state.get('hdd_sensors', {}))
+
+        if fan_count > 0:
+            avg_pwm = sum(
+                f.get('raw_pwm', f.get('pwm_value', 0))
+                for f in fans.values()
+            ) // fan_count
+            avg_rpm = sum(
+                f.get('rpm', 0)
+                for f in fans.values()
+            ) // fan_count
+        else:
+            avg_pwm = 0
+            avg_rpm = 0
+
+        max_temp = state.get('max_hdd_temp', 0)
+
         with get_db_connection() as conn:
             conn.execute(
                 'INSERT INTO logs VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -375,7 +387,7 @@ def log_telemetry():
                 )
             )
             conn.commit()
-            
+
     except sqlite3.OperationalError as e:
         logger.error(f'SQLite write error: {e}')
 
@@ -441,7 +453,7 @@ def loop(socketio=None):
             refresh_disks()
             
             with state_lock:
-                fans_snapshot = copy.deepcopy(state['fans'])
+                fans_snapshot = {k: v.copy() for k, v in state['fans'].items()}
                 sys_failsafe = state.get('failsafe', False)
                 sys_standby = state.get('standby_mode', False)
             

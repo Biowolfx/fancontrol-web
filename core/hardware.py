@@ -951,39 +951,48 @@ def _set_pwm_dsm(fan, raw_pwm, raw):
 
 
 def refresh():
-    """Update temperature and RPM readings"""
+    """Update temperature and RPM readings.
+    
+    Reads sysfs without holding state_lock, then batch-updates under a
+    single lock acquisition instead of per-sensor locks.
+    """
     with state_lock:
-        temp_items = [(k, v.copy()) for k, v in state['temp_sensors'].items()]
-        fan_items = [(k, v.copy()) for k, v in state['fans'].items()]
-    
-    for key, sensor in temp_items:
+        temp_paths = [(k, v['path']) for k, v in state['temp_sensors'].items()]
+        fan_paths = [(k, v['fan_path']) for k, v in state['fans'].items()]
+
+    # Read all sysfs without holding lock
+    temp_updates = {}
+    for key, path in temp_paths:
         try:
-            value = int(Path(sensor['path']).read_text().strip()) // 1000
+            temp_updates[key] = int(Path(path).read_text().strip()) // 1000
         except Exception:
-            continue
-        
-        with state_lock:
-            if key in state['temp_sensors']:
-                state['temp_sensors'][key]['value'] = value
-    
+            pass
+
     def poll_fan(item):
-        k, fan = item
+        k, path = item
         try:
-            rpm = int(Path(fan['fan_path']).read_text().strip())
+            return k, int(Path(path).read_text().strip())
         except Exception:
-            rpm = None
-        return k, rpm
-    
-    futures = [executor.submit(poll_fan, item) for item in fan_items]
+            return k, None
+
+    futures = [executor.submit(poll_fan, item) for item in fan_paths]
+    fan_updates = {}
     for future in futures:
         try:
             key, rpm = future.result(timeout=2)
             if rpm is not None:
-                with state_lock:
-                    if key in state['fans']:
-                        state['fans'][key]['rpm'] = rpm
+                fan_updates[key] = rpm
         except Exception:
             pass
+
+    # Single lock for all writes
+    with state_lock:
+        for k, v in temp_updates.items():
+            if k in state['temp_sensors']:
+                state['temp_sensors'][k]['value'] = v
+        for k, rpm in fan_updates.items():
+            if k in state['fans']:
+                state['fans'][k]['rpm'] = rpm
 
 
 def get_system_info():

@@ -834,10 +834,9 @@ def validate_control_request(data: Dict):
     fan_key = data.get('fan')
     if not fan_key:
         raise BadRequest("Missing fan identifier")
-    
-    with state_lock:
-        if fan_key not in state.get('fans', {}):
-            raise BadRequest(f"Fan '{fan_key}' not found")
+
+    if fan_key not in state.get('fans', {}):
+        raise BadRequest(f"Fan '{fan_key}' not found")
     
     if action == 'set_fan_pwm':
         pwm_val = data.get('pwm')

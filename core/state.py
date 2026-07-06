@@ -1,11 +1,10 @@
 """Global state management — thread-safe state dict with caching."""
 
-import copy
 import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.12.49"
+CONFIG_VERSION = "3.12.50"
 
 state_lock = threading.RLock()
 
@@ -38,15 +37,19 @@ _init_complete = threading.Event()
 
 
 def _build_state_snapshot() -> Dict[str, Any]:
-    """Build a fresh state snapshot (caller must hold state_lock)."""
+    """Build a fresh state snapshot (caller must hold state_lock).
+    
+    Uses shallow copy for dicts — fan/sensor/disk dicts are flat
+    (no nested mutable objects that need deep copy).
+    """
     return {
-        'fans': copy.deepcopy(state['fans']),
-        'temp_sensors': copy.deepcopy(state['temp_sensors']),
-        'hdd_sensors': copy.deepcopy(state['hdd_sensors']),
+        'fans': {k: v.copy() for k, v in state['fans'].items()},
+        'temp_sensors': {k: v.copy() for k, v in state['temp_sensors'].items()},
+        'hdd_sensors': {k: v.copy() for k, v in state['hdd_sensors'].items()},
         'max_hdd_temp': state.get('max_hdd_temp', 0),
         'tested': state.get('tested', False),
         'testing': state.get('testing', False),
-        'test_progress': copy.deepcopy(state.get('test_progress', {})),
+        'test_progress': (state.get('test_progress') or {}).copy(),
         '_pause_loop': state.get('_pause_loop', False),
         'failsafe': state.get('failsafe', False),
         'standby_mode': state.get('standby_mode', False),
@@ -55,7 +58,7 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'config_version': CONFIG_VERSION,
         'language': state.get('language', 'en'),
         'server_name': state.get('server_name', 'FanControl Server'),
-        'nodes': dict(state.get('nodes', {})),
+        'nodes': {k: v.copy() for k, v in state.get('nodes', {}).items()},
         'agent_mode': state.get('server_url') is not None,
         'api_token': state.get('api_token', ''),
     }
