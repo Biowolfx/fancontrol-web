@@ -192,7 +192,8 @@ function hideServerUnavailable() {
 
 let lastUIUpdate = 0;
 socket.on('update', (data) => {
-    currentState = data;
+    // Merge partial updates into currentState (don't replace)
+    if (data) Object.assign(currentState, data);
     // Sync node data from server state
     if (data.nodes) {
         const nodeEntries = Object.entries(data.nodes);
@@ -672,7 +673,12 @@ function renderRemoteNodeTree(node) {
                     const updateStarted = node.update_started;
                     if (updateStarted) {
                         const elapsed = Math.round((Date.now() / 1000) - updateStarted);
-                        return `<span class="text-[10px] px-1 py-0.5 rounded bg-cyan-900/50 text-neon-cyan border border-cyan-700/50 flex-shrink-0 animate-pulse" title="Updating... ${elapsed}s">⟳ ${elapsed}s</span>`;
+                        if (elapsed > 180) {
+                            // Safety: force-clear stale timer after 3 minutes
+                            node.update_started = null;
+                        } else {
+                            return `<span class="text-[10px] px-1 py-0.5 rounded bg-cyan-900/50 text-neon-cyan border border-cyan-700/50 flex-shrink-0 animate-pulse" title="Updating... ${elapsed}s">⟳ ${elapsed}s</span>`;
+                        }
                     }
                     if (agentVer && serverVer && agentVer !== serverVer) {
                         return `<span class="text-[10px] px-1 py-0.5 rounded bg-orange-900/50 text-orange-400 border border-orange-700/50 flex-shrink-0 cursor-pointer hover:bg-orange-800/50" onclick="event.stopPropagation(); updateSingleAgent('${escapeHtml(node.node_id)}')" title="Server: ${escapeHtml(serverVer)} — ${t('nodes.click_to_update', 'click to update')}">↑ ${escapeHtml(agentVer)}</span>`;
