@@ -193,7 +193,7 @@ function hideServerUnavailable() {
 let lastUIUpdate = 0;
 socket.on('update', (data) => {
     // Merge partial updates into currentState (don't replace)
-    if (data) Object.assign(currentState, data);
+    if (data && typeof data === 'object') Object.assign(currentState, data);
     // Sync node data from server state
     if (data.nodes) {
         const nodeEntries = Object.entries(data.nodes);
