@@ -461,7 +461,6 @@ def api_history():
 @routes.route('/api/update/check')
 def api_update_check():
     """Check for updates — compare local vs remote git hash."""
-    import subprocess
 
     current_version = CONFIG_VERSION
     remote_version = ''
@@ -553,91 +552,26 @@ def api_update_apply():
             return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
     try:
+        from core.update_helper import do_git_pull, sync_repo_to_app, schedule_restart
+
         repo_dir = '/repo'
         app_dir = '/app'
 
         logger.info(f'[UPDATE] ====== START ====== PID={os.getpid()} VERSION={CONFIG_VERSION}')
 
-        # Step 1: Check repo exists
-        repo_exists = os.path.isdir(repo_dir)
-        app_py = os.path.isfile(os.path.join(repo_dir, 'app.py'))
-        logger.info(f'[UPDATE] Step 1: /repo exists={repo_exists}, app.py={app_py}')
-
-        if not repo_exists or not app_py:
-            logger.error(f'[UPDATE] /repo not ready!')
+        if not os.path.isdir(repo_dir) or not os.path.isfile(os.path.join(repo_dir, 'app.py')):
             return jsonify({'status': 'error', 'message': '/repo not ready'}), 500
 
-        # Step 2: Git pull
-        logger.info('[UPDATE] Step 2: git fetch + reset...')
-        fetch = subprocess.run(
-            ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
-            capture_output=True, text=True, timeout=60,
-            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
-        )
-        if fetch.returncode != 0:
-            logger.error(f'[UPDATE] Git fetch FAILED: {fetch.stderr.strip()[:300]}')
-            return jsonify({'status': 'error', 'message': fetch.stderr.strip()}), 500
+        success, version = do_git_pull(repo_dir)
+        if not success:
+            return jsonify({'status': 'error', 'message': 'git pull failed'}), 500
+        logger.info(f'[UPDATE] /repo version after pull: {version}')
 
-        reset = subprocess.run(
-            ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
-            capture_output=True, text=True, timeout=60,
-            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
-        )
-        pull_output = reset.stdout.strip() + '\n' + reset.stderr.strip()
-        already_up = 'Already up to date' in pull_output or 'HEAD is now at' in pull_output
-        logger.info(f'[UPDATE] Step 2 result: rc={reset.returncode}, output={pull_output.strip()[:300]}')
+        sync_repo_to_app(repo_dir, app_dir)
 
-        # Step 3: Check what version /repo has after pull
-        try:
-            with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
-                for line in f:
-                    if 'CONFIG_VERSION' in line:
-                        logger.info(f'[UPDATE] Step 3: /repo version after pull: {line.strip()}')
-                        break
-        except Exception as e:
-            logger.error(f'[UPDATE] Step 3: Cannot read /repo version: {e}')
+        schedule_restart(delay=1.0)
 
-        # Step 4: Sync /repo → /app
-        logger.info('[UPDATE] Step 4: syncing files...')
-        import shutil
-        synced = []
-        for f in os.listdir(repo_dir):
-            if f.endswith('.py') or f.endswith('.txt') or f in ('Dockerfile', 'docker-compose.yml'):
-                src = os.path.join(repo_dir, f)
-                dst = os.path.join(app_dir, f)
-                if os.path.isfile(src):
-                    shutil.copy2(src, dst)
-                    synced.append(f)
-        for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
-            src = os.path.join(repo_dir, d)
-            dst = os.path.join(app_dir, d)
-            if os.path.isdir(src):
-                if os.path.exists(dst):
-                    shutil.rmtree(dst)
-                shutil.copytree(src, dst)
-                synced.append(f'{d}/')
-        logger.info(f'[UPDATE] Step 4: synced {len(synced)} items: {", ".join(synced[:15])}')
-
-        # Step 5: Verify /app version after sync
-        try:
-            with open(os.path.join(app_dir, 'core', 'state.py')) as f:
-                for line in f:
-                    if 'CONFIG_VERSION' in line:
-                        logger.info(f'[UPDATE] Step 5: /app version after sync: {line.strip()}')
-                        break
-        except Exception as e:
-            logger.error(f'[UPDATE] Step 5: Cannot read /app version: {e}')
-
-        # Step 6: Schedule process exit
-        logger.info('[UPDATE] Step 6: scheduling os._exit(0) in 1s...')
-        import threading
-        def delayed_exit():
-            logger.info('[UPDATE] Step 6: os._exit(0) called!')
-            os._exit(0)
-        threading.Timer(1.0, delayed_exit).start()
-
-        logger.info('[UPDATE] ====== DONE (waiting for timer) ======')
-        return jsonify({'status': 'ok', 'message': f'Synced. Restarting in 1s...'})
+        return jsonify({'status': 'ok', 'message': 'Synced. Restarting in 1s...'})
 
     except Exception as e:
         logger.error(f'[UPDATE] ERROR: {e}', exc_info=True)

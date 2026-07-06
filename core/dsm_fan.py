@@ -30,16 +30,39 @@ KNOWN_SCHEME_TYPES = [
     'STOP',
 ]
 
+# Module-level cache for scemd.xml parsed tree
+_scemd_cache = None
+_scemd_cache_mtime = 0.0
+
 
 def is_dsm_fan_available():
     """Check if scemd.xml exists and can be used for fan control."""
     return Path(SCEMD_PATH).exists() and os.access(SCEMD_PATH, os.R_OK | os.W_OK)
 
 
+def _invalidate_scemd_cache():
+    """Invalidate cached scemd.xml tree. Called after writes."""
+    global _scemd_cache, _scemd_cache_mtime
+    _scemd_cache = None
+    _scemd_cache_mtime = 0.0
+
+
 def _parse_scemd():
-    """Parse scemd.xml and return the tree."""
+    """Parse scemd.xml and return the tree (cached by file mtime)."""
+    global _scemd_cache, _scemd_cache_mtime
+    try:
+        mtime = Path(SCEMD_PATH).stat().st_mtime
+    except OSError:
+        return None
+
+    if _scemd_cache is not None and mtime == _scemd_cache_mtime:
+        import copy
+        return copy.deepcopy(_scemd_cache)
+
     try:
         tree = ET.parse(SCEMD_PATH)
+        _scemd_cache = tree
+        _scemd_cache_mtime = mtime
         return tree
     except ET.ParseError as e:
         logger.error(f'Failed to parse {SCEMD_PATH}: {e}')
@@ -412,6 +435,7 @@ def _write_and_restart(tree):
     try:
         tree.write(SCEMD_PATH, encoding='unicode', xml_declaration=False)
         logger.info(f'Wrote {SCEMD_PATH}')
+        _invalidate_scemd_cache()
     except Exception as e:
         logger.error(f'Failed to write {SCEMD_PATH}: {e}')
         return False
@@ -435,6 +459,7 @@ def _restore_backup():
     if backup.exists():
         try:
             shutil.copy2(backup, SCEMD_PATH)
+            _invalidate_scemd_cache()
             logger.info(f'Restored {SCEMD_PATH} from backup')
         except Exception as e:
             logger.error(f'Failed to restore backup: {e}')

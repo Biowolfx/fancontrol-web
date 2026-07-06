@@ -41,33 +41,32 @@ except Exception:
     # Ignore permission errors during import (testing or restricted environments)
     pass
 
-# Logger setup
+# Logger setup — guard against duplicate handlers (gunicorn workers re-import)
 logger = logging.getLogger('fancontrol')
-logger.setLevel(logging.DEBUG)
-fmt = logging.Formatter(
-    '%(asctime)s | %(levelname)-7s | %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(fmt)
-logger.addHandler(console_handler)
-
-try:
-    file_handler = RotatingFileHandler(
-        f'{LOG_DIR}/fancontrol.log',
-        maxBytes=10*1024*1024,
-        backupCount=5,
-        encoding='utf-8'
+if not logger.hasHandlers():
+    logger.setLevel(logging.DEBUG)
+    fmt = logging.Formatter(
+        '%(asctime)s | %(levelname)-7s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(fmt)
-    logger.addHandler(file_handler)
-except Exception:
-    # If creating the file handler fails (permissions, missing dirs), continue
-    # with console logging only — avoid raising during import.
-    pass
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(fmt)
+    logger.addHandler(console_handler)
+
+    try:
+        file_handler = RotatingFileHandler(
+            f'{LOG_DIR}/fancontrol.log',
+            maxBytes=10*1024*1024,
+            backupCount=5,
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(fmt)
+        logger.addHandler(file_handler)
+    except Exception:
+        pass
 
 
 # Flask & SocketIO

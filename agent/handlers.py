@@ -105,100 +105,22 @@ def make_handlers(sio_ref):
     def _on_update(data):
         """Server requests agent to update itself — git pull + restart."""
         logger.info('=== AGENT UPDATE RECEIVED from server ===')
-        import subprocess
         import os
 
         repo_dir = '/repo'
-
-        git_dir = os.path.join(repo_dir, '.git')
-        if not os.path.isdir(git_dir):
-            logger.error(f'[agent-update] /repo has no .git directory — cannot auto-update')
+        if not os.path.isdir(os.path.join(repo_dir, '.git')):
+            logger.error('[agent-update] /repo has no .git — cannot auto-update')
             return
 
         def _do_update():
-            try:
-                # Log current version before update
-                try:
-                    with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
-                        for line in f:
-                            if 'CONFIG_VERSION' in line:
-                                logger.info(f'[agent-update] Current version: {line.strip()}')
-                                break
-                except Exception:
-                    pass
-
-                logger.info('[agent-update] Step 1: git fetch origin main...')
-                result = subprocess.run(
-                    ['git', '-C', repo_dir, 'fetch', 'origin', 'main'],
-                    capture_output=True, text=True, timeout=30,
-                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
-                )
-                logger.info(f'[agent-update] fetch: rc={result.returncode}, stderr={result.stderr.strip()[:200]}')
-
-                if result.returncode != 0:
-                    logger.error(f'[agent-update] Git fetch failed, aborting update')
-                    return
-
-                logger.info('[agent-update] Step 2: git reset --hard origin/main...')
-                reset = subprocess.run(
-                    ['git', '-C', repo_dir, 'reset', '--hard', 'origin/main'],
-                    capture_output=True, text=True, timeout=15,
-                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'}
-                )
-                logger.info(f'[agent-update] reset: rc={reset.returncode}, output={reset.stdout.strip()[:200]}')
-
-                if reset.returncode != 0:
-                    logger.error(f'[agent-update] Git reset failed: {reset.stderr[:200]}')
-                    return
-
-                # Verify new version
-                try:
-                    with open(os.path.join(repo_dir, 'core', 'state.py')) as f:
-                        for line in f:
-                            if 'CONFIG_VERSION' in line:
-                                logger.info(f'[agent-update] New version after pull: {line.strip()}')
-                                break
-                except Exception:
-                    pass
-
-                logger.info('[agent-update] Step 3: syncing /repo → /app...')
-                import shutil
-                synced = []
-                for item in os.listdir(repo_dir):
-                    if item.endswith('.py') or item.endswith('.txt') or item in ('Dockerfile', 'docker-compose.yml'):
-                        src = os.path.join(repo_dir, item)
-                        dst = os.path.join('/app', item)
-                        if os.path.isfile(src):
-                            shutil.copy2(src, dst)
-                            synced.append(item)
-                for d in ('templates', 'static', 'core', 'server', 'agent', 'installer', 'tests'):
-                    src = os.path.join(repo_dir, d)
-                    dst = os.path.join('/app', d)
-                    if os.path.isdir(src):
-                        if os.path.exists(dst):
-                            shutil.rmtree(dst)
-                        shutil.copytree(src, dst)
-                        synced.append(f'{d}/')
-                logger.info(f'[agent-update] synced {len(synced)} items: {", ".join(synced[:15])}')
-
-                # Verify /app version
-                try:
-                    with open('/app/core/state.py') as f:
-                        for line in f:
-                            if 'CONFIG_VERSION' in line:
-                                logger.info(f'[agent-update] /app version: {line.strip()}')
-                                break
-                except Exception:
-                    pass
-
-                logger.info('[agent-update] Step 4: restarting container...')
-                # os._exit(0) triggers Docker restart (restart: unless-stopped policy)
-                # Schedule with small delay to ensure log messages are flushed
-                import threading as _threading
-                _threading.Timer(1.0, os._exit, args=[0]).start()
-                logger.info('[agent-update] os._exit(0) scheduled in 1s')
-            except Exception as e:
-                logger.error(f'[agent-update] Failed: {e}', exc_info=True)
+            from core.update_helper import do_git_pull, sync_repo_to_app, schedule_restart
+            success, version = do_git_pull(repo_dir)
+            if not success:
+                logger.error('[agent-update] git pull failed, aborting')
+                return
+            logger.info(f'[agent-update] updated to: {version}')
+            sync_repo_to_app(repo_dir, '/app')
+            schedule_restart(delay=1.0)
 
         import threading
         threading.Thread(target=_do_update, daemon=True).start()
