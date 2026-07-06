@@ -678,13 +678,15 @@ def api_update_agents():
             logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — cannot send update')
             continue
         _emit_to_node(socketio, 'server:update', {}, nid)
+        import time as _time
         with state_lock:
             state['nodes'].get(nid, {})['pending_update'] = True
+            state['nodes'].get(nid, {})['update_started'] = _time.time()
         updated.append(nid)
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
     if updated:
-        logger.info(f'[AGENTS-UPDATE] Waiting 10s for {len(updated)} agent(s)...')
+        logger.info(f'[AGENTS-UPDATE] Waiting 10s for {len(updated)} agent(s) to receive event...')
         import time
         time.sleep(10)
         logger.info('[AGENTS-UPDATE] Wait complete')

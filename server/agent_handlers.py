@@ -157,7 +157,8 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         }, node_id)
 
         with state_lock:
-            state['nodes'][node_id] = {
+            prev = state['nodes'].get(node_id, {})
+            new_node = {
                 'node_id': node_id,
                 'name': node['name'],
                 'status': 'online',
@@ -166,7 +167,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'dsm_schemes': agent_config.get('dsm_schemes', []),
                 'kernel_info': agent_config.get('kernel_info', {}),
                 'agent_version': agent_version,
+                'auto_update': prev.get('auto_update', False),
             }
+            # Clear update tracking if agent reconnected with current server version
+            from core.state import CONFIG_VERSION as _srv_ver
+            if agent_version == _srv_ver and prev.get('pending_update'):
+                logger.info(f'[connect] Agent {node_id} updated successfully: {prev.get("agent_version")} → {agent_version}')
+            state['nodes'][node_id] = new_node
         invalidate_state_cache()
 
         # Push server config to agent if in server mode

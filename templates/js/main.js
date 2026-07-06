@@ -301,6 +301,10 @@ function updateUI(data) {
     
     // Show appropriate screen
     if (!data.initialized || !data.tested) {
+        // Don't flash setup screen during restart if we were already on main screen
+        if (_wasOnMainScreen) {
+            return;
+        }
         showSetupScreen();
         if (data.hardware_scanned && wizardStep === 'intro') {
             renderDiscoveredHardware({
@@ -359,7 +363,10 @@ function showSetupScreen() {
     if (panel) panel.classList.add('hidden');
 }
 
+let _wasOnMainScreen = false;
+
 function showMainScreen() {
+    _wasOnMainScreen = true;
     const mainScreen = document.getElementById('main-screen');
     const wasOnSetup = mainScreen?.classList.contains('hidden');
 
@@ -662,6 +669,11 @@ function renderRemoteNodeTree(node) {
                 ${(() => {
                     const serverVer = currentState?.config_version || '';
                     const agentVer = node.agent_version || '';
+                    const updateStarted = node.update_started;
+                    if (updateStarted) {
+                        const elapsed = Math.round((Date.now() / 1000) - updateStarted);
+                        return `<span class="text-[10px] px-1 py-0.5 rounded bg-cyan-900/50 text-neon-cyan border border-cyan-700/50 flex-shrink-0 animate-pulse" title="Updating... ${elapsed}s">⟳ ${elapsed}s</span>`;
+                    }
                     if (agentVer && serverVer && agentVer !== serverVer) {
                         return `<span class="text-[10px] px-1 py-0.5 rounded bg-orange-900/50 text-orange-400 border border-orange-700/50 flex-shrink-0 cursor-pointer hover:bg-orange-800/50" onclick="event.stopPropagation(); updateSingleAgent('${escapeHtml(node.node_id)}')" title="Server: ${escapeHtml(serverVer)} — ${t('nodes.click_to_update', 'click to update')}">↑ ${escapeHtml(agentVer)}</span>`;
                     } else if (agentVer) {
