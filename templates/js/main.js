@@ -572,13 +572,20 @@ function renderLocalServerTree() {
 
     let html = `
         <div class="node-group" data-node="local">
-            <div class="p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
+            <div class="p-2 rounded hover:bg-cyber-accent cursor-pointer node-header group"
                  onclick="toggleNodeGroup('local')">
                 <div class="flex items-center gap-1.5">
-                    <span class="text-neon-cyan text-xs">▼</span>
+                    <span class="w-2 h-2 bg-neon-cyan rounded-full flex-shrink-0"></span>
                     <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(currentState.server_name || t('nodes.local_server', 'My Server'))}</span>
                     ${serverVer ? `<span class="text-[10px] text-gray-600" title="${escapeHtml(serverVer)}">${escapeHtml(serverVer)}</span>` : ''}
-                    <span class="text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded flex-shrink-0">${visibleFans.length} ${t('nodes.fans', 'fans')}</span>
+                    <button onclick="event.stopPropagation(); openServerNameEdit()"
+                            class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-neon-cyan rounded text-[10px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename">✎</button>
+                </div>
+                <div class="flex items-center gap-2 mt-0.5 ml-3.5">
+                    <span class="text-[10px] text-neon-green">online</span>
+                    ${visibleFans.length > 0 ? `<span class="text-[10px] text-gray-500">· ${visibleFans.length} ${t('nodes.fans', 'fans')}</span>` : ''}
+                    ${Object.keys(temps).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(temps).length} ${t('nodes.sensors', 'sensors')}</span>` : ''}
+                    ${Object.keys(disks).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(disks).length} ${t('nodes.disks', 'disks')}</span>` : ''}
                 </div>
             </div>
             <div class="node-children ml-4 space-y-px" id="node-children-local">

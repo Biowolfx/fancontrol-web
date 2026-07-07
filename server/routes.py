@@ -163,6 +163,7 @@ def api_update_server_name():
             state['server_name'] = name
 
         save_config()
+        invalidate_state_cache()
 
         # Push to all connected clients so UI updates instantly
         from app import socketio
@@ -976,6 +977,14 @@ def api_update_node(node_id):
 
     if update_node(node_id, name=name or None, ip=ip if ip is not None else None,
                    port=port, api_token=api_token or None):
+        # Update in-memory state so next snapshot reflects the change immediately
+        with state_lock:
+            if node_id in state.get('nodes', {}):
+                if name:
+                    state['nodes'][node_id]['name'] = name
+                if ip:
+                    state['nodes'][node_id].get('ip', '') and state['nodes'][node_id].update({'ip': ip})
+        invalidate_state_cache()
         return jsonify({'status': 'ok'})
     return jsonify({'error': 'Update failed'}), 500
 
