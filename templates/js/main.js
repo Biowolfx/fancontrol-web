@@ -472,6 +472,15 @@ function buildFanList(fans) {
     }
     
     container.innerHTML = html || `<div class="text-center text-gray-500 py-8">${t('setup.no_fans', 'No fans detected')}</div>`;
+
+    // Start pulse on any cards that already have health alerts
+    for (const [fanId, fan] of Object.entries(fans)) {
+        const healthStatus = fan.health?.status || 'healthy';
+        if (healthStatus !== 'healthy') {
+            const card = document.getElementById(`fan-card-${fanId}`);
+            if (card) startCardPulse(card, healthStatus);
+        }
+    }
 }
 
 function updateFanHealthClasses(fans) {
@@ -485,12 +494,15 @@ function updateFanHealthClasses(fans) {
                          healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
         const hasAny = healthClasses.some(c => card.classList.contains(c));
         if (newClass && !hasAny) {
-            // Remove transition-all so CSS animation isn't suppressed
             card.classList.remove('transition-all', 'duration-200');
+            healthClasses.forEach(c => card.classList.remove(c));
             card.classList.add(newClass);
+            // Start JS-based pulse animation via inline styles
+            startCardPulse(card, healthStatus);
         } else if (!newClass && hasAny) {
             healthClasses.forEach(c => card.classList.remove(c));
             card.classList.add('transition-all', 'duration-200');
+            stopCardPulse(card);
         }
         // Update status badge text
         const badge = card.querySelector('.text-xs.px-1\\.5');
@@ -500,6 +512,35 @@ function updateFanHealthClasses(fans) {
             badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(displayStatus)}`;
         }
     }
+}
+
+const _cardPulseTimers = new Map();
+
+function startCardPulse(card, status) {
+    stopCardPulse(card);
+    const color = status === 'stopped' ? '#ef4444' : '#facc15';
+    const darkColor = status === 'stopped' ? '#7f1d1d' : '#713f12';
+    const glowColor = status === 'stopped' ? 'rgba(239,68,68,0.5)' : 'rgba(250,204,21,0.5)';
+    let on = true;
+    const timer = setInterval(() => {
+        on = !on;
+        card.style.borderColor = on ? color : darkColor;
+        card.style.boxShadow = on ? `0 0 10px ${glowColor}` : 'none';
+    }, 750);
+    _cardPulseTimers.set(card.id, timer);
+    // Apply immediately
+    card.style.borderColor = color;
+    card.style.boxShadow = `0 0 10px ${glowColor}`;
+}
+
+function stopCardPulse(card) {
+    const timer = _cardPulseTimers.get(card.id);
+    if (timer) {
+        clearInterval(timer);
+        _cardPulseTimers.delete(card.id);
+    }
+    card.style.borderColor = '';
+    card.style.boxShadow = '';
 }
 
 function selectFan(fanId) {
