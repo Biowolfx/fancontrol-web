@@ -202,6 +202,12 @@ def api_get_disk_smart(disk_id):
         with _smart_cache_lock:
             _smart_cache[disk_id] = result
             _smart_cache_time[disk_id] = now
+            # Evict stale entries to prevent unbounded growth
+            stale = [k for k, t in _smart_cache_time.items()
+                     if (now - t) > SMART_CACHE_TTL * 2]
+            for k in stale:
+                _smart_cache.pop(k, None)
+                _smart_cache_time.pop(k, None)
 
     return jsonify(result)
 
@@ -951,15 +957,16 @@ def api_delete_node(node_id):
 def api_push_config(node_id):
     """Push config to agent."""
     from server.node_registry import get_node, update_node_config
+    from server.agent_handlers import _emit_to_node
     node = get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
     data = request.get_json()
     update_node_config(node_id, data.get('config', {}))
     from app import socketio
-    socketio.emit('server:config_push', {
+    _emit_to_node(socketio, 'server:config_push', {
         'config': data.get('config', {}),
-    }, room=node_id)
+    }, node_id)
     return jsonify({'status': 'pushed'})
 
 
@@ -967,6 +974,7 @@ def api_push_config(node_id):
 def api_set_node_mode(node_id):
     """Set agent control mode."""
     from server.node_registry import get_node, update_node_control_mode
+    from server.agent_handlers import _emit_to_node
     node = get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
@@ -976,9 +984,9 @@ def api_set_node_mode(node_id):
         return jsonify({'error': 'Invalid mode'}), 400
     update_node_control_mode(node_id, mode)
     from app import socketio
-    socketio.emit('server:set_control_mode', {
+    _emit_to_node(socketio, 'server:set_control_mode', {
         'mode': mode,
-    }, room=node_id)
+    }, node_id)
     return jsonify({'mode': mode})
 
 
