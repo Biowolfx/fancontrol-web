@@ -418,7 +418,14 @@ def check_fan_health(socketio=None):
         if fan.get('mode') == 'off':
             continue
 
-        health = fan.get('health', {})
+        health = fan.setdefault('health', {
+            'status': 'healthy',
+            'rpm_baseline': 0,
+            'slowdown_since': None,
+            'stopped_since': None,
+            'last_service_date': None,
+            'calibration_required': False,
+        })
         old_status = health.get('status', 'healthy')
         rpm = fan.get('rpm', 0) or 0
         pwm = fan.get('current_pct', 0) or fan.get('manual_pct', 50) or 0
