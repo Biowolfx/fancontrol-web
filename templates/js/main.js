@@ -519,18 +519,16 @@ const _cardPulseTimers = new Map();
 function startCardPulse(card, status) {
     stopCardPulse(card);
     const color = status === 'stopped' ? '#ef4444' : '#facc15';
-    const darkColor = status === 'stopped' ? '#7f1d1d' : '#713f12';
-    const glowColor = status === 'stopped' ? 'rgba(239,68,68,0.5)' : 'rgba(250,204,21,0.5)';
+    const darkColor = status === 'stopped' ? '#450a0a' : '#422006';
     let on = true;
+    // Use outline — unaffected by Tailwind border classes
+    card.style.outline = `3px solid ${color}`;
+    card.style.outlineOffset = '-3px';
     const timer = setInterval(() => {
         on = !on;
-        card.style.borderColor = on ? color : darkColor;
-        card.style.boxShadow = on ? `0 0 10px ${glowColor}` : 'none';
+        card.style.outline = on ? `3px solid ${color}` : `3px solid ${darkColor}`;
     }, 750);
     _cardPulseTimers.set(card.id, timer);
-    // Apply immediately
-    card.style.borderColor = color;
-    card.style.boxShadow = `0 0 10px ${glowColor}`;
 }
 
 function stopCardPulse(card) {
@@ -539,8 +537,8 @@ function stopCardPulse(card) {
         clearInterval(timer);
         _cardPulseTimers.delete(card.id);
     }
-    card.style.borderColor = '';
-    card.style.boxShadow = '';
+    card.style.outline = '';
+    card.style.outlineOffset = '';
 }
 
 function selectFan(fanId) {
