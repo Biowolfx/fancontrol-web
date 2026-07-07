@@ -72,6 +72,11 @@ SAVE_DEBOUNCE_SECONDS = 0.5
 _save_timer: Optional[threading.Timer] = None
 _save_lock = threading.Lock()
 
+# Cache of config.json content to avoid re-reading disk on every debounced save.
+# Invalidated on write and when wizard modifies the file externally.
+_cached_config_json: Optional[Dict] = None
+_cached_config_mtime: float = 0.0
+
 
 def migrate_config(cfg: Dict) -> Dict:
     """Migrate old config format to v3.0"""
@@ -99,16 +104,31 @@ def migrate_config(cfg: Dict) -> Dict:
 
 
 def _do_save_config():
-    """Actually write config to disk, preserving all existing fields."""
+    """Actually write config to disk, preserving all existing fields.
+    
+    Caches the on-disk config.json to avoid re-reading it on every
+    debounced save. Cache invalidated on write; external modifications
+    (by wizard) detected via mtime check.
+    """
+    global _cached_config_json, _cached_config_mtime
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Read existing config to preserve wizard-set fields
+        # Read existing config (cached if unchanged on disk)
         existing = {}
-        if CONFIG_PATH.exists():
+        try:
+            current_mtime = CONFIG_PATH.stat().st_mtime if CONFIG_PATH.exists() else 0.0
+        except OSError:
+            current_mtime = 0.0
+
+        if _cached_config_json is not None and current_mtime == _cached_config_mtime:
+            existing = _cached_config_json.copy()
+        elif CONFIG_PATH.exists():
             try:
                 with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                     existing = json.load(f)
+                _cached_config_json = existing.copy()
+                _cached_config_mtime = current_mtime
             except Exception:
                 pass
 
@@ -133,6 +153,12 @@ def _do_save_config():
         with open(tmp_path, 'w', encoding='utf-8') as f:
             json.dump(existing, f, indent=2, ensure_ascii=False)
         tmp_path.replace(CONFIG_PATH)
+
+        _cached_config_json = existing.copy()
+        try:
+            _cached_config_mtime = CONFIG_PATH.stat().st_mtime
+        except OSError:
+            pass
 
         logger.info('Configuration saved successfully')
 

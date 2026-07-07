@@ -20,14 +20,16 @@ def _start_heartbeat_checker(socketio):
         while True:
             time.sleep(10)
             try:
-                from server.node_registry import list_nodes, update_node_status, update_node
+                from server.node_registry import update_node_status, update_node
                 from core.state import state, state_lock, invalidate_state_cache
 
-                nodes = list_nodes()
+                # Read from in-memory state instead of SQLite every 10s
+                with state_lock:
+                    nodes_snapshot = {k: v.copy() for k, v in state.get('nodes', {}).items()}
+
                 now = datetime.utcnow()
 
-                for node in nodes:
-                    nid = node['node_id']
+                for nid, node in nodes_snapshot.items():
 
                     if node['status'] == 'online' and node.get('last_seen'):
                         try:

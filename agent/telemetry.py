@@ -25,9 +25,8 @@ def get_local_config() -> Dict[str, Any]:
             if is_dsm_fan_available():
                 result = get_all_schemes()
                 config['dsm_schemes'] = result.get('schemes', []) if result else []
-                logger.info(f'Including {len(config["dsm_schemes"])} DSM schemes in config')
-        except Exception as e:
-            logger.debug(f'Could not load DSM schemes: {e}')
+        except Exception:
+            pass
         return config
 
 
