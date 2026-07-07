@@ -108,7 +108,15 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                         'last_update': 0.0,
                         'schedule': [],
                         'curve': [],
-                        'calibration': {}
+                        'calibration': {},
+                        'health': {
+                            'status': 'healthy',
+                            'rpm_baseline': 0,
+                            'slowdown_since': None,
+                            'stopped_since': None,
+                            'last_service_date': None,
+                            'calibration_required': False,
+                        }
                     }
                     
                 except Exception as e:
@@ -185,6 +193,14 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                     'curve': [],
                     'calibration': {},
                     'control_method': 'dsm_scemd',
+                    'health': {
+                        'status': 'healthy',
+                        'rpm_baseline': 0,
+                        'slowdown_since': None,
+                        'stopped_since': None,
+                        'last_service_date': None,
+                        'calibration_required': False,
+                    }
                 }
                 modes = dsm_info.get('modes', [])
                 current_speed = modes[0].get('fan_speed', 0) if modes else 0

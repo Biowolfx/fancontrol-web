@@ -404,6 +404,102 @@ def cleanup_logs(retention_days: int = 30):
         logger.error(f'Failed to cleanup logs: {e}')
 
 
+def check_fan_health(socketio=None):
+    """Detect fan slowdown (bearing wear) and stop, emit alerts on status changes."""
+    now = time.time()
+    changes = []
+
+    with state_lock:
+        fans = dict(state.get('fans', {}))
+
+    for fan_id, fan in fans.items():
+        if not fan.get('writable'):
+            continue
+        if fan.get('mode') == 'off':
+            continue
+
+        health = fan.get('health', {})
+        old_status = health.get('status', 'healthy')
+        rpm = fan.get('rpm', 0) or 0
+        pwm = fan.get('current_pct', 0) or fan.get('manual_pct', 50) or 0
+        cal = fan.get('calibration', {})
+        max_rpm = cal.get('max_rpm', 0)
+        new_status = old_status
+
+        # --- STOP DETECTION ---
+        if rpm < 10 and pwm > 20:
+            if health.get('stopped_since') is None:
+                health['stopped_since'] = now
+            if now - health['stopped_since'] >= 10:
+                new_status = 'stopped'
+        else:
+            if health.get('stopped_since') is not None:
+                health['stopped_since'] = None
+            if old_status == 'stopped':
+                new_status = 'healthy'
+
+        # --- SLOWDOWN DETECTION (COMBINED) ---
+        if new_status != 'stopped' and rpm > 0 and pwm > 0:
+            if max_rpm > 0:
+                expected_rpm = max_rpm * (pwm / 100)
+            else:
+                if old_status in ('healthy', 'slowing'):
+                    if health.get('rpm_baseline', 0) == 0:
+                        health['rpm_baseline'] = rpm
+                    else:
+                        health['rpm_baseline'] = 0.9 * health['rpm_baseline'] + 0.1 * rpm
+                expected_rpm = health.get('rpm_baseline', 0)
+
+            if expected_rpm > 0 and rpm < expected_rpm * 0.5:
+                if health.get('slowing_since') is None:
+                    health['slowing_since'] = now
+                if now - health['slowing_since'] >= 15:
+                    new_status = 'slowing'
+            else:
+                if health.get('slowing_since') is not None:
+                    health['slowing_since'] = None
+                if old_status == 'slowing':
+                    new_status = 'healthy'
+
+        # --- NEEDS CALIBRATION ---
+        if health.get('calibration_required') and new_status != 'stopped':
+            new_status = 'needs_calibration'
+
+        health['status'] = new_status
+
+        if new_status != old_status:
+            changes.append((fan_id, fan.get('label', fan_id), old_status, new_status))
+
+    # Emit alerts outside of the lock
+    if socketio and changes:
+        for fan_id, label, old_s, new_s in changes:
+            if new_s == 'stopped':
+                socketio.emit('fan:health', {
+                    'fan_id': fan_id, 'node_id': 'local',
+                    'status': 'stopped', 'label': label,
+                    'message': f'Вентилятор {label} остановлен!',
+                })
+                logger.warning(f'Fan STOPPED: {label} ({fan_id})')
+            elif new_s == 'slowing':
+                socketio.emit('fan:health', {
+                    'fan_id': fan_id, 'node_id': 'local',
+                    'status': 'slowing', 'label': label,
+                    'message': f'Вентилятор {label} замедляется (износ подшипника)',
+                })
+                logger.warning(f'Fan SLOWING: {label} ({fan_id})')
+            elif new_s == 'needs_calibration':
+                socketio.emit('fan:health', {
+                    'fan_id': fan_id, 'node_id': 'local',
+                    'status': 'needs_calibration', 'label': label,
+                    'message': f'Вентилятор {label} требует калибровки',
+                })
+            elif new_s == 'healthy' and old_s in ('stopped', 'slowing', 'needs_calibration'):
+                socketio.emit('fan:health:cleared', {
+                    'fan_id': fan_id, 'node_id': 'local',
+                })
+                logger.info(f'Fan recovered: {label} ({fan_id}) → healthy')
+
+
 _failed_calibration_logged = False
 _last_cleanup = time.monotonic()
 
@@ -451,7 +547,9 @@ def loop(socketio=None):
             
             refresh()
             refresh_disks()
-            
+
+            check_fan_health(socketio)
+
             with state_lock:
                 fans_snapshot = {k: v.copy() for k, v in state['fans'].items()}
                 sys_failsafe = state.get('failsafe', False)

@@ -156,7 +156,11 @@ function fanIcon(fan, size = 'xs') {
     if (isDsm) {
         return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
     }
-    const color = rpm > 0 ? '#22d3ee' : '#4b5563';
+    const healthStatus = fan.health?.status || 'healthy';
+    let color;
+    if (healthStatus === 'stopped') color = '#ef4444';
+    else if (healthStatus === 'slowing' || healthStatus === 'needs_calibration') color = '#facc15';
+    else color = rpm > 0 ? '#22d3ee' : '#4b5563';
     const dur = rpm > 0 ? Math.max(0.3, 3 - rpm / 500) : 0;
     const anim = rpm > 0 ? `style="animation: fan-spin ${dur}s linear infinite"` : '';
     return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 100 100" ${anim}><g fill="${color}" opacity="0.9"><path d="M50 50 Q30 20 50 5 Q70 20 50 50"/><path d="M50 50 Q80 30 95 50 Q80 70 50 50"/><path d="M50 50 Q70 80 50 95 Q30 80 50 50"/><path d="M50 50 Q20 70 5 50 Q20 30 50 50"/></g><circle cx="50" cy="50" r="6" fill="${color}" opacity="0.6"/></svg>`;
@@ -435,17 +439,21 @@ function buildFanList(fans) {
         const isSelected = fanId === currentFanId;
         const borderColor = isSelected ? 'border-neon-purple' : 'border-cyber-accent';
         const bgColor = isSelected ? 'bg-cyber-accent' : 'bg-cyber-card';
-        
+        const healthStatus = fan.health?.status || 'healthy';
+        const healthClass = healthStatus === 'stopped' ? 'fan-alert-stopped' :
+                            healthStatus === 'slowing' ? 'fan-alert-slowing' :
+                            healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
+
         html += `
-            <div id="fan-card-${escapeHtml(fanId)}" 
-                 class="fan-card ${bgColor} border ${borderColor} rounded-lg px-3 py-2.5 pb-2 cursor-pointer
+            <div id="fan-card-${escapeHtml(fanId)}"
+                 class="fan-card ${bgColor} border ${borderColor} ${healthClass} rounded-lg px-3 py-2.5 pb-2 cursor-pointer
                         hover:border-neon-purple transition-all duration-200"
                  onclick="selectFan('${escapeHtml(fanId)}')">
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-sm font-semibold text-white truncate">${escapeHtml(fan.label)}</span>
                     <div class="flex items-center gap-1">
                         ${fan.inverted ? `<span class="text-xs px-1.5 py-0.5 rounded bg-cyan-900 bg-opacity-30 text-neon-cyan">${t('fan.inv', 'INV')}</span>` : ''}
-                        <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.status)}">${t('status.' + fan.status, fan.status)}</span>
+                        <span class="text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(fan.health?.status || fan.status)}">${t('status.' + (fan.health?.status || fan.status), fan.health?.status || fan.status)}</span>
                     </div>
                 </div>
                 <div class="flex items-center justify-between text-xs">
@@ -593,11 +601,16 @@ function renderLocalServerTree() {
 
     for (const [fanId, fan] of visibleFans) {
         const isSelected = fanId === currentFanId;
+        const fanHealth = fan.health?.status || 'healthy';
+        const healthIcon = fanHealth === 'stopped' ? '<span class="text-red-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.stopped', 'Fan stopped') + '">⛔</span>' :
+                          fanHealth === 'slowing' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.slowing', 'Fan slowing — bearing wear') + '">⚠</span>' :
+                          fanHealth === 'needs_calibration' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.needs_calibration', 'Calibration required') + '">⚠</span>' : '';
         html += `
             <div data-sensor-id="fan:${escapeHtml(fanId)}" class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
                  onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
                 ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(fan.label)}</span>
+                ${healthIcon}
                 <span class="ml-auto text-xs font-mono text-neon-cyan" id="tree-fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0}</span>
                 <button onclick="event.stopPropagation(); hideSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
             </div>
@@ -729,11 +742,16 @@ function renderRemoteNodeTree(node) {
     for (const [fanId, fan] of Object.entries(fans)) {
         const cleanLabel = (fan.label || fanId).replace(/\s*\(Synology-[^)]+\)/, '');
         const isDsm = fan.control_method === 'dsm_scemd';
+        const fanHealth = fan.health?.status || 'healthy';
+        const healthIcon = fanHealth === 'stopped' ? '<span class="text-red-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.stopped', 'Fan stopped') + '">⛔</span>' :
+                          fanHealth === 'slowing' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.slowing', 'Fan slowing — bearing wear') + '">⚠</span>' :
+                          fanHealth === 'needs_calibration' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.needs_calibration', 'Calibration required') + '">⚠</span>' : '';
         html += `
             <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-cyber-accent"
                  onclick="selectNodeFan('${escapeHtml(node.node_id)}', '${escapeHtml(fanId)}')">
                 ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(cleanLabel)}${isDsm ? ' <span class="text-blue-400 text-[10px]">DSM</span>' : ''}</span>
+                ${healthIcon}
                 <span class="ml-auto text-xs font-mono text-neon-cyan">${fan.rpm || 0}</span>
             </div>
         `;
@@ -2843,6 +2861,9 @@ function getStatusBadgeClass(status) {
         'no_sensor': 'bg-yellow-900 bg-opacity-30 text-neon-orange',
         'not_tested': 'bg-gray-700 text-gray-400',
         'calibrating': 'bg-purple-900 bg-opacity-30 text-neon-purple',
+        'stopped': 'bg-red-900 bg-opacity-50 text-neon-red',
+        'slowing': 'bg-yellow-900 bg-opacity-30 text-yellow-400',
+        'needs_calibration': 'bg-yellow-900 bg-opacity-30 text-yellow-400',
     };
     return classes[status] || 'bg-gray-700 text-gray-400';
 }
@@ -2957,11 +2978,122 @@ function updateInspector(fan) {
         const calLambdaVal = document.getElementById('cal-lambda-val');
         if (calLambdaVal) calLambdaVal.textContent = (cal.lambda || 1.0).toFixed(1);
     }
+
+    // Health & Service section
+    const health = fan.health || {};
+    const serviceSection = document.getElementById('fan-service-section');
+    if (serviceSection) {
+        const lastService = health.last_service_date;
+        const needsCal = health.calibration_required;
+        const hStatus = health.status;
+
+        let svcHtml = '';
+        if (lastService) {
+            svcHtml += `<div class="text-xs text-gray-500">${t('fan.service_date', 'Last service')}: ${new Date(lastService).toLocaleDateString()}</div>`;
+        }
+        if (hStatus === 'stopped' || hStatus === 'slowing' || needsCal) {
+            svcHtml += `<button onclick="showServiceFanModal('${escapeHtml(fan.id)}')" class="mt-2 px-3 py-1.5 bg-yellow-900/30 border border-yellow-700/50 rounded text-xs text-yellow-400 hover:bg-yellow-800/50 transition">
+                ${t('fan.service', 'Service')} / ${t('fan.replace', 'Replace')}
+            </button>`;
+        }
+        if (needsCal) {
+            svcHtml += `<div class="mt-2 px-2 py-1 rounded bg-yellow-900/20 border border-yellow-700/30 text-xs text-yellow-400">
+                ⚠ ${t('fan.calibration_required', 'Calibration required after service')}
+                <button onclick="startFanCalibration('${escapeHtml(fan.id)}')" class="ml-2 underline hover:text-yellow-300">${t('inspector.calibrate', 'Calibrate')}</button>
+            </div>`;
+        }
+        serviceSection.innerHTML = svcHtml;
+    }
 }
 
 // ============================================================================
 // FAN CONTROL ACTIONS
 // ============================================================================
+
+function showServiceFanModal(fanId) {
+    const fan = currentState?.fans?.[fanId];
+    if (!fan) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    const today = new Date().toISOString().split('T')[0];
+
+    overlay.innerHTML = `
+        <div class="bg-gray-900 border border-gray-700 rounded-xl p-5 w-80 shadow-2xl">
+            <h3 class="text-white font-semibold mb-3">${t('fan.service', 'Service')} / ${t('fan.replace', 'Replace')}</h3>
+            <p class="text-xs text-gray-400 mb-4">${escapeHtml(fan.label)}</p>
+            <div class="mb-4">
+                <label class="text-xs text-gray-500 block mb-1">${t('fan.service_date', 'Date')}</label>
+                <input type="date" id="service-date" value="${today}" class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-white">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="recordFanService('${escapeHtml(fanId)}', 'service', this)" class="flex-1 px-3 py-2 bg-yellow-900/30 border border-yellow-700/50 rounded text-xs text-yellow-400 hover:bg-yellow-800/50 transition">
+                    ${t('fan.service', 'Service')}
+                </button>
+                <button onclick="recordFanService('${escapeHtml(fanId)}', 'replace', this)" class="flex-1 px-3 py-2 bg-orange-900/30 border border-orange-700/50 rounded text-xs text-orange-400 hover:bg-orange-800/50 transition">
+                    ${t('fan.replace', 'Replace')}
+                </button>
+            </div>
+            <button onclick="this.closest('.fixed').remove()" class="w-full mt-2 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition">
+                ${t('common.cancel', 'Cancel')}
+            </button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function recordFanService(fanId, action, btnEl) {
+    const dateEl = document.getElementById('service-date');
+    const date = dateEl ? dateEl.value : new Date().toISOString().split('T')[0];
+
+    try {
+        const resp = await fetch(`/api/fan/${fanId}/service`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action, date})
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            // Close modal
+            const overlay = btnEl?.closest('.fixed');
+            if (overlay) overlay.remove();
+
+            showToast(t('fan.service_done', 'Service recorded. Calibration recommended.'), 'warning', [
+                {label: t('inspector.calibrate', 'Calibrate'), onclick: () => startFanCalibration(fanId)},
+                {label: t('common.later', 'Later'), onclick: () => {}, secondary: true}
+            ]);
+
+            // Update local state
+            if (currentState?.fans?.[fanId]) {
+                currentState.fans[fanId].health = data.health;
+            }
+            if (currentFanId === fanId) {
+                updateInspector(currentState.fans[fanId]);
+            }
+            buildFanList(currentState.fans || {});
+            buildServerTree();
+        }
+    } catch (e) {
+        showToast(t('common.error', 'Error'), 'error');
+    }
+}
+
+async function startFanCalibration(fanId) {
+    try {
+        const resp = await fetch('/api/test/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fan: fanId})
+        });
+        if (resp.ok) {
+            showToast(t('calibration.started', 'Calibration started...'), 'info');
+        }
+    } catch (e) {
+        showToast(t('common.error', 'Error'), 'error');
+    }
+}
 
 function setFanMode(mode) {
     if (!currentFanId) return;

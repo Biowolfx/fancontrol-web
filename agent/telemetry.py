@@ -37,7 +37,8 @@ def get_telemetry() -> Dict[str, Any]:
             'fans': {k: {'rpm': v.get('rpm', 0),
                          'pwm_value': v.get('pwm_value', 0),
                          'control_method': v.get('control_method', 'hwmon'),
-                         'label': v.get('label', k)}
+                         'label': v.get('label', k),
+                         'health': v.get('health', {})}
                      for k, v in state['fans'].items()},
             'temp_sensors': {k: {'value': v.get('value', 0),
                                  'label': v.get('label', k)}

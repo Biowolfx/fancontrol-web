@@ -65,7 +65,7 @@ FAN_FIELDS = [
     'inverted', 'min_rpm', 'max_rpm', 'manual_pct',
     'sensors', 'sensor_mode', 'target_temp', 'mode',
     'status', 'target_pwm', 'current_pct',
-    'schedule', 'curve', 'calibration'
+    'schedule', 'curve', 'calibration', 'health'
 ]
 
 SAVE_DEBOUNCE_SECONDS = 0.5

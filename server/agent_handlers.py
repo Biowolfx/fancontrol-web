@@ -246,6 +246,30 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
         with state_lock:
             if node_id in state['nodes']:
+                # Check for fan health status changes before updating telemetry
+                prev_telemetry = state['nodes'][node_id].get('telemetry', {})
+                prev_fans = prev_telemetry.get('fans', {})
+                new_fans = telemetry.get('fans', {})
+
+                for fan_id, new_fan in new_fans.items():
+                    new_health = new_fan.get('health', {})
+                    prev_health = prev_fans.get(fan_id, {}).get('health', {})
+                    new_h_status = new_health.get('status', 'healthy')
+                    prev_h_status = prev_health.get('status', 'healthy')
+
+                    if new_h_status != prev_h_status:
+                        label = new_fan.get('label', fan_id)
+                        if new_h_status in ('stopped', 'slowing', 'needs_calibration'):
+                            socketio.emit('fan:health', {
+                                'fan_id': fan_id, 'node_id': node_id,
+                                'status': new_h_status, 'label': label,
+                                'message': f'[{node_id}] Вентилятор {label}: {new_h_status}',
+                            })
+                        elif new_h_status == 'healthy' and prev_h_status in ('stopped', 'slowing', 'needs_calibration'):
+                            socketio.emit('fan:health:cleared', {
+                                'fan_id': fan_id, 'node_id': node_id,
+                            })
+
                 state['nodes'][node_id]['status'] = 'online'
                 state['nodes'][node_id]['telemetry'] = telemetry
         invalidate_state_cache()

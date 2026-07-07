@@ -810,8 +810,39 @@ def api_fan_calibration(fan_id):
             if key in data:
                 fan['calibration'][key] = data[key]
 
+        # Clear calibration_required after successful calibration
+        health = fan.get('health', {})
+        if health.get('calibration_required'):
+            health['calibration_required'] = False
+            health['status'] = 'healthy'
+            health['rpm_baseline'] = 0
+
     save_config()
     return jsonify({'status': 'saved'})
+
+
+@routes.route('/api/fan/<fan_id>/service', methods=['POST'])
+def api_fan_service(fan_id):
+    """Record fan replacement or service event."""
+    data = request.get_json(force=True) or {}
+    action = data.get('action', 'service')
+    date = data.get('date', datetime.now().isoformat() if 'datetime' in dir() else '')
+
+    with state_lock:
+        fan = state.get('fans', {}).get(fan_id)
+        if not fan:
+            return jsonify({'error': 'Fan not found'}), 404
+
+        health = fan.get('health', {})
+        health['last_service_date'] = date
+        health['calibration_required'] = True
+        health['status'] = 'needs_calibration'
+        health['rpm_baseline'] = 0
+        health['slowdown_since'] = None
+        health['stopped_since'] = None
+
+    save_config()
+    return jsonify({'status': 'ok', 'health': health})
 
 
 @routes.route('/api/dashboard', methods=['GET'])
