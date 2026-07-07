@@ -4556,7 +4556,7 @@ function toggleSettings() {
         panel.classList.remove('hidden');
         updateLangButtons();
         updateSettingsUI();
-        fetchLogLevel();
+        fetchLogSettings();
         autoCheckUpdate();
     }
 }
@@ -4614,13 +4614,16 @@ function updateSettingsUI() {
 // ============================================================================
 
 let _currentLogLevel = 'INFO';
+let _currentRetention = 30;
 
-async function fetchLogLevel() {
+async function fetchLogSettings() {
     try {
         const resp = await fetch('/api/logging');
         const data = await resp.json();
         _currentLogLevel = data.level || 'INFO';
+        _currentRetention = data.retention_days || 30;
         updateLogLevelButtons();
+        updateRetentionButtons();
     } catch {}
 }
 
@@ -4643,6 +4646,29 @@ async function setLogLevel(level) {
         if (resp.ok) {
             _currentLogLevel = level;
             updateLogLevelButtons();
+        }
+    } catch {}
+}
+
+function updateRetentionButtons() {
+    [7, 14, 30, 60, 90, 180, 365].forEach(days => {
+        const btn = document.getElementById(`retention-btn-${days}`);
+        if (btn) {
+            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px] ${_currentRetention === days ? BTN_ACTIVE : BTN_INACTIVE}`;
+        }
+    });
+}
+
+async function setLogRetention(days) {
+    try {
+        const resp = await fetch('/api/logging', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retention_days: days })
+        });
+        if (resp.ok) {
+            _currentRetention = days;
+            updateRetentionButtons();
         }
     } catch {}
 }
@@ -4780,12 +4806,34 @@ function openUpdateModal() {
         </div>
     `;
 
-    // Show agents checkbox if there are online agents
+    // Show agents list if there are online agents
     const agentsSection = document.getElementById('update-modal-agents');
+    const agentsList = document.getElementById('update-modal-agents-list');
     const onlineAgents = nodesData.filter(n => n.status === 'online');
     if (agentsSection) {
         if (onlineAgents.length > 0) {
             agentsSection.classList.remove('hidden');
+            if (agentsList) {
+                agentsList.innerHTML = onlineAgents.map(agent => {
+                    const ver = agent.agent_version || '—';
+                    const serverVer = currentState?.config_version || '?';
+                    const needsUpdate = ver !== '—' && serverVer !== '?' && ver !== serverVer;
+                    const checked = agent.auto_update ? 'checked' : '';
+                    return `
+                        <div class="flex items-center justify-between py-1.5 px-2 rounded bg-cyber-accent border border-gray-700">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-2 h-2 rounded-full ${needsUpdate ? 'bg-orange-400' : 'bg-neon-green'} flex-shrink-0"></span>
+                                <span class="text-xs text-gray-300 truncate">${escapeHtml(agent.name || agent.node_id)}</span>
+                                <span class="text-[10px] ${needsUpdate ? 'text-orange-400' : 'text-gray-500'}">${ver}</span>
+                            </div>
+                            <label class="flex items-center gap-1 cursor-pointer flex-shrink-0">
+                                <input type="checkbox" class="accent-neon-cyan w-3.5 h-3.5" ${checked}
+                                    onchange="toggleAgentAutoUpdate('${agent.node_id}', this.checked)">
+                                <span class="text-[10px] text-gray-400">auto</span>
+                            </label>
+                        </div>`;
+                }).join('');
+            }
         } else {
             agentsSection.classList.add('hidden');
         }
@@ -4802,6 +4850,16 @@ function openUpdateModal() {
 
 function closeUpdateModal() {
     document.getElementById('update-modal').classList.add('hidden');
+}
+
+async function toggleAgentAutoUpdate(nodeId, enabled) {
+    try {
+        await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/auto-update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+        });
+    } catch {}
 }
 
 function setStepState(step, state) {
@@ -4829,8 +4887,9 @@ async function startUpdate() {
     const bar = document.getElementById('update-modal-bar');
     const result = document.getElementById('update-modal-result');
     const closeBtn = document.getElementById('update-modal-close');
-    const agentsCheck = document.getElementById('update-agents-check');
-    const updateAgents = agentsCheck && agentsCheck.checked;
+
+    const onlineAgents = nodesData.filter(n => n.status === 'online');
+    const updateAgents = onlineAgents.length > 0;
 
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
@@ -4885,7 +4944,7 @@ async function startUpdate() {
         result.classList.remove('hidden');
         result.className = 'text-sm mb-4 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
         const agentMsg = updateAgents
-            ? `<div class="text-gray-400 mt-1">Agents will restart automatically after server comes back online.</div>`
+            ? `<div class="text-gray-400 mt-1">${onlineAgents.length} agent(s) will update automatically.</div>`
             : '';
         result.innerHTML = `
             <div class="font-semibold mb-1">${t('settings.update_success', 'Update complete!')}</div>

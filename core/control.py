@@ -501,7 +501,7 @@ def loop(socketio=None):
                 last_log = current_time
             
             if current_time - _last_cleanup > LOG_CLEANUP_INTERVAL:
-                cleanup_logs()
+                cleanup_logs(state.get('log_retention_days', 30))
                 _last_cleanup = current_time
             
             time.sleep(CONTROL_LOOP_INTERVAL)

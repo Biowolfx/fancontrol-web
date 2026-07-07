@@ -136,6 +136,7 @@
   "settings.update_error": "Failed to check for updates",
   "settings.apply_update": "Apply Update & Restart",
   "settings.update_agents": "Also update all connected agents",
+  "settings.connected_agents": "Connected Agents",
   "settings.update_agents_hint": "Recommended: update all nodes to the same version to avoid config conflicts.",
   "settings.updating": "Updating...",
   "settings.update_applied": "Update applied. Container will restart...",
@@ -157,6 +158,8 @@
   "settings.update_host_hint": "Run on host to apply update:",
   "settings.logging": "Logging Level",
   "settings.logging_hint": "Control log verbosity. WARNING reduces log file size significantly.",
+  "settings.log_retention": "Log Retention",
+  "settings.log_retention_hint": "How long to keep log files before automatic cleanup.",
 
   "common.edit": "Edit",
   "common.del": "Del",

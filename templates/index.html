@@ -922,6 +922,21 @@
                 </div>
             </div>
 
+            <!-- Log Retention -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.log_retention">Log Retention</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.log_retention_hint">How long to keep log files before automatic cleanup.</p>
+                <div class="flex gap-1 flex-wrap">
+                    <button id="retention-btn-7" onclick="setLogRetention(7)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">7d</button>
+                    <button id="retention-btn-14" onclick="setLogRetention(14)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">14d</button>
+                    <button id="retention-btn-30" onclick="setLogRetention(30)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">30d</button>
+                    <button id="retention-btn-60" onclick="setLogRetention(60)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">60d</button>
+                    <button id="retention-btn-90" onclick="setLogRetention(90)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">90d</button>
+                    <button id="retention-btn-180" onclick="setLogRetention(180)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">6mo</button>
+                    <button id="retention-btn-365" onclick="setLogRetention(365)" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px]">1yr</button>
+                </div>
+            </div>
+
             <!-- System Update -->
             <div class="mb-6">
                 <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.update">System Update</label>
@@ -973,11 +988,11 @@
             <div id="update-modal-result" class="hidden text-sm mb-4 p-3 rounded-lg"></div>
 
             <div id="update-modal-agents" class="hidden mb-4 p-3 rounded-lg bg-cyber-accent border border-gray-700">
-                <div class="flex items-center gap-2 mb-2">
-                    <input type="checkbox" id="update-agents-check" class="accent-neon-cyan">
-                    <label for="update-agents-check" class="text-sm text-gray-300" data-i18n="settings.update_agents">Also update all connected agents</label>
+                <div class="text-sm font-semibold text-gray-300 mb-2" data-i18n="settings.connected_agents">Connected Agents</div>
+                <div id="update-modal-agents-list" class="space-y-2 max-h-40 overflow-y-auto">
+                    <!-- Populated by JS -->
                 </div>
-                <p class="text-xs text-gray-500 ml-6" data-i18n="settings.update_agents_hint">Recommended: update all nodes to the same version to avoid config conflicts.</p>
+                <p class="text-xs text-gray-500 mt-2" data-i18n="settings.update_agents_hint">Auto-update syncs with each agent's settings. Toggle applies immediately.</p>
             </div>
 
             <div class="flex gap-3">

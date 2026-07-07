@@ -136,6 +136,7 @@
   "settings.update_error": "Не удалось проверить обновления",
   "settings.apply_update": "Применить и перезапустить",
   "settings.update_agents": "Также обновить всех подключённых агентов",
+  "settings.connected_agents": "Подключённые агенты",
   "settings.update_agents_hint": "Рекомендуется: обновить все узлы до одной версии для избежания конфликтов конфигураций.",
   "settings.updating": "Обновление...",
   "settings.update_applied": "Обновление применено. Контейнер перезапускается...",
@@ -157,6 +158,8 @@
   "settings.update_host_hint": "Выполните на хосте для применения:",
   "settings.logging": "Уровень логирования",
   "settings.logging_hint": "Управление детализацией логов. WARNING значительно уменьшает размер файла логов.",
+  "settings.log_retention": "Хранение логов",
+  "settings.log_retention_hint": "Срок хранения логов до автоматической очистки.",
 
   "common.edit": "Изм.",
   "common.del": "Удл.",

@@ -138,6 +138,7 @@ def _do_save_config():
         existing['language'] = state.get('language', 'en')
         existing['server_name'] = state.get('server_name', 'FanControl Server')
         existing['log_level'] = state.get('log_level', 'INFO')
+        existing['log_retention_days'] = state.get('log_retention_days', 30)
 
         fans_data = {}
         with state_lock:
@@ -209,6 +210,7 @@ def load_config():
                 state['language'] = cfg.get('language', 'en')
                 state['server_name'] = cfg.get('server_name', 'FanControl Server')
                 state['log_level'] = cfg.get('log_level', 'INFO')
+                state['log_retention_days'] = cfg.get('log_retention_days', 30)
                 state['dashboard'] = cfg.get('dashboard', {'groups': [], 'cards': []})
 
             logger.info('Configuration loaded successfully')

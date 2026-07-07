@@ -109,24 +109,41 @@ def api_set_language():
 
 @routes.route('/api/logging', methods=['GET'])
 def api_get_logging():
-    """Get current log level."""
+    """Get current log level and retention."""
     from app import get_log_level
-    return jsonify({'level': get_log_level(), 'levels': ['DEBUG', 'INFO', 'WARNING', 'ERROR']})
+    return jsonify({
+        'level': get_log_level(),
+        'levels': ['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+        'retention_days': state.get('log_retention_days', 30),
+        'retention_options': [7, 14, 30, 60, 90, 180, 365],
+    })
 
 
 @routes.route('/api/logging', methods=['POST'])
 def api_set_logging():
-    """Set log level."""
+    """Set log level and/or retention."""
     try:
         data = request.get_json(force=True)
-        level = data.get('level', 'INFO')
-        from app import set_log_level
-        if set_log_level(level):
-            save_config()
-            return jsonify({'status': 'ok', 'level': level})
-        return jsonify({'status': 'error', 'message': f'Invalid level: {level}'}), 400
+        result = {}
+
+        level = data.get('level')
+        if level:
+            from app import set_log_level
+            if set_log_level(level):
+                result['level'] = level
+            else:
+                return jsonify({'status': 'error', 'message': f'Invalid level: {level}'}), 400
+
+        retention = data.get('retention_days')
+        if retention is not None:
+            retention = max(7, min(365, int(retention)))
+            state['log_retention_days'] = retention
+            result['retention_days'] = retention
+
+        save_config()
+        return jsonify({'status': 'ok', **result})
     except Exception as e:
-        logger.error(f'Logging level error: {e}', exc_info=True)
+        logger.error(f'Logging config error: {e}', exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
