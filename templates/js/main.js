@@ -342,14 +342,15 @@ function updateUI(data) {
     updateFailsafeIndicator(data.failsafe);
     updateStandbyIndicator(data.standby_mode);
     
-    // Build fan list if needed (only when fan count changes to preserve animations)
+    // Build fan list only when empty; otherwise update in-place to preserve pulse timers
     if (data.fans && Object.keys(data.fans).length > 0) {
-        const existingCount = document.querySelectorAll('#fan-list .fan-card').length;
-        if (existingCount === 0 || existingCount !== Object.keys(data.fans).length) {
+        const container = document.getElementById('fan-list');
+        const existingCount = container ? container.querySelectorAll('.fan-card').length : 0;
+        if (existingCount === 0) {
             buildFanList(data.fans);
-        } else {
-            updateFanHealthClasses(data.fans);
         }
+        // Always update health classes (works on both new and existing cards)
+        updateFanHealthClasses(data.fans);
     }
     
     // Build disks list
@@ -489,27 +490,25 @@ function updateFanHealthClasses(fans) {
         const card = document.getElementById(`fan-card-${fanId}`);
         if (!card) continue;
         const healthStatus = fan.health?.status || 'healthy';
-        const newClass = healthStatus === 'stopped' ? 'fan-alert-stopped' :
-                         healthStatus === 'slowing' ? 'fan-alert-slowing' :
-                         healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
         const hasAny = healthClasses.some(c => card.classList.contains(c));
-        if (newClass && !hasAny) {
+
+        if (healthStatus !== 'healthy' && !hasAny) {
             card.classList.remove('transition-all', 'duration-200');
             healthClasses.forEach(c => card.classList.remove(c));
-            card.classList.add(newClass);
-            // Start JS-based pulse animation via inline styles
+            card.classList.add(`fan-alert-${healthStatus}`);
             startCardPulse(card, healthStatus);
-        } else if (!newClass && hasAny) {
+        } else if (healthStatus === 'healthy' && hasAny) {
             healthClasses.forEach(c => card.classList.remove(c));
             card.classList.add('transition-all', 'duration-200');
             stopCardPulse(card);
         }
-        // Update status badge text
+
+        // Update status badge
         const badge = card.querySelector('.text-xs.px-1\\.5');
         if (badge) {
-            const displayStatus = fan.health?.status || fan.status;
-            badge.textContent = t('status.' + displayStatus, displayStatus);
-            badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(displayStatus)}`;
+            const ds = fan.health?.status || fan.status;
+            badge.textContent = t('status.' + ds, ds);
+            badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(ds)}`;
         }
     }
 }
@@ -519,26 +518,23 @@ const _cardPulseTimers = new Map();
 function startCardPulse(card, status) {
     stopCardPulse(card);
     const color = status === 'stopped' ? '#ef4444' : '#facc15';
-    const darkColor = status === 'stopped' ? '#450a0a' : '#422006';
+    const dim   = status === 'stopped' ? '#450a0a' : '#422006';
     let on = true;
-    // Use outline — unaffected by Tailwind border classes
-    card.style.outline = `3px solid ${color}`;
-    card.style.outlineOffset = '-3px';
-    const timer = setInterval(() => {
+    function tick() {
         on = !on;
-        card.style.outline = on ? `3px solid ${color}` : `3px solid ${darkColor}`;
-    }, 750);
+        card.style.setProperty('outline', on ? `3px solid ${color}` : `3px solid ${dim}`, 'important');
+        card.style.setProperty('outline-offset', '-3px', 'important');
+    }
+    tick(); // immediate first frame
+    const timer = setInterval(tick, 750);
     _cardPulseTimers.set(card.id, timer);
 }
 
 function stopCardPulse(card) {
-    const timer = _cardPulseTimers.get(card.id);
-    if (timer) {
-        clearInterval(timer);
-        _cardPulseTimers.delete(card.id);
-    }
-    card.style.outline = '';
-    card.style.outlineOffset = '';
+    const t = _cardPulseTimers.get(card.id);
+    if (t) { clearInterval(t); _cardPulseTimers.delete(card.id); }
+    card.style.removeProperty('outline');
+    card.style.removeProperty('outline-offset');
 }
 
 function selectFan(fanId) {
