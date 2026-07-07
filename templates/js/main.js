@@ -448,11 +448,13 @@ function buildFanList(fans) {
         const healthClass = healthStatus === 'stopped' ? 'fan-alert-stopped' :
                             healthStatus === 'slowing' ? 'fan-alert-slowing' :
                             healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
+        // Remove transition-all when health alert is active so CSS animation works
+        const transitionClass = healthClass ? '' : 'transition-all duration-200';
 
         html += `
             <div id="fan-card-${escapeHtml(fanId)}"
                  class="fan-card ${bgColor} border ${borderColor} ${healthClass} rounded-lg px-3 py-2.5 pb-2 cursor-pointer
-                        hover:border-neon-purple transition-all duration-200"
+                        hover:border-neon-purple ${transitionClass}"
                  onclick="selectFan('${escapeHtml(fanId)}')">
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-sm font-semibold text-white truncate">${escapeHtml(fan.label)}</span>
@@ -483,9 +485,12 @@ function updateFanHealthClasses(fans) {
                          healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
         const hasAny = healthClasses.some(c => card.classList.contains(c));
         if (newClass && !hasAny) {
+            // Remove transition-all so CSS animation isn't suppressed
+            card.classList.remove('transition-all', 'duration-200');
             card.classList.add(newClass);
         } else if (!newClass && hasAny) {
             healthClasses.forEach(c => card.classList.remove(c));
+            card.classList.add('transition-all', 'duration-200');
         }
         // Update status badge text
         const badge = card.querySelector('.text-xs.px-1\\.5');

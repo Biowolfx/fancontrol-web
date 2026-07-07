@@ -440,7 +440,10 @@ def check_fan_health(socketio=None):
         new_status = old_status
 
         # --- STOP DETECTION ---
-        if rpm < 10 and pwm > 20:
+        # RPM < 10 while fan should be spinning (pwm > 5) → stopped
+        # Also detect if fan was previously running (baseline > 0) and now RPM = 0
+        should_be_spinning = pwm > 5 or health.get('rpm_baseline', 0) > 0
+        if rpm < 10 and should_be_spinning:
             if health.get('stopped_since') is None:
                 health['stopped_since'] = now
             if now - health['stopped_since'] >= 10:
