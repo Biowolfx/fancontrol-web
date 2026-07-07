@@ -342,9 +342,14 @@ function updateUI(data) {
     updateFailsafeIndicator(data.failsafe);
     updateStandbyIndicator(data.standby_mode);
     
-    // Build fan list if needed
+    // Build fan list if needed (only when fan count changes to preserve animations)
     if (data.fans && Object.keys(data.fans).length > 0) {
-        buildFanList(data.fans);
+        const existingCount = document.querySelectorAll('#fan-list .fan-card').length;
+        if (existingCount === 0 || existingCount !== Object.keys(data.fans).length) {
+            buildFanList(data.fans);
+        } else {
+            updateFanHealthClasses(data.fans);
+        }
     }
     
     // Build disks list
@@ -465,6 +470,31 @@ function buildFanList(fans) {
     }
     
     container.innerHTML = html || `<div class="text-center text-gray-500 py-8">${t('setup.no_fans', 'No fans detected')}</div>`;
+}
+
+function updateFanHealthClasses(fans) {
+    const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
+    for (const [fanId, fan] of Object.entries(fans)) {
+        const card = document.getElementById(`fan-card-${fanId}`);
+        if (!card) continue;
+        const healthStatus = fan.health?.status || 'healthy';
+        const newClass = healthStatus === 'stopped' ? 'fan-alert-stopped' :
+                         healthStatus === 'slowing' ? 'fan-alert-slowing' :
+                         healthStatus === 'needs_calibration' ? 'fan-alert-needs-calibration' : '';
+        const hasAny = healthClasses.some(c => card.classList.contains(c));
+        if (newClass && !hasAny) {
+            card.classList.add(newClass);
+        } else if (!newClass && hasAny) {
+            healthClasses.forEach(c => card.classList.remove(c));
+        }
+        // Update status badge text
+        const badge = card.querySelector('.text-xs.px-1\\.5');
+        if (badge) {
+            const displayStatus = fan.health?.status || fan.status;
+            badge.textContent = t('status.' + displayStatus, displayStatus);
+            badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(displayStatus)}`;
+        }
+    }
 }
 
 function selectFan(fanId) {

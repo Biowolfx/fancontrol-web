@@ -428,7 +428,13 @@ def check_fan_health(socketio=None):
         })
         old_status = health.get('status', 'healthy')
         rpm = fan.get('rpm', 0) or 0
-        pwm = fan.get('current_pct', 0) or fan.get('manual_pct', 50) or 0
+        # Use the highest available PWM indicator — current_pct from control loop,
+        # manual_pct from user setting, or target_pwm as fallback. For inverted fans
+        # current_pct may lag by one cycle, so take the max of all three.
+        pwm_from_pct = fan.get('current_pct', 0) or 0
+        pwm_from_manual = fan.get('manual_pct', 0) or 0
+        pwm_from_target = fan.get('target_pwm', 0) or 0
+        pwm = max(pwm_from_pct, pwm_from_manual, pwm_from_target)
         cal = fan.get('calibration', {})
         max_rpm = cal.get('max_rpm', 0)
         new_status = old_status
