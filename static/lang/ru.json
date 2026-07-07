@@ -155,6 +155,8 @@
   "settings.update_success": "Обновление завершено!",
   "settings.restart_notice": "Контейнер перезапускается. Страница обновится через 10 секунд...",
   "settings.update_host_hint": "Выполните на хосте для применения:",
+  "settings.logging": "Уровень логирования",
+  "settings.logging_hint": "Управление детализацией логов. WARNING значительно уменьшает размер файла логов.",
 
   "common.edit": "Изм.",
   "common.del": "Удл.",

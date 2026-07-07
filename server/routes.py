@@ -107,6 +107,29 @@ def api_set_language():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@routes.route('/api/logging', methods=['GET'])
+def api_get_logging():
+    """Get current log level."""
+    from app import get_log_level
+    return jsonify({'level': get_log_level(), 'levels': ['DEBUG', 'INFO', 'WARNING', 'ERROR']})
+
+
+@routes.route('/api/logging', methods=['POST'])
+def api_set_logging():
+    """Set log level."""
+    try:
+        data = request.get_json(force=True)
+        level = data.get('level', 'INFO')
+        from app import set_log_level
+        if set_log_level(level):
+            save_config()
+            return jsonify({'status': 'ok', 'level': level})
+        return jsonify({'status': 'error', 'message': f'Invalid level: {level}'}), 400
+    except Exception as e:
+        logger.error(f'Logging level error: {e}', exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @routes.route('/api/server-name', methods=['PUT'])
 def api_update_server_name():
     """Update server name and push to all connected clients."""

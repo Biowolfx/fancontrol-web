@@ -137,6 +137,7 @@ def _do_save_config():
         existing['tested'] = state.get('tested', False)
         existing['language'] = state.get('language', 'en')
         existing['server_name'] = state.get('server_name', 'FanControl Server')
+        existing['log_level'] = state.get('log_level', 'INFO')
 
         fans_data = {}
         with state_lock:
@@ -207,6 +208,7 @@ def load_config():
                 state['tested'] = bool(cfg.get('tested', False))
                 state['language'] = cfg.get('language', 'en')
                 state['server_name'] = cfg.get('server_name', 'FanControl Server')
+                state['log_level'] = cfg.get('log_level', 'INFO')
                 state['dashboard'] = cfg.get('dashboard', {'groups': [], 'cards': []})
 
             logger.info('Configuration loaded successfully')

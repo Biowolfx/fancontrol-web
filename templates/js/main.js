@@ -4556,6 +4556,7 @@ function toggleSettings() {
         panel.classList.remove('hidden');
         updateLangButtons();
         updateSettingsUI();
+        fetchLogLevel();
         autoCheckUpdate();
     }
 }
@@ -4606,6 +4607,44 @@ function updateSettingsUI() {
         const btn = document.getElementById(`autoupd-btn-${v}`);
         if (btn) btn.className = `flex-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold transition-all duration-300 border ${s.autoUpdateCheck === v ? BTN_ACTIVE : BTN_INACTIVE}`;
     });
+}
+
+// ============================================================================
+// LOGGING LEVEL
+// ============================================================================
+
+let _currentLogLevel = 'INFO';
+
+async function fetchLogLevel() {
+    try {
+        const resp = await fetch('/api/logging');
+        const data = await resp.json();
+        _currentLogLevel = data.level || 'INFO';
+        updateLogLevelButtons();
+    } catch {}
+}
+
+function updateLogLevelButtons() {
+    ['DEBUG', 'INFO', 'WARNING', 'ERROR'].forEach(level => {
+        const btn = document.getElementById(`log-btn-${level}`);
+        if (btn) {
+            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${_currentLogLevel === level ? BTN_ACTIVE : BTN_INACTIVE}`;
+        }
+    });
+}
+
+async function setLogLevel(level) {
+    try {
+        const resp = await fetch('/api/logging', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level })
+        });
+        if (resp.ok) {
+            _currentLogLevel = level;
+            updateLogLevelButtons();
+        }
+    } catch {}
 }
 
 function setTempUnit(unit) {

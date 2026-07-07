@@ -155,6 +155,8 @@
   "settings.update_success": "Update complete!",
   "settings.restart_notice": "Container is restarting. Page will reload in 10 seconds...",
   "settings.update_host_hint": "Run on host to apply update:",
+  "settings.logging": "Logging Level",
+  "settings.logging_hint": "Control log verbosity. WARNING reduces log file size significantly.",
 
   "common.edit": "Edit",
   "common.del": "Del",

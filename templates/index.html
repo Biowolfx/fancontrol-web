@@ -909,7 +909,19 @@
                     <span data-i18n="settings.off">Off</span>
                 </button>
             </div>
-            
+
+            <!-- Logging Level -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.logging">Logging Level</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.logging_hint">Control log verbosity. WARNING reduces log file size significantly.</p>
+                <div class="flex gap-1">
+                    <button id="log-btn-DEBUG" onclick="setLogLevel('DEBUG')" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">DEBUG</button>
+                    <button id="log-btn-INFO" onclick="setLogLevel('INFO')" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">INFO</button>
+                    <button id="log-btn-WARNING" onclick="setLogLevel('WARNING')" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">WARN</button>
+                    <button id="log-btn-ERROR" onclick="setLogLevel('ERROR')" class="flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border">ERROR</button>
+                </div>
+            </div>
+
             <!-- System Update -->
             <div class="mb-6">
                 <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.update">System Update</label>

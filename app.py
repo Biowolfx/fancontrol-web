@@ -43,6 +43,10 @@ except Exception:
 
 # Logger setup — guard against duplicate handlers (gunicorn workers re-import)
 logger = logging.getLogger('fancontrol')
+
+_console_handler = None
+_file_handler = None
+
 if not logger.hasHandlers():
     logger.setLevel(logging.DEBUG)
     fmt = logging.Formatter(
@@ -50,23 +54,55 @@ if not logger.hasHandlers():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(fmt)
-    logger.addHandler(console_handler)
+    _console_handler = logging.StreamHandler(sys.stdout)
+    _console_handler.setLevel(logging.INFO)
+    _console_handler.setFormatter(fmt)
+    logger.addHandler(_console_handler)
 
     try:
-        file_handler = RotatingFileHandler(
+        _file_handler = RotatingFileHandler(
             f'{LOG_DIR}/fancontrol.log',
             maxBytes=10*1024*1024,
             backupCount=5,
             encoding='utf-8'
         )
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(fmt)
-        logger.addHandler(file_handler)
+        _file_handler.setLevel(logging.DEBUG)
+        _file_handler.setFormatter(fmt)
+        logger.addHandler(_file_handler)
     except Exception:
         pass
+else:
+    # Handlers already set up (gunicorn workers) — grab references
+    for h in logger.handlers:
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler):
+            _console_handler = h
+        elif isinstance(h, RotatingFileHandler):
+            _file_handler = h
+
+LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
+
+
+def set_log_level(level_name: str):
+    """Set log level for both console and file handlers."""
+    level_name = level_name.upper()
+    if level_name not in LOG_LEVELS:
+        return False
+    level = getattr(logging, level_name)
+    if _console_handler:
+        _console_handler.setLevel(level)
+    if _file_handler:
+        _file_handler.setLevel(level)
+    logger.setLevel(level)
+    state['log_level'] = level_name
+    logger.info(f'Log level changed to {level_name}')
+    return True
+
+
+def get_log_level() -> str:
+    """Get current effective log level (from console handler)."""
+    if _console_handler:
+        return logging.getLevelName(_console_handler.level)
+    return 'INFO'
 
 
 # Flask & SocketIO
@@ -122,7 +158,12 @@ def init_hardware():
             state['hdd_sensors'] = discover_disks()
             refresh()
             load_config()
-            
+
+            # Apply saved log level
+            saved_level = state.get('log_level', 'INFO')
+            if saved_level and saved_level != 'INFO':
+                set_log_level(saved_level)
+
             if state['initialized']:
                 logger.info('System restored from saved configuration')
             else:
