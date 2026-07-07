@@ -240,6 +240,7 @@
   "dashboard.add_group": "Добавить группу",
   "nodes.local_server": "Мой сервер",
   "nodes.fans": "вентиляторов",
+  "nodes.sensors": "датчиков",
   "nodes.disks": "дисков",
 
   "picker.type": "Тип",

@@ -568,13 +568,18 @@ function renderLocalServerTree() {
     const hiddenDisks = Object.entries(disks).filter(([id]) => hidden.includes(`disk:${id}`));
     const hasHidden = hiddenFans.length + hiddenTemps.length + hiddenDisks.length > 0;
 
+    const serverVer = currentState?.config_version || '';
+
     let html = `
         <div class="node-group" data-node="local">
-            <div class="flex items-center gap-2 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
+            <div class="p-2 rounded hover:bg-cyber-accent cursor-pointer node-header"
                  onclick="toggleNodeGroup('local')">
-                <span class="text-neon-cyan text-xs">▼</span>
-                <span class="text-sm font-semibold text-white">🖥 ${escapeHtml(currentState.server_name || t('nodes.local_server', 'My Server'))}</span>
-                <span class="ml-auto text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded">${visibleFans.length} ${t('nodes.fans', 'fans')}</span>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-neon-cyan text-xs">▼</span>
+                    <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(currentState.server_name || t('nodes.local_server', 'My Server'))}</span>
+                    ${serverVer ? `<span class="text-[10px] text-gray-600" title="${escapeHtml(serverVer)}">${escapeHtml(serverVer)}</span>` : ''}
+                    <span class="text-xs bg-green-900 bg-opacity-30 text-neon-green px-1.5 py-0.5 rounded flex-shrink-0">${visibleFans.length} ${t('nodes.fans', 'fans')}</span>
+                </div>
             </div>
             <div class="node-children ml-4 space-y-px" id="node-children-local">
     `;
@@ -670,40 +675,46 @@ function renderRemoteNodeTree(node) {
     const temps = telemetry.temp_sensors || {};
     const disks = telemetry.hdd_sensors || {};
     const fanCount = Object.keys(fans).length;
-    const statusColor = node.status === 'online' ? 'text-neon-green' : 'text-gray-500';
     const statusDot = node.status === 'online' ? 'bg-neon-green' : 'bg-gray-500';
+
+    const serverVer = currentState?.config_version || '';
+    const agentVer = node.agent_version || '';
+    const updateStarted = node.update_started;
+
+    let versionBadge = '';
+    if (updateStarted) {
+        const elapsed = Math.round((Date.now() / 1000) - updateStarted);
+        if (elapsed > 180) {
+            node.update_started = null;
+        } else {
+            versionBadge = `<span class="text-[10px] px-1 py-0.5 rounded bg-cyan-900/50 text-neon-cyan border border-cyan-700/50 animate-pulse" title="Updating... ${elapsed}s">⟳ ${elapsed}s</span>`;
+        }
+    }
+    if (!versionBadge && agentVer && serverVer && agentVer !== serverVer) {
+        versionBadge = `<span class="text-[10px] px-1 py-0.5 rounded bg-orange-900/50 text-orange-400 border border-orange-700/50 cursor-pointer hover:bg-orange-800/50" onclick="event.stopPropagation(); updateSingleAgent('${escapeHtml(node.node_id)}')" title="Server: ${escapeHtml(serverVer)} — ${t('nodes.click_to_update', 'click to update')}">↑ ${escapeHtml(agentVer)}</span>`;
+    } else if (!versionBadge && agentVer) {
+        versionBadge = `<span class="text-[10px] text-gray-600" title="${escapeHtml(agentVer)}">${escapeHtml(agentVer)}</span>`;
+    }
 
     let html = `
         <div class="node-group" data-node="${escapeHtml(node.node_id)}">
-            <div class="flex items-center gap-1 p-2 rounded hover:bg-cyber-accent cursor-pointer node-header group"
+            <div class="p-2 rounded hover:bg-cyber-accent cursor-pointer node-header group"
                  onclick="toggleNodeGroup('${escapeHtml(node.node_id)}')">
-                <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
-                <span class="text-sm font-semibold text-white truncate flex-1">🖥 ${escapeHtml(node.name)}</span>
-                <span class="text-xs ${statusColor} flex-shrink-0">${node.status}</span>
-                ${(() => {
-                    const serverVer = currentState?.config_version || '';
-                    const agentVer = node.agent_version || '';
-                    const updateStarted = node.update_started;
-                    if (updateStarted) {
-                        const elapsed = Math.round((Date.now() / 1000) - updateStarted);
-                        if (elapsed > 180) {
-                            // Safety: force-clear stale timer after 3 minutes
-                            node.update_started = null;
-                        } else {
-                            return `<span class="text-[10px] px-1 py-0.5 rounded bg-cyan-900/50 text-neon-cyan border border-cyan-700/50 flex-shrink-0 animate-pulse" title="Updating... ${elapsed}s">⟳ ${elapsed}s</span>`;
-                        }
-                    }
-                    if (agentVer && serverVer && agentVer !== serverVer) {
-                        return `<span class="text-[10px] px-1 py-0.5 rounded bg-orange-900/50 text-orange-400 border border-orange-700/50 flex-shrink-0 cursor-pointer hover:bg-orange-800/50" onclick="event.stopPropagation(); updateSingleAgent('${escapeHtml(node.node_id)}')" title="Server: ${escapeHtml(serverVer)} — ${t('nodes.click_to_update', 'click to update')}">↑ ${escapeHtml(agentVer)}</span>`;
-                    } else if (agentVer) {
-                        return `<span class="text-[10px] text-gray-600 flex-shrink-0" title="${escapeHtml(agentVer)}">${escapeHtml(agentVer)}</span>`;
-                    }
-                    return '';
-                })()}
-                <button onclick="event.stopPropagation(); showNodeSettings('${escapeHtml(node.node_id)}')"
-                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-neon-cyan hover:bg-gray-700 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Settings">&#9881;</button>
-                <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
-                        class="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-900/40 rounded text-[11px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">X</button>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
+                    <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(node.name)}</span>
+                    ${versionBadge}
+                    <button onclick="event.stopPropagation(); showNodeSettings('${escapeHtml(node.node_id)}')"
+                            class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-neon-cyan rounded text-[10px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Settings">&#9881;</button>
+                    <button onclick="event.stopPropagation(); deleteNode('${escapeHtml(node.node_id)}')"
+                            class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-red-400 rounded text-[10px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete">✕</button>
+                </div>
+                <div class="flex items-center gap-2 mt-0.5 ml-3.5">
+                    <span class="text-[10px] ${node.status === 'online' ? 'text-neon-green' : 'text-gray-500'}">${node.status}</span>
+                    ${fanCount > 0 ? `<span class="text-[10px] text-gray-500">· ${fanCount} ${t('nodes.fans', 'fans')}</span>` : ''}
+                    ${Object.keys(temps).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(temps).length} ${t('nodes.sensors', 'sensors')}</span>` : ''}
+                    ${Object.keys(disks).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(disks).length} ${t('nodes.disks', 'disks')}</span>` : ''}
+                </div>
             </div>
             <div class="node-children ml-4 space-y-0.5 ${_collapsedNodes.has(node.node_id) ? 'hidden' : ''}" id="node-children-${escapeHtml(node.node_id)}">
     `;

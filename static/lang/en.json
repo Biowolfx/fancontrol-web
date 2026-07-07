@@ -240,6 +240,7 @@
   "dashboard.add_group": "Add Group",
   "nodes.local_server": "My Server",
   "nodes.fans": "fans",
+  "nodes.sensors": "sensors",
   "nodes.disks": "disks",
 
   "picker.type": "Type",
