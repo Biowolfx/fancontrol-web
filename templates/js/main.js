@@ -2167,27 +2167,25 @@ function updateCardDetails(cardId) {
         return;
     }
     if (card.type !== 'fan') {
-        detailsEl.innerHTML = '';
         return;
     }
 
     const fanData = getFanData(card.source, card.sourceId);
-    let html = '';
+    if (!fanData) return;
 
-    if (fanData) {
-        if (card.showMode) {
-            const mode = fanData.mode || 'manual';
-            const modeClass = mode === 'auto' ? 'text-neon-green' : 'text-neon-cyan';
-            const modeLabel = mode === 'auto' ? 'AUTO' : 'MANUAL';
-            html += `<div class="text-xs ${modeClass} mt-1">${modeLabel}</div>`;
-        }
-        if (card.showTarget && fanData.mode === 'auto') {
-            html += `<div class="text-xs text-gray-500 mt-1">Target: ${fanData.target_temp || '--'}°C</div>`;
-        }
-        if (card.showSensors && fanData.sensors && fanData.sensors.length > 0) {
-            const sensorLabels = fanData.sensors.map(s => getSensorLabel(s)).join(', ');
-            html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">Sensors: ${escapeHtml(sensorLabels)}</div>`;
-        }
+    let html = '';
+    if (card.showMode) {
+        const mode = fanData.mode || 'manual';
+        const modeClass = mode === 'auto' ? 'text-neon-green' : 'text-neon-cyan';
+        const modeLabel = mode === 'auto' ? 'AUTO' : 'MANUAL';
+        html += `<div class="text-xs ${modeClass} mt-1">${modeLabel}</div>`;
+    }
+    if (card.showTarget && fanData.mode === 'auto') {
+        html += `<div class="text-xs text-gray-500 mt-1">Target: ${fanData.target_temp || '--'}°C</div>`;
+    }
+    if (card.showSensors && fanData.sensors && fanData.sensors.length > 0) {
+        const sensorLabels = fanData.sensors.map(s => getSensorLabel(s)).join(', ');
+        html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">Sensors: ${escapeHtml(sensorLabels)}</div>`;
     }
 
     detailsEl.innerHTML = html;
@@ -2195,15 +2193,11 @@ function updateCardDetails(cardId) {
 
 function updateDiskCardDetails(card, detailsEl) {
     if (!card.smartAttributes?.length) {
-        detailsEl.innerHTML = '';
         return;
     }
 
     const diskData = currentState?.hdd_sensors?.[card.sourceId];
-    if (!diskData) {
-        detailsEl.innerHTML = '';
-        return;
-    }
+    if (!diskData) return;
 
     let html = '';
     const smartUnits = card.smartUnits || {};
@@ -2275,7 +2269,7 @@ function updateDiskCardDetails(card, detailsEl) {
         }
     }
 
-    detailsEl.innerHTML = html;
+    if (html) detailsEl.innerHTML = html;
 }
 
 function getUnitLabel(unit) {
