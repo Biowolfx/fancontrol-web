@@ -351,6 +351,12 @@ function updateUI(data) {
         }
         // Always update health classes (works on both new and existing cards)
         updateFanHealthClasses(data.fans);
+        // DEBUG: log fan health status
+        for (const [fid, f] of Object.entries(data.fans)) {
+            if (f.health && f.health.status !== 'healthy') {
+                console.log(`[fan-health] ${fid}: status=${f.health.status} rpm=${f.rpm} writable=${f.writable} mode=${f.mode}`);
+            }
+        }
     }
     
     // Build disks list
@@ -488,16 +494,21 @@ function updateFanHealthClasses(fans) {
     const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
     for (const [fanId, fan] of Object.entries(fans)) {
         const card = document.getElementById(`fan-card-${fanId}`);
-        if (!card) continue;
+        if (!card) {
+            console.log(`[fan-health] card not found for ${fanId}`);
+            continue;
+        }
         const healthStatus = fan.health?.status || 'healthy';
         const hasAny = healthClasses.some(c => card.classList.contains(c));
 
         if (healthStatus !== 'healthy' && !hasAny) {
+            console.log(`[fan-health] STARTING pulse for ${fanId}: ${healthStatus}`);
             card.classList.remove('transition-all', 'duration-200');
             healthClasses.forEach(c => card.classList.remove(c));
             card.classList.add(`fan-alert-${healthStatus}`);
             startCardPulse(card, healthStatus);
         } else if (healthStatus === 'healthy' && hasAny) {
+            console.log(`[fan-health] STOPPING pulse for ${fanId}`);
             healthClasses.forEach(c => card.classList.remove(c));
             card.classList.add('transition-all', 'duration-200');
             stopCardPulse(card);
@@ -528,6 +539,7 @@ function startCardPulse(card, status) {
     tick(); // immediate first frame
     const timer = setInterval(tick, 750);
     _cardPulseTimers.set(card.id, timer);
+    console.log(`[fan-health] pulse timer started for ${card.id}, color=${color}`);
 }
 
 function stopCardPulse(card) {

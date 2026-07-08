@@ -439,6 +439,11 @@ def check_fan_health(socketio=None):
         max_rpm = cal.get('max_rpm', 0)
         new_status = old_status
 
+        logger.debug(f'[health] {fan.get("label", fan_id)}: rpm={rpm} pwm={pwm} '
+                     f'pct={pwm_from_pct} manual={pwm_from_manual} target={pwm_from_target} '
+                     f'baseline={health.get("rpm_baseline", 0):.0f} status={old_status} '
+                     f'stopped_since={health.get("stopped_since")}')
+
         # --- STOP DETECTION ---
         # RPM < 10 while fan should be spinning (pwm > 5) → stopped
         # Also detect if fan was previously running (baseline > 0) and now RPM = 0
