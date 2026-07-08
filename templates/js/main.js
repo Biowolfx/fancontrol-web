@@ -730,8 +730,8 @@ function renderLocalServerTree() {
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent cursor-pointer"
                      onclick="toggleNodeGroup('local-hidden')">
                     <span class="text-neon-cyan text-[10px]">${arrowChar}</span>
-                    <span class="text-[10px] text-gray-500">Удалённые (${totalHidden})</span>
-                    <button onclick="event.stopPropagation(); restoreAllSensors()" class="ml-auto text-[10px] text-gray-600 hover:text-neon-green px-1">↺ все</button>
+                    <span class="text-[10px] text-gray-500">${t('nodes.hidden', 'Hidden')} (${totalHidden})</span>
+                    <button onclick="event.stopPropagation(); restoreAllSensors()" class="ml-auto text-[10px] text-gray-600 hover:text-neon-green px-1">↺ ${t('nodes.all', 'all')}</button>
                 </div>
                 <div class="node-children ml-4 space-y-px ${isHiddenExpanded ? '' : 'hidden'}" id="node-children-local-hidden">
         `;
@@ -741,7 +741,7 @@ function renderLocalServerTree() {
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                     <span class="opacity-50">${fanIcon(fan)}</span>
                     <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(fan.label)}</span>
-                    <button onclick="restoreSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                    <button onclick="restoreSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="${t('nodes.restore', 'Restore')}">↺</button>
                 </div>
             `;
         }
@@ -750,7 +750,7 @@ function renderLocalServerTree() {
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                     <span class="text-xs opacity-50">🌡</span>
                     <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(sensor.label)}</span>
-                    <button onclick="restoreSensor('temp:${escapeHtml(sensorId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                    <button onclick="restoreSensor('temp:${escapeHtml(sensorId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="${t('nodes.restore', 'Restore')}">↺</button>
                 </div>
             `;
         }
@@ -759,7 +759,7 @@ function renderLocalServerTree() {
                 <div class="flex items-center gap-1.5 p-1 rounded hover:bg-cyber-accent group">
                     <span class="text-xs opacity-50">💾</span>
                     <span class="text-xs text-gray-500 truncate flex-1">${escapeHtml(disk.label || diskId)}</span>
-                    <button onclick="restoreSensor('disk:${escapeHtml(diskId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="Восстановить">↺</button>
+                    <button onclick="restoreSensor('disk:${escapeHtml(diskId)}')" class="text-gray-600 hover:text-neon-green text-[10px] px-0.5" title="${t('nodes.restore', 'Restore')}">↺</button>
                 </div>
             `;
         }
@@ -860,7 +860,7 @@ function renderRemoteNodeTree(node) {
     }
 
     if (fanCount === 0 && Object.keys(temps).length === 0 && Object.keys(disks).length === 0) {
-        html += `<div class="text-xs text-gray-600 p-1.5">No telemetry</div>`;
+        html += `<div class="text-xs text-gray-600 p-1.5">${t('node.no_telemetry', 'No telemetry')}</div>`;
     }
 
     html += `</div></div>`;
@@ -944,7 +944,7 @@ function hideCardPicker() {
 function populatePickerSources() {
     const select = document.getElementById('picker-source');
     if (!select) return;
-    select.innerHTML = '<option value="local">My Server (local)</option>';
+    select.innerHTML = `<option value="local">${t('picker.my_server', 'My Server (local)')}</option>`;
     for (const node of nodesData) {
         select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name || node.node_id)}</option>`;
     }
@@ -2277,15 +2277,15 @@ function updateCardDetails(cardId) {
     if (card.showMode) {
         const mode = fanData.mode || 'manual';
         const modeClass = mode === 'auto' ? 'text-neon-green' : 'text-neon-cyan';
-        const modeLabel = mode === 'auto' ? 'AUTO' : 'MANUAL';
+        const modeLabel = mode === 'auto' ? t('mode.auto', 'AUTO') : t('mode.manual', 'MANUAL');
         html += `<div class="text-xs ${modeClass} mt-1">${modeLabel}</div>`;
     }
     if (card.showTarget && fanData.mode === 'auto') {
-        html += `<div class="text-xs text-gray-500 mt-1">Target: ${fanData.target_temp || '--'}°C</div>`;
+        html += `<div class="text-xs text-gray-500 mt-1">${t('inspector.target', 'Target:')} ${fanData.target_temp || '--'}°C</div>`;
     }
     if (card.showSensors && fanData.sensors && fanData.sensors.length > 0) {
         const sensorLabels = fanData.sensors.map(s => getSensorLabel(s)).join(', ');
-        html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">Sensors: ${escapeHtml(sensorLabels)}</div>`;
+        html += `<div class="text-xs text-gray-500 mt-1 truncate" title="${escapeHtml(sensorLabels)}">${t('inspector.sensors', 'Sensors:')} ${escapeHtml(sensorLabels)}</div>`;
     }
 
     detailsEl.innerHTML = html;
@@ -3564,13 +3564,13 @@ function runDiscovery() {
                 document.getElementById('setup-step-intro').classList.add('hidden');
                 document.getElementById('setup-step-results').classList.remove('hidden');
             } else {
-                alert('Scan error: ' + data.message);
+                alert(t('discover.scan_error', 'Scan error: ') + data.message);
                 wizardStep = 'intro';
             }
         })
         .catch(err => {
             console.error('Discovery error:', err);
-            alert('Connection error during scan');
+            alert(t('discover.connection_error', 'Connection error'));
             setDiscoverButtonState(false);
             wizardStep = 'intro';
         });
@@ -3778,12 +3778,12 @@ function applyDsmFanSpeed() {
             currentState = { ...currentState, initialized: true, tested: true };
             showMainScreen();
         } else {
-            alert('Error: ' + (data.message || 'Failed to set fan speed'));
+            alert('Error: ' + (data.message || t('toast.speed_failed', 'Failed to set fan speed')));
         }
     })
     .catch(err => {
         console.error('DSM fan speed error:', err);
-        alert('Failed to set fan speed');
+        alert(t('toast.speed_failed', 'Failed to set fan speed'));
     });
 }
 
@@ -3798,7 +3798,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
     const container = document.getElementById('dsm-scheme-inner');
     if (!container) return;
 
-    container.innerHTML = '<div class="text-gray-500 text-center py-8">Loading DSM schemes...</div>';
+    container.innerHTML = `<div class="text-gray-500 text-center py-8">${t('dsm.loading', 'Loading DSM schemes...')}</div>`;
 
     try {
         let schemesData, activeData;
@@ -3807,7 +3807,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
             // Remote node — use schemes from node state
             const node = nodesData.find(n => n.node_id === remoteNodeId);
             if (!node) {
-                container.innerHTML = '<div class="text-red-400 text-center py-8">Node not found</div>';
+                container.innerHTML = `<div class="text-red-400 text-center py-8">${t('dsm.node_not_found', 'Node not found')}</div>`;
                 return;
             }
             schemesData = { status: 'ok', schemes: node.telemetry?.dsm_schemes || node.config?.dsm_schemes || node.dsm_schemes || [] };
@@ -3840,7 +3840,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-xl font-bold text-white">DSM Fan Schemes</h2>
                     <button onclick="showView('dashboard')" class="text-gray-400 hover:text-white text-sm">
-                        &larr; Back to Dashboard
+                        &larr; ${t('dsm.back', 'Back to Dashboard')}
                     </button>
                 </div>
         `;
@@ -3854,12 +3854,12 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                     <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center gap-3">
                             <h3 class="text-white font-semibold">${schemeLabel}</h3>
-                            ${isActive ? '<span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded">Active</span>' : ''}
+                            ${isActive ? `<span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded">${t('dsm.active', 'Active')}</span>` : ''}
                             ${scheme.hibernation_speed === 'STOP' ? '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-0.5 rounded">Hibernation: STOP</span>' : ''}
                         </div>
                         <button onclick="applyDsmScheme('${escapeHtml(scheme.type)}')"
                                 class="px-3 py-1 bg-neon-cyan/20 border border-neon-cyan/50 text-neon-cyan text-xs rounded hover:bg-neon-cyan/30 transition-all">
-                            Apply
+                            ${t('dsm.apply', 'Apply')}
                         </button>
                     </div>
             `;
@@ -3869,11 +3869,11 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="text-gray-400 text-xs border-b border-gray-700">
-                                <th class="text-left py-2">Sensor</th>
-                                <th class="text-left py-2">Speed</th>
-                                <th class="text-left py-2">Action</th>
-                                <th class="text-left py-2">Threshold</th>
-                                <th class="text-right py-2">Edit</th>
+                                <th class="text-left py-2">${t('dsm.col_sensor', 'Sensor')}</th>
+                                <th class="text-left py-2">${t('dsm.col_speed', 'Speed')}</th>
+                                <th class="text-left py-2">${t('dsm.col_action', 'Action')}</th>
+                                <th class="text-left py-2">${t('dsm.col_threshold', 'Threshold')}</th>
+                                <th class="text-right py-2">${t('dsm.col_edit', 'Edit')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -3905,7 +3905,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
 
                 html += '</tbody></table>';
             } else {
-                html += '<div class="text-gray-500 text-xs py-2">No entries</div>';
+                html += `<div class="text-gray-500 text-xs py-2">${t('dsm.no_entries', 'No entries')}</div>`;
             }
 
             html += '</div>';
@@ -3970,7 +3970,7 @@ async function editDsmEntry(schemeType, index) {
             renderDsmSchemeEditor();
         } else {
             const err = await resp.json();
-            alert(err.message || 'Failed to update entry');
+            alert(err.message || t('dsm.entry_failed', 'Failed to update entry'));
         }
     } catch (e) {
         alert('Error: ' + e.message);
@@ -3984,7 +3984,7 @@ async function applyDsmScheme(schemeType) {
             const node = nodesData.find(n => n.node_id === _currentRemoteNodeId);
             const scheme = (node?.telemetry?.dsm_schemes || node?.config?.dsm_schemes || node?.dsm_schemes || []).find(s => s.type === schemeType);
             if (!scheme) {
-                showToast('Scheme not found', 'error');
+                showToast(t('dsm.node_not_found', 'Node not found'), 'error');
                 return;
             }
             socket.emit('server:dsm:apply', {
@@ -3997,19 +3997,19 @@ async function applyDsmScheme(schemeType) {
                     threshold_temp: e.threshold_temp,
                 })),
             });
-            showToast('Scheme applied to remote agent', 'success');
+            showToast(t('dsm.apply_remote', 'Scheme applied to remote agent'), 'success');
         } else {
             // Local server
             const resp = await fetch('/api/dsm/apply', { method: 'POST' });
             const data = await resp.json();
             if (data.status === 'ok') {
-                showToast('Scheme applied successfully', 'success');
+                showToast(t('dsm.apply_ok', 'Scheme applied successfully'), 'success');
             } else {
-                showToast(data.message || 'Failed to apply scheme', 'error');
+                showToast(data.message || t('dsm.apply_failed', 'Failed to apply scheme'), 'error');
             }
         }
     } catch (e) {
-        showToast('Error applying scheme: ' + e.message, 'error');
+        showToast(t('dsm.apply_failed', 'Failed to apply scheme') + ': ' + e.message, 'error');
     }
 }
 
@@ -4021,9 +4021,9 @@ function runCalibration() {
     wizardStep = 'calibrating';
     
     document.getElementById('calibration-modal').classList.remove('hidden');
-    document.getElementById('calibration-status').textContent = 'Starting...';
+    document.getElementById('calibration-status').textContent = t('calibration.starting', 'Starting...');
     document.getElementById('calibration-progress-bar').style.width = '0%';
-    document.getElementById('calibration-step').textContent = 'Step 0/11';
+    document.getElementById('calibration-step').textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
     
     fetch('/api/initialize', { method: 'POST' })
         .then(r => r.json())
@@ -4045,8 +4045,8 @@ function updateCalibrationModal(progress) {
     }
     
     document.getElementById('calibration-status').textContent = progress.status;
-    document.getElementById('calibration-step').textContent = 
-        `Step ${progress.step}/${progress.total}`;
+    document.getElementById('calibration-step').textContent =
+        t('calibration.step_label', 'Step ${current}/${total}').replace('${current}', progress.step).replace('${total}', progress.total);
     
     const pct = progress.total > 0 ? (progress.step / progress.total * 100) : 0;
     document.getElementById('calibration-progress-bar').style.width = `${pct}%`;
@@ -4089,9 +4089,9 @@ function startCalibration() {
     if (!confirm(t('calibration.confirm', 'Recalibrate all fans? This takes 1-2 minutes.'))) return;
     
     document.getElementById('calibration-modal').classList.remove('hidden');
-    document.getElementById('calibration-status').textContent = 'Starting...';
+    document.getElementById('calibration-status').textContent = t('calibration.starting', 'Starting...');
     document.getElementById('calibration-progress-bar').style.width = '0%';
-    document.getElementById('calibration-step').textContent = 'Step 0/21';
+    document.getElementById('calibration-step').textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
     
     fetch('/api/initialize', { method: 'POST' })
         .catch(err => console.error('Calibration error:', err));
@@ -4301,13 +4301,13 @@ function renderScheduleRules() {
                         <span class="text-xs font-semibold" style="color:${color.text}">${escapeHtml(settings)}</span>
                         <span class="text-[10px] text-gray-500 ml-2">${cells.length}h</span>
                     </div>
-                    <button onclick="editRuleGroup(${gIdx}); event.stopPropagation()" 
+                    <button onclick="editRuleGroup(${gIdx}); event.stopPropagation()"
                             class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
-                        Edit
+                        ${t('schedule.edit', 'Edit')}
                     </button>
-                    <button onclick="deleteRuleGroup(${gIdx}); event.stopPropagation()" 
+                    <button onclick="deleteRuleGroup(${gIdx}); event.stopPropagation()"
                             class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-bg transition-all flex-shrink-0">
-                        Del
+                        ${t('schedule.delete', 'Del')}
                     </button>
                     <span id="rule-chevron-${gIdx}" class="text-[10px] text-gray-500 transition-transform duration-200 cursor-pointer" onclick="toggleRuleGroup(${gIdx})">▸</span>
                 </div>
@@ -4323,13 +4323,13 @@ function renderScheduleRules() {
                 <div class="flex items-center gap-2 px-3 py-1.5 hover:bg-cyber-bg transition-all">
                     <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${color.dot}; opacity:0.6"></span>
                     <span class="text-[11px] text-gray-300 flex-1">${dayLabel} ${fromStr}–${toStr}</span>
-                    <button onclick="editSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()" 
+                    <button onclick="editSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()"
                             class="text-[10px] text-gray-400 hover:text-neon-cyan px-1.5 py-0.5 rounded hover:bg-cyber-accent transition-all">
-                        Edit
+                        ${t('schedule.edit', 'Edit')}
                     </button>
-                    <button onclick="deleteSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()" 
+                    <button onclick="deleteSinglePeriod('${sp.day}', ${sp.from}, ${sp.to}); event.stopPropagation()"
                             class="text-[10px] text-gray-400 hover:text-neon-red px-1.5 py-0.5 rounded hover:bg-cyber-accent transition-all">
-                        Del
+                        ${t('schedule.delete', 'Del')}
                     </button>
                 </div>
             `;
@@ -4723,7 +4723,7 @@ function describeCells(cells) {
     } else if (days.length <= 3) {
         dayStr = days.map(d => tDay(DAYS.indexOf(d))).join(', ');
     } else {
-        dayStr = `${days.length} days`;
+        dayStr = t('schedule.days', '${count} days').replace('${count}', days.length);
     }
     
     if (hours.length === 24) {
@@ -4999,7 +4999,7 @@ let _updateChecked = false;
 function copyAgentToken() {
     const token = document.getElementById('agent-token-value').textContent;
     if (token && navigator.clipboard) {
-        navigator.clipboard.writeText(token).then(() => showToast('Token copied!', 'success'));
+        navigator.clipboard.writeText(token).then(() => showToast(t('toast.token_copied', 'Token copied!'), 'success'));
     }
 }
 
@@ -5240,10 +5240,10 @@ async function updateAgentsNow(nodeIds) {
                 'success'
             );
         } else {
-            showToast(data.message || 'Update failed', 'error');
+            showToast(data.message || t('toast.update_failed', 'Update failed'), 'error');
         }
     } catch (e) {
-        showToast('Failed: ' + e.message, 'error');
+        showToast(t('common.error', 'Error') + ': ' + e.message, 'error');
     }
 }
 
@@ -5371,7 +5371,7 @@ function renderNodesOverview() {
                     <h3 class="text-white font-semibold">${escapeHtml(node.name)}</h3>
                     <div class="flex items-center gap-2">
                         <span class="text-xs ${node.status === 'online' ? 'text-green-400' : 'text-gray-500'}">${node.status}</span>
-                        ${node.control_mode === 'manual' ? '<span class="text-yellow-400 text-xs">&#9888; Manual</span>' : ''}
+                        ${node.control_mode === 'manual' ? `<span class="text-yellow-400 text-xs">&#9888; ${t('node.detail.manual', 'Manual')}</span>` : ''}
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-sm">
@@ -5465,11 +5465,11 @@ function renderNodeDetail(node) {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
                 <h3 class="text-white font-semibold mb-3">${t('nodes.fans', 'Fans')}</h3>
-                <div class="space-y-2">${fansHtml || '<div class="text-gray-500 text-sm">No fan data</div>'}</div>
+                <div class="space-y-2">${fansHtml || `<div class="text-gray-500 text-sm">${t('node.detail.no_fans', 'No fan data')}</div>`}</div>
             </div>
             <div>
                 <h3 class="text-white font-semibold mb-3">${t('node.temperatures', 'Temperatures')}</h3>
-                <div class="space-y-2">${tempsHtml || '<div class="text-gray-500 text-sm">No temperature data</div>'}</div>
+                <div class="space-y-2">${tempsHtml || `<div class="text-gray-500 text-sm">${t('node.detail.no_temps', 'No temperature data')}</div>`}</div>
             </div>
         </div>
     `;
@@ -5553,11 +5553,11 @@ async function addNode() {
             loadNodes();
         } else {
             const err = await resp.json().catch(() => ({}));
-            showToast(err.error || 'Failed to add node', 'error');
+            showToast(err.error || t('toast.add_node_failed', 'Failed to add node'), 'error');
         }
     } catch (e) {
         console.error('[FanControl] Failed to add node:', e);
-        showToast('Failed to add node: ' + e.message, 'error');
+        showToast(t('toast.add_node_failed', 'Failed to add node') + ': ' + e.message, 'error');
     }
 }
 
@@ -5574,11 +5574,11 @@ async function deleteNode(nodeId) {
         } else {
             const err = await resp.json().catch(() => ({}));
             console.error('[FanControl] Delete failed:', resp.status, err);
-            showToast(`Delete failed: ${err.error || resp.status}`, 'error');
+            showToast(t('toast.delete_failed', 'Delete failed') + ': ' + (err.error || resp.status), 'error');
         }
     } catch (e) {
         console.error('[FanControl] Failed to delete node:', e);
-        showToast('Delete failed: ' + e.message, 'error');
+        showToast(t('toast.delete_failed', 'Delete failed') + ': ' + e.message, 'error');
     }
 }
 
@@ -5635,7 +5635,7 @@ function hideServerNameModal() {
 
 async function saveServerName() {
     const name = document.getElementById('server-name-input').value.trim();
-    if (!name) { showToast('Name required', 'error'); return; }
+    if (!name) { showToast(t('toast.name_required', 'Name required'), 'error'); return; }
 
     try {
         const resp = await fetch('/api/server-name', {
@@ -5646,13 +5646,13 @@ async function saveServerName() {
         if (resp.ok) {
             hideServerNameModal();
             currentState.server_name = name;
-            showToast('Server renamed', 'success');
+            showToast(t('toast.server_renamed', 'Server renamed'), 'success');
         } else {
             const err = await resp.json().catch(() => ({}));
-            showToast(err.error || 'Save failed', 'error');
+            showToast(err.error || t('toast.save_failed', 'Save failed'), 'error');
         }
     } catch (e) {
-        showToast('Save failed: ' + e.message, 'error');
+        showToast(t('toast.save_failed', 'Save failed') + ': ' + e.message, 'error');
     }
 }
 
@@ -5661,7 +5661,7 @@ async function saveNodeSettings() {
     const name = document.getElementById('node-settings-name').value.trim();
     const ip = document.getElementById('node-settings-ip').value.trim();
     const port = parseInt(document.getElementById('node-settings-port').value) || 5059;
-    if (!name) { showToast('Name required', 'error'); return; }
+    if (!name) { showToast(t('toast.name_required', 'Name required'), 'error'); return; }
 
     try {
         const resp = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
@@ -5674,10 +5674,10 @@ async function saveNodeSettings() {
             loadNodes();
         } else {
             const err = await resp.json().catch(() => ({}));
-            showToast(err.error || 'Save failed', 'error');
+            showToast(err.error || t('toast.save_failed', 'Save failed'), 'error');
         }
     } catch (e) {
-        showToast('Save failed: ' + e.message, 'error');
+        showToast(t('toast.save_failed', 'Save failed') + ': ' + e.message, 'error');
     }
 }
 
@@ -5689,7 +5689,7 @@ async function scanForAgents() {
     btn.disabled = true;
     btn.textContent = '...';
     list.classList.remove('hidden');
-    list.innerHTML = '<div class="text-gray-500 text-xs py-1">Scanning network...</div>';
+    list.innerHTML = `<div class="text-gray-500 text-xs py-1">${t('discovery.scanning', 'Scanning network...')}</div>`;
 
     try {
         const [discoverResp, discoveredResp, subnetResp] = await Promise.all([
@@ -5720,9 +5720,9 @@ async function scanForAgents() {
                 const label = agent.already_registered
                     ? `<span class="text-neon-green">online</span> ${escapeHtml(agent.name || agent.node_id)}`
                     : escapeHtml(agent.name || agent.node_id);
-                const btnLabel = agent.already_registered ? 'Refresh' : '+ Add';
+                const btnLabel = agent.already_registered ? t('discovery.refresh', 'Refresh') : t('discovery.add', '+ Add');
                 const onclick = agent.already_registered
-                    ? `loadNodes(); showToast('Node refreshed', 'success')`
+                    ? `loadNodes(); showToast(t('toast.node_refreshed', 'Node refreshed'), 'success')`
                     : `acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')`;
                 html += `
                     <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
@@ -5740,7 +5740,7 @@ async function scanForAgents() {
                     html += `
                         <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
                             <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
-                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')" class="text-neon-cyan hover:text-cyan-300 px-1">+ Add</button>
+                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')" class="text-neon-cyan hover:text-cyan-300 px-1">${t('discovery.add', '+ Add')}</button>
                         </div>
                     `;
                 }
@@ -5749,7 +5749,7 @@ async function scanForAgents() {
 
         if (!html) {
             html = '<div class="text-gray-500 text-xs py-1">';
-            html += 'No agents found. Use IP field below to add manually.';
+            html += t('discovery.no_agents', 'No agents found. Use IP field below to add manually.');
             html += '</div>';
         }
 
@@ -5844,16 +5844,16 @@ function showToast(message, type = 'info', actions = []) {
 socket.on('node:discovered', (data) => {
     if (data.already_connected) {
         // Agent auto-registered via WebSocket — already connected, just notify
-        showToast(`Agent connected: ${data.name} (${data.ip})`, 'success');
+        showToast(t('toast.agent_connected', 'Agent connected') + ': ' + data.name + ' (' + data.ip + ')', 'success');
         loadNodes();
     } else {
         // SSDP-discovered agent — check if dismissed
         const dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]');
         if (dismissed.includes(data.node_id)) return;
-        const msg = `Новый агент: ${data.name} (${data.ip})`;
+        const msg = t('toast.new_agent', 'New agent: ') + data.name + ' (' + data.ip + ')';
         showToast(msg, 'warning', [
-            { label: 'Добавить', onclick: `acceptDiscoveredAgent('${data.node_id}')` },
-            { label: 'Не напоминать', onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
+            { label: t('toast.add', 'Add'), onclick: `acceptDiscoveredAgent('${data.node_id}')` },
+            { label: t('toast.dismiss', 'Don\'t remind'), onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
         ]);
     }
 });
@@ -5869,11 +5869,11 @@ async function acceptDiscoveredAgent(nodeId) {
     try {
         const resp = await fetch(`/api/discovered/${nodeId}/accept`, { method: 'POST' });
         if (resp.ok) {
-            showToast('Агент добавлен! Переподключение...', 'success');
+            showToast(t('toast.agent_added', 'Agent added! Reconnecting...'), 'success');
             loadNodes();
         }
     } catch (e) {
-        showToast('Ошибка добавления агента', 'error');
+        showToast(t('toast.agent_add_error', 'Failed to add agent'), 'error');
     }
 }
 
@@ -5883,7 +5883,7 @@ function dismissAgentForever(nodeId) {
         dismissed.push(nodeId);
         localStorage.setItem('fc_dismissed_agents', JSON.stringify(dismissed));
     }
-    showToast('Больше не напоминать', 'success');
+    showToast(t('toast.dismissed', 'Won\'t remind again'), 'success');
 }
 
 function showConflictModal(data) {
