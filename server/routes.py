@@ -630,6 +630,7 @@ def api_update_agents():
     """Send update command to all online agents via WebSocket."""
     from server.agent_handlers import _emit_to_node, _node_to_sid
     from app import socketio
+    from core.state import CONFIG_VERSION
 
     logger.info('[AGENTS-UPDATE] Endpoint called')
 
@@ -645,16 +646,30 @@ def api_update_agents():
     updated = []
     skipped = []
     no_sid = []
+    already_ok = []
     for nid, node in nodes.items():
         status = node.get('status', '?')
         has_sid = nid in _node_to_sid
-        logger.info(f'[AGENTS-UPDATE] node={nid} status={status} has_sid={has_sid}')
+        agent_ver = node.get('agent_version', '')
+        logger.info(f'[AGENTS-UPDATE] node={nid} status={status} has_sid={has_sid} '
+                    f'version={agent_ver}')
         if node_ids and nid not in node_ids:
             continue
         if status != 'online':
             skipped.append(nid)
             continue
-        # Always set pending_update — agent polling will pick it up even if WebSocket fails
+        # Skip agents already at the correct version
+        if agent_ver and agent_ver == CONFIG_VERSION:
+            # Clear any stale pending_update flag
+            with state_lock:
+                state['nodes'].get(nid, {})['pending_update'] = False
+                state['nodes'].get(nid, {})['update_started'] = None
+            from server.node_registry import update_node_flags
+            update_node_flags(nid, pending_update=False)
+            already_ok.append(nid)
+            logger.info(f'[AGENTS-UPDATE] Agent {nid} already at {CONFIG_VERSION} — skipped')
+            continue
+        # Set pending_update — agent polling will pick it up even if WebSocket fails
         import time as _time
         with state_lock:
             state['nodes'].get(nid, {})['pending_update'] = True
@@ -672,14 +687,19 @@ def api_update_agents():
 
     if updated:
         logger.info(f'[AGENTS-UPDATE] Sent update to {len(updated)} agent(s)')
+    if already_ok:
+        logger.info(f'[AGENTS-UPDATE] {len(already_ok)} agent(s) already up to date')
 
-    logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, no_sid={no_sid}')
+    logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, '
+                f'no_sid={no_sid}, already_ok={already_ok}')
     return jsonify({
         'status': 'ok',
         'updated': updated,
         'skipped': skipped,
         'no_sid': no_sid,
-        'message': f'Update sent to {len(updated)} agent(s), {len(skipped)} offline, {len(no_sid)} no SID'
+        'already_ok': already_ok,
+        'message': f'Update sent to {len(updated)} agent(s), {len(skipped)} offline, '
+                   f'{len(no_sid)} no SID, {len(already_ok)} already up to date'
     })
 
 
