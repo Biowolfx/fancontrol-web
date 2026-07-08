@@ -166,10 +166,15 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 logger.error(f'[connect] Error reading flags: {e}')
                 db_pending = False
                 db_auto = False
-            update_done = (agent_version and agent_version == _srv_ver and db_pending)
-            if update_done:
+            # If agent reconnects with matching server version, update is done
+            # — clear pending_update. If version doesn't match, keep pending
+            # so polling can retry.
+            update_done = (agent_version and agent_version == _srv_ver)
+            if update_done and db_pending:
                 logger.info(f'[connect] Agent {node_id} updated successfully: '
                             f'{prev.get("agent_version", "?")} → {agent_version}')
+            clear_pending = update_done or not db_pending
+            if clear_pending and db_pending:
                 from server.node_registry import update_node_flags
                 update_node_flags(node_id, pending_update=False)
             new_node = {
@@ -182,7 +187,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'kernel_info': agent_config.get('kernel_info', {}),
                 'agent_version': agent_version,
                 'auto_update': db_auto,
-                'pending_update': False if update_done else db_pending,
+                'pending_update': False if clear_pending else db_pending,
                 'update_started': None,
             }
             state['nodes'][node_id] = new_node
