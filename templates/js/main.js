@@ -249,10 +249,7 @@ function updateFanHealthClasses(fans) {
     const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
     for (const [fanId, fan] of Object.entries(fans)) {
         const card = document.getElementById(`fan-card-${fanId}`);
-        if (!card) {
-            console.log(`[fan-health] card not found for ${fanId}`);
-            continue;
-        }
+        if (!card) continue;
         const healthStatus = fan.health?.status || 'healthy';
         const hasAny = healthClasses.some(c => card.classList.contains(c));
 
