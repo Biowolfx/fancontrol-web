@@ -4,7 +4,7 @@
  */
 
 import {
-    store, CHART_UPDATE_INTERVAL, RELOAD_DELAY, SCHEDULE_CELL_SIZE, SPARKLINE_MAX,
+    store, i18n, CHART_UPDATE_INTERVAL, RELOAD_DELAY, SCHEDULE_CELL_SIZE, SPARKLINE_MAX,
     BTN_ACTIVE, BTN_INACTIVE,
     settingsDefaults, settings, schedule, dashboard, cardDrag, cardResize, cardEdit,
     smart, groupDrag, timers, dsm, logging, update, conflict, debug, sparklineHistory,
