@@ -3,7 +3,7 @@
 FanControl Web - Monolith (single-file version)
 All Python modules, HTML template, JS, and lang files merged into one file.
 
-CONFIG_VERSION: 3.12.12
+CONFIG_VERSION: 3.12.87
 Auto-generated build - do not edit manually.
 """
 
@@ -58,7 +58,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.12.12"
+CONFIG_VERSION = "3.12.87"
 
 state_lock = threading.RLock()
 
@@ -3776,6 +3776,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
         update_node_status(node_id, 'online', agent_config)
         update_node_control_mode(node_id, control_mode)
+        # Save agent config (incl. dsm_schemes) to config column
+        # so telemetry updates don't overwrite it
+        update_node_config(node_id, agent_config)
+
+        agent_version = data.get('version', '') or agent_config.get('config_version', '')
+        if agent_version:
+            update_node_version(node_id, agent_version)
 
         if on_connect:
             on_connect(node_id)
@@ -3787,6 +3794,26 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         }, node_id)
 
         with state_lock:
+            prev = state['nodes'].get(node_id, {})
+            from core.state import CONFIG_VERSION as _srv_ver
+            try:
+                db_pending = bool(node.get('pending_update', 0))
+                db_auto = bool(node.get('auto_update', 0))
+            except Exception as e:
+                logger.error(f'[connect] Error reading flags: {e}')
+                db_pending = False
+                db_auto = False
+            # If agent reconnects with matching server version, update is done
+            # — clear pending_update. If version doesn't match, keep pending
+            # so polling can retry.
+            update_done = (agent_version and agent_version == _srv_ver)
+            if update_done and db_pending:
+                logger.info(f'[connect] Agent {node_id} updated successfully: '
+                            f'{prev.get("agent_version", "?")} → {agent_version}')
+            clear_pending = update_done or not db_pending
+            if clear_pending and db_pending:
+                from server.node_registry import update_node_flags
+                update_node_flags(node_id, pending_update=False)
             state['nodes'][node_id] = {
                 'node_id': node_id,
                 'name': node['name'],
@@ -3795,6 +3822,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 'config': agent_config,
                 'dsm_schemes': agent_config.get('dsm_schemes', []),
                 'kernel_info': agent_config.get('kernel_info', {}),
+                'agent_version': agent_version,
+                'auto_update': db_auto,
+                'pending_update': False if clear_pending else db_pending,
+                'update_started': None,
             }
         invalidate_state_cache()
 
@@ -5031,6 +5062,179 @@ def api_accept_discovered(node_id):
         _discovered_nodes.pop(node_id, None)
 
     return jsonify(node), 201
+
+
+# ============================================================================
+# Agent update endpoints
+# ============================================================================
+
+@routes.route('/api/update/agents', methods=['POST'])
+def api_update_agents():
+    """Send update command to all online agents via WebSocket."""
+    from core.state import CONFIG_VERSION
+
+    logger.info('[AGENTS-UPDATE] Endpoint called')
+
+    data = request.get_json(silent=True) or {}
+    node_ids = data.get('node_ids')  # Optional: specific nodes, or None for all
+
+    with state_lock:
+        nodes = dict(state.get('nodes', {}))
+
+    updated = []
+    skipped = []
+    no_sid = []
+    already_ok = []
+    for nid, node in nodes.items():
+        status = node.get('status', '?')
+        has_sid = nid in _node_to_sid
+        agent_ver = node.get('agent_version', '')
+        if node_ids and nid not in node_ids:
+            continue
+        if status != 'online':
+            skipped.append(nid)
+            continue
+        # Skip agents already at the correct version
+        if agent_ver and agent_ver == CONFIG_VERSION:
+            with state_lock:
+                state['nodes'].get(nid, {})['pending_update'] = False
+                state['nodes'].get(nid, {})['update_started'] = None
+            update_node_flags(nid, pending_update=False)
+            already_ok.append(nid)
+            continue
+        # Set pending_update
+        import time as _time
+        with state_lock:
+            state['nodes'].get(nid, {})['pending_update'] = True
+            state['nodes'].get(nid, {})['update_started'] = _time.time()
+        update_node_flags(nid, pending_update=True)
+        if not has_sid:
+            no_sid.append(nid)
+            updated.append(nid)
+            continue
+        _emit_to_node(socketio, 'server:update', {}, nid)
+        updated.append(nid)
+
+    return jsonify({
+        'status': 'ok',
+        'updated': updated,
+        'skipped': skipped,
+        'no_sid': no_sid,
+        'already_ok': already_ok,
+    })
+
+
+@routes.route('/api/update/poll', methods=['POST'])
+def api_update_poll():
+    """Agent polls to check if an update is needed."""
+    from core.state import CONFIG_VERSION
+    data = request.get_json(silent=True) or {}
+    agent_version = data.get('agent_version', '')
+    node_id = data.get('node_id', '')
+
+    with state_lock:
+        node = state.get('nodes', {}).get(node_id, {})
+
+    auto_update = node.get('auto_update', False)
+    pending = node.get('pending_update', False)
+    version_mismatch = agent_version and agent_version != CONFIG_VERSION
+    should_update = version_mismatch and (auto_update or pending)
+
+    return jsonify({
+        'update_available': version_mismatch,
+        'should_update': should_update,
+        'server_version': CONFIG_VERSION,
+    })
+
+
+@routes.route('/api/nodes/<node_id>/auto-update', methods=['POST'])
+def toggle_auto_update(node_id):
+    """Toggle auto-update for a specific agent node."""
+    data = request.get_json(silent=True) or {}
+    enabled = data.get('enabled', False)
+    with state_lock:
+        if node_id in state.get('nodes', {}):
+            state['nodes'][node_id]['auto_update'] = enabled
+    update_node_flags(node_id, auto_update=enabled)
+    return jsonify({'node_id': node_id, 'auto_update': enabled})
+
+
+# ============================================================================
+# Diagnostic endpoints
+# ============================================================================
+
+@routes.route('/api/health', methods=['GET'])
+def api_health():
+    """Quick health check."""
+    from core.state import CONFIG_VERSION
+
+    with state_lock:
+        nodes = dict(state.get('nodes', {}))
+
+    agents = []
+    pending_agents = []
+    for nid, node in nodes.items():
+        info = {
+            'node_id': nid,
+            'version': node.get('agent_version', '?'),
+            'status': node.get('status', '?'),
+            'pending': bool(node.get('pending_update', 0)),
+            'auto_update': bool(node.get('auto_update', 0)),
+            'connected': nid in _node_to_sid,
+        }
+        agents.append(info)
+        if info['pending']:
+            pending_agents.append(nid)
+
+    return jsonify({
+        'server_version': CONFIG_VERSION,
+        'agents': agents,
+        'pending_agents': pending_agents,
+        'total_agents': len(agents),
+    })
+
+
+@routes.route('/api/debug', methods=['GET'])
+def api_debug():
+    """Detailed diagnostic info."""
+    from core.state import CONFIG_VERSION
+
+    with state_lock:
+        nodes = dict(state.get('nodes', {}))
+
+    agents = []
+    for nid, node in nodes.items():
+        info = {
+            'node_id': nid,
+            'name': node.get('name', '?'),
+            'version': node.get('agent_version', '?'),
+            'status': node.get('status', '?'),
+            'pending_update': bool(node.get('pending_update', 0)),
+            'auto_update': bool(node.get('auto_update', 0)),
+            'control_mode': node.get('control_mode', '?'),
+            'sid': _node_to_sid.get(nid, None),
+            'ip': node.get('ip', '?'),
+        }
+        agents.append(info)
+
+    git_hash = ''
+    try:
+        result = subprocess.run(
+            ['git', '-C', '/repo', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, timeout=5,
+        )
+        git_hash = result.stdout.strip()
+    except Exception:
+        pass
+
+    return jsonify({
+        'server': {
+            'version': CONFIG_VERSION,
+            'git_hash': git_hash,
+        },
+        'agents': agents,
+        'sid_map': {nid: sid[:8] + '...' for nid, sid in _node_to_sid.items()},
+    })
 
 
 # ==============================================================================
