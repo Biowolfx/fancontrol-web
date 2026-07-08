@@ -4578,6 +4578,9 @@ async function toggleAgentAutoUpdate(nodeId, enabled) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled }),
         });
+        // Update local state so startUpdate() respects the change immediately
+        const node = store.nodesData.find(n => n.node_id === nodeId);
+        if (node) node.auto_update = enabled;
     } catch (err) { console.error('Failed to toggle auto-update:', err); }
 }
 
@@ -4719,7 +4722,11 @@ async function startUpdate() {
     const serverVer = store.state?.config_version || '?';
     const onlineAgents = store.nodesData.filter(n => n.status === 'online');
     // Only update agents with auto_update enabled
-    const outdatedAgents = onlineAgents.filter(n => n.auto_update !== false);
+    // auto_update may be boolean or integer (0/1) from SQLite
+    const outdatedAgents = onlineAgents.filter(n => {
+        const au = n.auto_update;
+        return au && au !== 0 && au !== '0';
+    });
 
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
