@@ -1271,3 +1271,111 @@ def api_accept_discovered(node_id):
         _discovered_nodes.pop(node_id, None)
 
     return jsonify(node), 201
+
+
+# ============================================================================
+# Diagnostic endpoints
+# ============================================================================
+
+@routes.route('/api/health', methods=['GET'])
+def api_health():
+    """Quick health check — server version, agent versions, pending agents."""
+    from core.state import CONFIG_VERSION
+    from server.agent_handlers import _node_to_sid
+
+    with state_lock:
+        nodes = dict(state.get('nodes', {}))
+
+    agents = []
+    pending_agents = []
+    for nid, node in nodes.items():
+        info = {
+            'node_id': nid,
+            'version': node.get('agent_version', '?'),
+            'status': node.get('status', '?'),
+            'pending': bool(node.get('pending_update', 0)),
+            'auto_update': bool(node.get('auto_update', 0)),
+            'connected': nid in _node_to_sid,
+        }
+        agents.append(info)
+        if info['pending']:
+            pending_agents.append(nid)
+
+    return jsonify({
+        'server_version': CONFIG_VERSION,
+        'agents': agents,
+        'pending_agents': pending_agents,
+        'total_agents': len(agents),
+    })
+
+
+@routes.route('/api/debug', methods=['GET'])
+def api_debug():
+    """Detailed diagnostic info — versions, state, config, recent logs."""
+    from core.state import CONFIG_VERSION
+    from server.agent_handlers import _node_to_sid, _sid_to_node
+
+    with state_lock:
+        nodes = dict(state.get('nodes', {}))
+
+    agents = []
+    for nid, node in nodes.items():
+        info = {
+            'node_id': nid,
+            'name': node.get('name', '?'),
+            'version': node.get('agent_version', '?'),
+            'status': node.get('status', '?'),
+            'pending_update': bool(node.get('pending_update', 0)),
+            'auto_update': bool(node.get('auto_update', 0)),
+            'control_mode': node.get('control_mode', '?'),
+            'sid': _node_to_sid.get(nid, None),
+            'last_seen': node.get('last_seen', '?'),
+            'ip': node.get('ip', '?'),
+        }
+        agents.append(info)
+
+    # Server state
+    git_hash = ''
+    try:
+        result = subprocess.run(
+            ['git', '-C', '/repo', 'rev-parse', '--short', 'HEAD'],
+            capture_output=True, text=True, timeout=5,
+        )
+        git_hash = result.stdout.strip()
+    except Exception:
+        pass
+
+    # Pending SQLite flags
+    pending_db = {}
+    try:
+        from server.node_registry import list_nodes
+        for n in list_nodes():
+            if n.get('pending_update'):
+                pending_db[n['node_id']] = True
+    except Exception:
+        pass
+
+    return jsonify({
+        'server': {
+            'version': CONFIG_VERSION,
+            'git_hash': git_hash,
+            'data_dir': str(DATA_DIR),
+            'uptime': _get_uptime(),
+        },
+        'agents': agents,
+        'sid_map': {nid: sid[:8] + '...' for nid, sid in _node_to_sid.items()},
+        'pending_in_db': pending_db,
+        'state_keys': list(state.keys()),
+    })
+
+
+def _get_uptime():
+    """Get process uptime."""
+    try:
+        import resource
+        r = resource.getrusage(resource.RUSAGE_SELF)
+        return f'{r.ru_utime + r.ru_stime:.1f}s cpu'
+    except Exception:
+        return '?'
+
+
