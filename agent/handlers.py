@@ -110,20 +110,53 @@ def make_handlers(sio_ref):
         repo_dir = '/repo'
         if not os.path.isdir(os.path.join(repo_dir, '.git')):
             logger.error('[agent-update] /repo has no .git — cannot auto-update')
+            sio_ref.emit('agent:update_result', {
+                'status': 'error', 'message': 'No .git in /repo'})
             return
 
         def _do_update():
             from core.update_helper import do_git_pull, sync_repo_to_app, schedule_restart
-            success, version = do_git_pull(repo_dir)
-            if not success:
-                logger.error('[agent-update] git pull failed, aborting')
-                return
-            logger.info(f'[agent-update] updated to: {version}')
-            sync_repo_to_app(repo_dir, '/app')
-            schedule_restart(delay=1.0)
+            try:
+                success, version = do_git_pull(repo_dir)
+                if not success:
+                    logger.error('[agent-update] git pull failed, aborting')
+                    sio_ref.emit('agent:update_result', {
+                        'status': 'error', 'message': 'git pull failed'})
+                    return
+                logger.info(f'[agent-update] updated to: {version}')
+                sio_ref.emit('agent:update_result', {
+                    'status': 'pulling', 'version': version})
+                sync_repo_to_app(repo_dir, '/app')
+                sio_ref.emit('agent:update_result', {
+                    'status': 'synced', 'version': version})
+                schedule_restart(delay=1.0)
+            except Exception as e:
+                logger.error(f'[agent-update] error: {e}')
+                sio_ref.emit('agent:update_result', {
+                    'status': 'error', 'message': str(e)})
 
         import threading
         threading.Thread(target=_do_update, daemon=True).start()
+
+    def _on_request_logs(data):
+        """Server requests recent log lines from agent."""
+        import os
+        from core.config import cfg
+        log_file = os.path.join(cfg.log_dir, 'fancontrol.log')
+        lines = data.get('lines', 100)
+        try:
+            if os.path.isfile(log_file):
+                with open(log_file, 'r', errors='replace') as f:
+                    all_lines = f.readlines()
+                    recent = all_lines[-lines:]
+            else:
+                recent = [f'Log file not found: {log_file}\n']
+        except Exception as e:
+            recent = [f'Error reading logs: {e}\n']
+        sio_ref.emit('agent:logs', {
+            'node_id': state.get('node_id'),
+            'lines': recent,
+        })
 
     return {
         'connect': _on_connect,
@@ -134,4 +167,5 @@ def make_handlers(sio_ref):
         'server:node_id_push': _on_node_id_push,
         'server:dsm:apply': _on_dsm_apply,
         'server:update': _on_update,
+        'server:request_logs': _on_request_logs,
     }

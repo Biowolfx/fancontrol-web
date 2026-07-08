@@ -414,5 +414,18 @@
   "update.wait_agents": "Ожидание агентов...",
   "update.waiting_agents": "Ожидание обновления агентов...",
   "update.agents_remaining": "Осталось ${count} агент(ов)...",
-  "update.agents_timeout": "Таймаут — продолжаем обновление сервера. Оставшиеся агенты обновятся позже."
+  "update.agents_timeout": "Таймаут — продолжаем обновление сервера. Оставшиеся агенты обновятся позже.",
+  "update.sending": "Отправка...",
+  "update.pulling": "Загрузка кода...",
+  "update.synced": "Синхронизировано, перезапуск...",
+  "update.error": "Ошибка",
+  "update.retry": "Повторить",
+  "update.skip": "Пропустить",
+  "update.skipped": "Пропущен",
+  "update.version_mismatch": "Несоответствие версии после обновления",
+  "update.agent_logs": "Логи",
+  "update.view_logs": "Просмотр логов",
+  "update.logs_failed": "Не удалось запросить логи",
+  "update.agents_errors": "Некоторые агенты завершились с ошибкой. Пропустите или повторите, затем продолжите.",
+  "update.continue_server": "Продолжить обновление сервера"
 }

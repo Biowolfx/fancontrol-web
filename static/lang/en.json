@@ -414,5 +414,18 @@
   "update.wait_agents": "Waiting for agents...",
   "update.waiting_agents": "Waiting for agents to update...",
   "update.agents_remaining": "${count} agent(s) still updating...",
-  "update.agents_timeout": "Timeout — proceeding with server update. Remaining agents will update later."
+  "update.agents_timeout": "Timeout — proceeding with server update. Remaining agents will update later.",
+  "update.sending": "Sending...",
+  "update.pulling": "Pulling code...",
+  "update.synced": "Synced, restarting...",
+  "update.error": "Error",
+  "update.retry": "Retry",
+  "update.skip": "Skip",
+  "update.skipped": "Skipped",
+  "update.version_mismatch": "Version mismatch after update",
+  "update.agent_logs": "Logs",
+  "update.view_logs": "View logs",
+  "update.logs_failed": "Failed to request logs",
+  "update.agents_errors": "Some agents had errors. Skip them or retry, then continue.",
+  "update.continue_server": "Continue server update"
 }

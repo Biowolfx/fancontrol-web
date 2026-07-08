@@ -390,6 +390,35 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         _emit_to_node(socketio, 'agent:dsm:apply', data, node_id)
         logger.info(f'DSM apply forwarded to agent {node_id}')
 
+    @socketio.on('agent:update_result')
+    def handle_agent_update_result(data):
+        """Agent reports update progress or error."""
+        from flask import request as flask_request
+        agent_sid = flask_request.sid if flask_request else None
+        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
+        if not node_id:
+            return
+        status = data.get('status', 'unknown')
+        message = data.get('message', '')
+        version = data.get('version', '')
+        logger.info(f'Agent update result: {node_id} status={status} version={version} msg={message}')
+        socketio.emit('agent:update_progress', {
+            'node_id': node_id,
+            'status': status,
+            'message': message,
+            'version': version,
+        })
+
+    @socketio.on('agent:logs')
+    def handle_agent_logs(data):
+        """Agent sends log lines — forward to browser."""
+        node_id = data.get('node_id', '')
+        lines = data.get('lines', [])
+        socketio.emit('agent:logs', {
+            'node_id': node_id,
+            'lines': lines,
+        })
+
     @socketio.on('disconnect')
     def handle_disconnect():
         """Clean up SID mapping on disconnect."""

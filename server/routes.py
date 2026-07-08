@@ -669,10 +669,7 @@ def api_update_agents():
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
     if updated:
-        logger.info(f'[AGENTS-UPDATE] Waiting 10s for {len(updated)} agent(s) to receive event...')
-        import time
-        time.sleep(10)
-        logger.info('[AGENTS-UPDATE] Wait complete')
+        logger.info(f'[AGENTS-UPDATE] Sent update to {len(updated)} agent(s)')
 
     logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, no_sid={no_sid}')
     return jsonify({
@@ -682,6 +679,22 @@ def api_update_agents():
         'no_sid': no_sid,
         'message': f'Update sent to {len(updated)} agent(s), {len(skipped)} offline, {len(no_sid)} no SID'
     })
+
+
+@routes.route('/api/nodes/<node_id>/request-logs', methods=['POST'])
+def api_request_agent_logs(node_id):
+    """Request log lines from a remote agent via WebSocket."""
+    from server.agent_handlers import _emit_to_node, _node_to_sid
+    from app import socketio
+
+    if node_id not in state.get('nodes', {}):
+        return jsonify({'error': 'Node not found'}), 404
+    if node_id not in _node_to_sid:
+        return jsonify({'error': 'Agent not connected'}), 503
+
+    lines = (request.get_json(silent=True) or {}).get('lines', 100)
+    _emit_to_node(socketio, 'server:request_logs', {'lines': lines}, node_id)
+    return jsonify({'status': 'ok', 'message': 'Log request sent'})
 
 
 @routes.route('/api/update/poll', methods=['POST'])

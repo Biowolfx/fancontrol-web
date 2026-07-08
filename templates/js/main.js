@@ -5114,6 +5114,131 @@ function setStepState(step, state) {
     }
 }
 
+let _updateAgentStates = {}; // {nodeId: {status, message, version}}
+let _updateResolve = null;   // resolve function for the waiting promise
+
+function setupUpdateListeners() {
+    if (socket.hasListeners('agent:update_progress')) return;
+    socket.on('agent:update_progress', (data) => {
+        const { node_id, status, message, version } = data;
+        _updateAgentStates[node_id] = { status, message, version };
+        renderUpdateAgentProgress();
+        // Check if all agents are done
+        checkAgentsDone();
+    });
+    socket.on('agent:logs', (data) => {
+        renderAgentLogsModal(data.node_id, data.lines);
+    });
+}
+
+function checkAgentsDone() {
+    const pending = Object.entries(_updateAgentStates).filter(([_, s]) =>
+        !['synced', 'error', 'skipped'].includes(s.status));
+    if (pending.length === 0 && _updateResolve) {
+        _updateResolve();
+        _updateResolve = null;
+    }
+}
+
+function renderUpdateAgentProgress() {
+    const el = document.getElementById('update-modal-agents-progress');
+    if (!el) return;
+    const serverVer = currentState?.config_version || '?';
+    let html = '';
+    for (const [nid, st] of Object.entries(_updateAgentStates)) {
+        const node = nodesData.find(n => n.node_id === nid);
+        const name = node?.name || nid;
+        let statusIcon = '', statusText = '', actions = '';
+        switch (st.status) {
+            case 'pending':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></span>';
+                statusText = '<span class="text-gray-400">' + t('update.sending', 'Sending...') + '</span>';
+                break;
+            case 'pulling':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"></span>';
+                statusText = `<span class="text-neon-cyan">${t('update.pulling', 'Pulling code...')} ${st.version || ''}</span>`;
+                break;
+            case 'synced':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-neon-green"></span>';
+                statusText = `<span class="text-neon-green">${t('update.synced', 'Synced, restarting...')}</span>`;
+                break;
+            case 'error':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-neon-red"></span>';
+                statusText = `<span class="text-neon-red">${t('update.error', 'Error')}: ${escapeHtml(st.message || 'unknown')}</span>`;
+                actions = `<button onclick="retryAgentUpdate('${nid}')" class="text-[10px] text-neon-cyan hover:underline ml-1">${t('update.retry', 'Retry')}</button>
+                    <button onclick="skipAgentUpdate('${nid}')" class="text-[10px] text-gray-500 hover:underline ml-1">${t('update.skip', 'Skip')}</button>`;
+                break;
+            case 'skipped':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-gray-600"></span>';
+                statusText = `<span class="text-gray-500">${t('update.skipped', 'Skipped')}</span>`;
+                break;
+            case 'version_mismatch':
+                statusIcon = '<span class="w-2 h-2 rounded-full bg-yellow-400"></span>';
+                statusText = `<span class="text-yellow-400">${t('update.version_mismatch', 'Version mismatch after update')}</span>`;
+                actions = `<button onclick="retryAgentUpdate('${nid}')" class="text-[10px] text-neon-cyan hover:underline ml-1">${t('update.retry', 'Retry')}</button>
+                    <button onclick="skipAgentUpdate('${nid}')" class="text-[10px] text-gray-500 hover:underline ml-1">${t('update.skip', 'Skip')}</button>`;
+                break;
+        }
+        html += `<div class="flex items-center gap-2 py-1 px-2 rounded bg-cyber-accent border border-gray-700 text-xs">
+            ${statusIcon}
+            <span class="text-gray-300 truncate flex-1">${escapeHtml(name)}</span>
+            ${statusText}
+            ${actions}
+            <button onclick="requestAgentLogs('${nid}')" class="text-[10px] text-gray-500 hover:text-neon-cyan ml-1" title="${t('update.view_logs', 'View logs')}">📋</button>
+        </div>`;
+    }
+    el.innerHTML = html;
+}
+
+function retryAgentUpdate(nodeId) {
+    _updateAgentStates[nodeId] = { status: 'pending' };
+    renderUpdateAgentProgress();
+    fetch('/api/update/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_ids: [nodeId] }),
+    }).catch(() => {});
+}
+
+function skipAgentUpdate(nodeId) {
+    if (_updateAgentStates[nodeId]) {
+        _updateAgentStates[nodeId].status = 'skipped';
+    }
+    renderUpdateAgentProgress();
+    checkAgentsDone();
+}
+
+function requestAgentLogs(nodeId) {
+    fetch(`/api/nodes/${encodeURIComponent(nodeId)}/request-logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines: 150 }),
+    }).catch(() => {
+        showToast(t('update.logs_failed', 'Failed to request logs'), 'error');
+    });
+}
+
+function renderAgentLogsModal(nodeId, lines) {
+    const node = nodesData.find(n => n.node_id === nodeId);
+    const name = node?.name || nodeId;
+    const overlay = document.createElement('div');
+    overlay.className = 'fixed inset-0 bg-black/70 z-[90] flex items-center justify-center';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+        <div class="bg-gray-900 border border-gray-700 rounded-xl w-[700px] max-h-[80vh] flex flex-col shadow-2xl">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+                <h3 class="text-white font-semibold text-sm">📋 ${escapeHtml(name)} — ${t('update.agent_logs', 'Logs')}</h3>
+                <div class="flex gap-2">
+                    <button onclick="requestAgentLogs('${nodeId}')" class="text-xs text-gray-400 hover:text-neon-cyan">🔄 ${t('discovery.refresh', 'Refresh')}</button>
+                    <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-lg">&times;</button>
+                </div>
+            </div>
+            <pre class="flex-1 overflow-auto p-4 text-[11px] text-gray-300 font-mono whitespace-pre-wrap">${escapeHtml(lines.join(''))}</pre>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
 async function startUpdate() {
     const applyBtn = document.getElementById('update-modal-apply');
     const progress = document.getElementById('update-modal-progress');
@@ -5124,72 +5249,83 @@ async function startUpdate() {
     const serverVer = currentState?.config_version || '?';
     const onlineAgents = nodesData.filter(n => n.status === 'online');
     const outdatedAgents = onlineAgents.filter(n => n.agent_version && n.agent_version !== serverVer);
-    const updateAgents = outdatedAgents.length > 0;
 
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
     progress.classList.remove('hidden');
     bar.style.width = '10%';
 
-    // Step 0: Send update to agents first (while server is still running)
-    if (updateAgents) {
+    setupUpdateListeners();
+
+    // Step 1: Send update to agents (while server is still running)
+    if (outdatedAgents.length > 0) {
         setStepState('agents', 'active');
         bar.style.width = '5%';
+
+        // Initialize agent states
+        _updateAgentStates = {};
+        outdatedAgents.forEach(n => {
+            _updateAgentStates[n.node_id] = { status: 'pending' };
+        });
+        renderUpdateAgentProgress();
+
         try {
             const agentResp = await fetch('/api/update/agents', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ node_ids: outdatedAgents.map(n => n.node_id) }),
             });
-            const agentData = await agentResp.json();
+            await agentResp.json();
             setStepState('agents', 'done');
             bar.style.width = '15%';
 
-            // Step 0.5: Wait for agents to finish updating
+            // Step 2: Wait for all agents in real-time via WebSocket
             setStepState('wait', 'active');
             result.classList.remove('hidden');
             result.className = 'text-sm mb-4 p-3 rounded-lg bg-cyan-900/20 border border-cyan-800 text-neon-cyan';
             result.innerHTML = `<div class="font-semibold mb-1">${t('update.waiting_agents', 'Waiting for agents to update...')}</div>
-                <div class="text-gray-400 text-xs">${outdatedAgents.map(n => escapeHtml(n.name)).join(', ')}</div>`;
+                <div id="update-modal-agents-progress" class="space-y-1 mt-2"></div>`;
+            renderUpdateAgentProgress();
 
-            const targetVersion = serverVer;
-            const maxWait = 120000; // 2 minutes max
-            const pollInterval = 3000; // check every 3s
-            const startTime = Date.now();
-            let allUpdated = false;
+            // Wait for all agents to finish (no timeout)
+            await new Promise((resolve) => {
+                _updateResolve = resolve;
+                // Also check immediately in case all already done
+                checkAgentsDone();
+            });
 
-            while (Date.now() - startTime < maxWait) {
-                await new Promise(r => setTimeout(r, pollInterval));
-                try {
-                    const nodesResp = await fetch('/api/nodes');
-                    const nodes = await nodesResp.json();
-                    const stillOutdated = nodes.filter(n =>
-                        n.status === 'online' && n.agent_version && n.agent_version !== targetVersion);
-                    if (stillOutdated.length === 0) {
-                        allUpdated = true;
-                        break;
-                    }
-                    // Update progress text
-                    const elapsed = Math.round((Date.now() - startTime) / 1000);
-                    result.innerHTML = `<div class="font-semibold mb-1">${t('update.waiting_agents', 'Waiting for agents to update...')}</div>
-                        <div class="text-gray-400 text-xs">${t('update.agents_remaining', '${count} agent(s) still updating...').replace('${count}', stillOutdated.length)} (${elapsed}s)</div>`;
-                } catch {}
+            const skipped = Object.values(_updateAgentStates).filter(s => s.status === 'skipped').length;
+            const errors = Object.values(_updateAgentStates).filter(s => s.status === 'error').length;
+            setStepState('wait', errors > 0 && skipped === 0 ? 'error' : 'done');
+
+            if (errors > 0 && skipped === 0) {
+                result.innerHTML += `<div class="text-yellow-400 text-xs mt-2">${t('update.agents_errors', 'Some agents had errors. Skip them or retry, then continue.')}</div>`;
+                bar.style.width = '35%';
+                // Show continue button so user can proceed with server update
+                const continueBtn = document.createElement('button');
+                continueBtn.textContent = t('update.continue_server', 'Continue server update');
+                continueBtn.className = 'mt-2 px-3 py-1.5 bg-neon-cyan/20 border border-neon-cyan/50 rounded text-xs text-neon-cyan hover:bg-neon-cyan/30 transition';
+                continueBtn.onclick = () => {
+                    continueBtn.remove();
+                    startServerUpdate(bar, result, applyBtn, closeBtn);
+                };
+                result.appendChild(continueBtn);
+                closeBtn.classList.remove('hidden');
+                return;
             }
 
-            setStepState('wait', allUpdated ? 'done' : 'error');
-            if (allUpdated) {
-                bar.style.width = '35%';
-            } else {
-                result.innerHTML += `<div class="text-yellow-400 text-xs mt-1">${t('update.agents_timeout', 'Timeout — proceeding with server update. Remaining agents will update later.')}</div>`;
-                bar.style.width = '35%';
-            }
+            bar.style.width = '35%';
         } catch (e) {
             console.error('Failed to notify agents:', e);
             setStepState('agents', 'error');
         }
     }
 
-    // Step 1: Git pull on server
+    // Step 3: Git pull on server
+    await startServerUpdate(bar, result, applyBtn, closeBtn);
+}
+
+async function startServerUpdate(bar, result, applyBtn, closeBtn) {
     setStepState('pull', 'active');
     bar.style.width = '40%';
 
@@ -5210,30 +5346,22 @@ async function startUpdate() {
             return;
         }
 
-        // Step 1 done
         setStepState('pull', 'done');
         bar.style.width = '60%';
 
-        // Step 2: Restart (entrypoint syncs code from /repo)
+        // Step 4: Restart
         setStepState('restart', 'active');
         bar.style.width = '80%';
 
-        // Show restart notification
         result.classList.remove('hidden');
         result.className = 'text-sm mb-4 p-3 rounded-lg bg-green-900 bg-opacity-20 border border-green-800 text-neon-green';
-        const agentMsg = updateAgents
-            ? `<div class="text-gray-400 mt-1">${onlineAgents.length} agent(s) will update automatically.</div>`
-            : '';
         result.innerHTML = `
             <div class="font-semibold mb-1">${t('settings.update_success', 'Update complete!')}</div>
             <div class="text-gray-400">${t('settings.restart_notice', 'Container is restarting. Page will reload in 10 seconds...')}</div>
-            ${agentMsg}
         `;
 
         bar.style.width = '100%';
         setStepState('restart', 'done');
-
-        // Reload after delay
         setTimeout(() => { window.location.reload(); }, RELOAD_DELAY);
 
     } catch (e) {
