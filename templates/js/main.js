@@ -4858,15 +4858,8 @@ function openUpdateAgentsModal() {
         return;
     }
 
-    const names = outdated.map(n => `${n.name} (${n.agent_version})`).join(', ');
-    const msg = t('nodes.update_n_agents', 'Update {count} agent(s) to version {version}?')
-        .replace('{count}', outdated.length)
-        .replace('{version}', serverVer)
-        + '\n\n' + names;
-
-    if (confirm(msg)) {
-        updateAgentsNow(outdated.map(n => n.node_id));
-    }
+    // Open the full update modal with agent progress tracking
+    openUpdateModal();
 }
 
 async function updateAgentsNow(nodeIds) {
