@@ -654,17 +654,19 @@ def api_update_agents():
         if status != 'online':
             skipped.append(nid)
             continue
-        if not has_sid:
-            no_sid.append(nid)
-            logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — cannot send update')
-            continue
-        _emit_to_node(socketio, 'server:update', {}, nid)
+        # Always set pending_update — agent polling will pick it up even if WebSocket fails
         import time as _time
         with state_lock:
             state['nodes'].get(nid, {})['pending_update'] = True
             state['nodes'].get(nid, {})['update_started'] = _time.time()
         from server.node_registry import update_node_flags
         update_node_flags(nid, pending_update=True)
+        if not has_sid:
+            no_sid.append(nid)
+            logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — update via polling fallback')
+            updated.append(nid)
+            continue
+        _emit_to_node(socketio, 'server:update', {}, nid)
         updated.append(nid)
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
 
