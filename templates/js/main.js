@@ -4718,7 +4718,8 @@ async function startUpdate() {
 
     const serverVer = store.state?.config_version || '?';
     const onlineAgents = store.nodesData.filter(n => n.status === 'online');
-    const outdatedAgents = onlineAgents.filter(n => n.agent_version && n.agent_version !== serverVer);
+    // Update all online agents — git pull is idempotent, and agents may have stale version info
+    const outdatedAgents = onlineAgents;
 
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
