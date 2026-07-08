@@ -15,7 +15,7 @@ export function updateChart() {
     fetch('/api/history?hours=24')
         .then(r => r.json())
         .then(data => {
-            if (!data.has_data) return;
+            if (!data || !data.has_data || !data.timestamps || !data.timestamps.length) return;
             
             const series = [
                 {
@@ -34,8 +34,9 @@ export function updateChart() {
                 }
             ];
             
-            if (!store.chart) {
-                store.chart = new ApexCharts(chartContainer, {
+            try {
+                if (!store.chart) {
+                    store.chart = new ApexCharts(chartContainer, {
                     chart: {
                         type: 'line',
                         height: 250,
@@ -106,6 +107,7 @@ export function updateChart() {
             } else {
                 store.chart.updateSeries(series);
             }
+            } catch (e) { console.error('Chart render error:', e); }
         })
         .catch(err => console.error('Chart error:', err));
 }

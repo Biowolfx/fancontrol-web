@@ -5705,3 +5705,5 @@ window.updateCalibrationParam = updateCalibrationParam;
 window.onSmartUnitChange = onSmartUnitChange;
 window.toggleAgentAutoUpdate = toggleAgentAutoUpdate;
 window.updatePickerElements = updatePickerElements;
+window.onScheduleMouseDown = onScheduleMouseDown;
+window.onScheduleMouseEnter = onScheduleMouseEnter;
