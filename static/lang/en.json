@@ -410,6 +410,7 @@
   "toast.new_agent": "New agent: ",
   "toast.node_refreshed": "Node refreshed",
   "toast.speed_failed": "Failed to set fan speed",
+  "toast.control_error": "Control command failed",
 
   "update.wait_agents": "Waiting for agents...",
   "update.waiting_agents": "Waiting for agents to update...",
@@ -427,5 +428,19 @@
   "update.view_logs": "View logs",
   "update.logs_failed": "Failed to request logs",
   "update.agents_errors": "Some agents had errors. Skip them or retry, then continue.",
-  "update.continue_server": "Continue server update"
+  "update.continue_server": "Continue server update",
+
+  "smart.loading": "Loading...",
+  "smart.load_error": "SMART data load error",
+  "smart.no_attributes": "No SMART attributes",
+  "smart.no_nvme_attributes": "No NVMe attributes",
+  "smart.critical": "CRITICAL",
+  "smart.important": "IMPORTANT",
+  "smart.unit.bytes": "B",
+  "smart.unit.kb": "KB",
+  "smart.unit.mb": "MB",
+  "smart.unit.gb": "GB",
+  "smart.unit.tb": "TB",
+  "smart.unit.days_short": " d",
+  "smart.unit.months_short": " mo"
 }

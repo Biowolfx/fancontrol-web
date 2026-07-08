@@ -410,6 +410,7 @@
   "toast.new_agent": "Новый агент: ",
   "toast.node_refreshed": "Узел обновлён",
   "toast.speed_failed": "Не удалось установить скорость",
+  "toast.control_error": "Ошибка команды управления",
 
   "update.wait_agents": "Ожидание агентов...",
   "update.waiting_agents": "Ожидание обновления агентов...",
@@ -427,5 +428,19 @@
   "update.view_logs": "Просмотр логов",
   "update.logs_failed": "Не удалось запросить логи",
   "update.agents_errors": "Некоторые агенты завершились с ошибкой. Пропустите или повторите, затем продолжите.",
-  "update.continue_server": "Продолжить обновление сервера"
+  "update.continue_server": "Продолжить обновление сервера",
+
+  "smart.loading": "Загрузка...",
+  "smart.load_error": "Ошибка загрузки SMART данных",
+  "smart.no_attributes": "Нет SMART атрибутов",
+  "smart.no_nvme_attributes": "Нет NVMe атрибутов",
+  "smart.critical": "КРИТИЧНЫЙ",
+  "smart.important": "ВАЖНЫЙ",
+  "smart.unit.bytes": "Б",
+  "smart.unit.kb": "КБ",
+  "smart.unit.mb": "МБ",
+  "smart.unit.gb": "ГБ",
+  "smart.unit.tb": "ТБ",
+  "smart.unit.days_short": " дн",
+  "smart.unit.months_short": " мес"
 }

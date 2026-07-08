@@ -3,172 +3,17 @@
  * Main JavaScript Application
  */
 
-// ============================================================================
-// GLOBAL STATE
-// ============================================================================
-
-let chart = null;
-let currentFanId = null;
-let allSensors = [];
-let fanConfigs = {};
-let isDragging = false;
-let wizardStep = 'intro';
-let currentState = {};
-let lastChartUpdate = 0;
-const CHART_UPDATE_INTERVAL = 60000;
-const RELOAD_DELAY = 10000;
-const SCHEDULE_CELL_SIZE = 18;
-
-const BTN_ACTIVE = 'bg-neon-cyan bg-opacity-20 text-neon-cyan border-neon-cyan border-opacity-30';
-const BTN_INACTIVE = 'bg-cyber-accent text-gray-400 border-gray-700 hover:text-white';
-const BTN_MANUAL_ACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-purple bg-opacity-20 text-neon-purple border border-neon-purple border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-purple';
-const BTN_MANUAL_INACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-purple hover:bg-opacity-20 hover:text-neon-purple hover:border-neon-purple';
-const BTN_AUTO_ACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-neon-cyan bg-opacity-20 text-neon-cyan border border-neon-cyan border-opacity-30 hover:bg-opacity-40 hover:shadow-neon-cyan';
-const BTN_AUTO_INACTIVE = 'py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 bg-cyber-accent text-gray-400 border border-gray-700 hover:bg-neon-cyan hover:bg-opacity-20 hover:text-neon-cyan hover:border-neon-cyan';
-
-// ============================================================================
-// PERSISTENT SETTINGS
-// ============================================================================
-
-const settingsDefaults = {
-    tempUnit: 'celsius',
-    refreshInterval: 0,
-    compactMode: false,
-    autoUpdateCheck: 21600000
-};
-
-let _cachedSettings = null;
-let _settingsCacheTime = 0;
-const SETTINGS_CACHE_TTL = 1000;
-
-function getSettings() {
-    const now = Date.now();
-    if (_cachedSettings && (now - _settingsCacheTime) < SETTINGS_CACHE_TTL) {
-        return _cachedSettings;
-    }
-    try {
-        const raw = localStorage.getItem('fancontrol_settings');
-        _cachedSettings = raw ? { ...settingsDefaults, ...JSON.parse(raw) } : { ...settingsDefaults };
-    } catch { _cachedSettings = { ...settingsDefaults }; }
-    _settingsCacheTime = now;
-    return _cachedSettings;
-}
-
-function saveSettings(partial) {
-    const s = getSettings();
-    Object.assign(s, partial);
-    localStorage.setItem('fancontrol_settings', JSON.stringify(s));
-    _cachedSettings = s;
-    _settingsCacheTime = Date.now();
-    return s;
-}
-
-function formatTemp(celsius) {
-    if (celsius == null) return '--';
-    const s = getSettings();
-    if (s.tempUnit === 'fahrenheit') {
-        return Math.round(celsius * 9 / 5 + 32) + '°F';
-    }
-    return celsius + '°C';
-}
-
-function getTempUnitSymbol() {
-    return getSettings().tempUnit === 'fahrenheit' ? '°F' : '°C';
-}
-
-// Schedule state
-let scheduleData = {};
-let scheduleSelection = [];
-let isDraggingSchedule = false;
-let dragStartCell = null;
-let editingCells = [];
-let scheduleEditorSensors = [];
-let expandedRuleGroups = new Set();
-
-// ============================================================================
-// I18N SYSTEM
-// ============================================================================
-
-let currentLang = localStorage.getItem('fancontrol_lang') || 'en';
-let translations = {};
-
-async function loadLang(code) {
-    try {
-        const resp = await fetch(`/api/lang/${code}`);
-        if (resp.ok) {
-            translations = await resp.json();
-            currentLang = code;
-            localStorage.setItem('fancontrol_lang', code);
-            applyTranslations();
-            return true;
-        }
-    } catch (e) {
-        console.error('[i18n] Failed to load lang:', code, e);
-    }
-    return false;
-}
-
-function t(key, fallback) {
-    return translations[key] || fallback || key;
-}
-
-function applyTranslations() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (key && translations[key]) {
-            el.textContent = translations[key];
-        }
-    });
-    document.querySelectorAll('[data-i18n-title]').forEach(el => {
-        const key = el.getAttribute('data-i18n-title');
-        if (key && translations[key]) {
-            el.title = translations[key];
-        }
-    });
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
-        const key = el.getAttribute('data-i18n-placeholder');
-        if (key && translations[key]) {
-            el.placeholder = translations[key];
-        }
-    });
-    // Update page title
-    const ver = currentState?.config_version;
-    if (translations['app.title'] && ver) {
-        document.title = `${translations['app.title']} v${ver}`;
-    }
-}
-
-// ============================================================================
-// UTILITIES
-// ============================================================================
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-}
-
-function fanIcon(fan, size = 'xs') {
-    const sizeClass = size === 'xs' ? 'w-3 h-3' : 'w-4 h-4';
-    const rpm = fan.rpm || 0;
-    const isDsm = fan.control_method === 'dsm_scemd';
-    if (isDsm) {
-        return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>`;
-    }
-    const healthStatus = fan.health?.status || 'healthy';
-    let color;
-    if (healthStatus === 'stopped') color = '#ef4444';
-    else if (healthStatus === 'slowing' || healthStatus === 'needs_calibration') color = '#facc15';
-    else color = rpm > 0 ? '#22d3ee' : '#4b5563';
-    const dur = rpm > 0 ? Math.max(0.3, 3 - rpm / 500) : 0;
-    const anim = rpm > 0 ? `style="animation: fan-spin ${dur}s linear infinite"` : '';
-    return `<svg class="${sizeClass} inline-block flex-shrink-0" viewBox="0 0 100 100" ${anim}><g fill="${color}" opacity="0.9"><path d="M50 50 Q30 20 50 5 Q70 20 50 50"/><path d="M50 50 Q80 30 95 50 Q80 70 50 50"/><path d="M50 50 Q70 80 50 95 Q30 80 50 50"/><path d="M50 50 Q20 70 5 50 Q20 30 50 50"/></g><circle cx="50" cy="50" r="6" fill="${color}" opacity="0.6"/></svg>`;
-}
-
-function show(el) { if (el) el.classList.remove('hidden'); }
-function hide(el) { if (el) el.classList.add('hidden'); }
-function toggle(el, visible) { if (el) el.classList.toggle('hidden', !visible); }
+import {
+    store, CHART_UPDATE_INTERVAL, RELOAD_DELAY, SCHEDULE_CELL_SIZE, SPARKLINE_MAX,
+    BTN_ACTIVE, BTN_INACTIVE,
+    settingsDefaults, settings, schedule, dashboard, cardDrag, cardResize, cardEdit,
+    smart, groupDrag, timers, dsm, logging, update, conflict, debug, sparklineHistory,
+} from './store.js';
+import { escapeHtml, fanIcon, show, hide, toggle, formatTemp, getTempUnitSymbol, formatBytes, getUnitLabel, getTempColorClass, getSettings, saveSettings, showToast } from './utils.js';
+import { loadLang, t, applyTranslations } from './i18n.js';
+import { healthIcon, buildSensorCheckboxList, setModeButtonStyles } from './render-helpers.js';
+import { registerSocketHandlers } from './socket-handlers.js';
+import { updateChart } from './charts.js';
 
 function setDiscoverButtonState(loading) {
     const btn = document.getElementById('discover-btn');
@@ -185,16 +30,24 @@ console.log('[FanControl] Establishing Socket.IO connection...');
 const socket = io();
 window.socket = socket;
 
-let serverAvailable = true;
-
-socket.on('disconnect', () => {
-    serverAvailable = false;
-    showServerUnavailable();
-});
-
-socket.on('connect', () => {
-    serverAvailable = true;
-    hideServerUnavailable();
+// Register all socket event handlers centrally
+registerSocketHandlers(socket, {
+    showServerUnavailable,
+    hideServerUnavailable,
+    updateUI,
+    buildServerTree,
+    updateCalibrationModal,
+    renderDiscoveredHardware,
+    hideCalibrationModal,
+    showMainScreen,
+    renderUpdateAgentProgress,
+    checkAgentsDone,
+    renderAgentLogsModal,
+    renderNodesOverview,
+    loadNodeDetail,
+    showConflictModal,
+    showManualModeWarning,
+    loadNodes,
 });
 
 function showServerUnavailable() {
@@ -206,102 +59,6 @@ function hideServerUnavailable() {
     const banner = document.getElementById('server-unavailable-banner');
     if (banner) banner.classList.add('hidden');
 }
-
-let lastUIUpdate = 0;
-socket.on('update', (data) => {
-    // Merge partial updates into currentState (don't replace)
-    if (data != null && typeof data === 'object') Object.assign(currentState, data);
-    // Sync node data from server state
-    if (data.nodes) {
-        const nodeEntries = Object.entries(data.nodes);
-        for (const [nid, ndata] of nodeEntries) {
-            const idx = nodesData.findIndex(n => n.node_id === nid);
-            if (idx >= 0) {
-                Object.assign(nodesData[idx], ndata);
-            } else {
-                nodesData.push(ndata);
-            }
-        }
-        buildServerTree();
-    }
-    if (data.test_progress && data.testing) {
-        updateCalibrationModal(data.test_progress);
-    }
-    const interval = getSettings().refreshInterval;
-    if (interval === 0) {
-        updateUI(data);
-    } else {
-        const now = Date.now();
-        if (now - lastUIUpdate >= interval) {
-            lastUIUpdate = now;
-            updateUI(data);
-        }
-    }
-    // Show update button in sidebar for agent mode
-    const agentUpdateSection = document.getElementById('agent-update-section');
-    if (agentUpdateSection) {
-        agentUpdateSection.classList.toggle('hidden', !data.agent_mode);
-    }
-    // Show "Update Agents" button if any agent has outdated version (server mode only)
-    const updateAgentsOutdated = document.getElementById('update-agents-outdated-section');
-    if (updateAgentsOutdated && !data.agent_mode) {
-        const serverVer = data.config_version || '';
-        const outdatedCount = Object.values(data.nodes || {})
-            .filter(n => n.status === 'online' && n.agent_version && n.agent_version !== serverVer).length;
-        updateAgentsOutdated.classList.toggle('hidden', outdatedCount === 0);
-        const countEl = document.getElementById('outdated-agents-count');
-        if (countEl) {
-            countEl.textContent = outdatedCount > 0 ? outdatedCount : '';
-        }
-    }
-    // Hide "Add Node" section in agent mode (no server features)
-    const addNodeSection = document.getElementById('add-node-section');
-    if (addNodeSection) {
-        addNodeSection.classList.toggle('hidden', !!data.agent_mode);
-    }
-    // Show agent token in sidebar only in agent mode
-    const agentTokenSection = document.getElementById('agent-token-section');
-    const agentTokenBanner = document.getElementById('agent-token-banner');
-    const hasToken = data.api_token && data.api_token.length > 0;
-    if (agentTokenSection) {
-        agentTokenSection.classList.toggle('hidden', !data.agent_mode || !hasToken);
-        if (hasToken) document.getElementById('agent-token-value').textContent = data.api_token;
-    }
-    // Hide the big banner — token is already in sidebar
-    if (agentTokenBanner) {
-        agentTokenBanner.classList.add('hidden');
-    }
-    // DSM scheme view is accessed by clicking DSM fans in tree — no nav button needed
-});
-
-socket.on('hardware_discovered', (data) => {
-    console.log('[FanControl] Hardware discovered:', data);
-    if (wizardStep === 'intro' || wizardStep === 'scanning') {
-        renderDiscoveredHardware(data);
-        wizardStep = 'results';
-    }
-});
-
-socket.on('test_progress', (progress) => {
-    console.log('[FanControl] Calibration progress:', progress);
-    updateCalibrationModal(progress);
-});
-
-socket.on('hidden_sensors', (data) => {
-    _hiddenSensors = data.hiddenSensors || [];
-    buildServerTree();
-});
-
-socket.on('test_complete', (result) => {
-    console.log('[FanControl] Calibration complete:', result);
-    hideCalibrationModal();
-    
-    if (result.success) {
-        wizardStep = 'done';
-        currentState = { ...currentState, initialized: true, tested: true };
-        showMainScreen();
-    }
-});
 
 // ============================================================================
 // UI UPDATE FUNCTIONS
@@ -320,17 +77,17 @@ function updateUI(data) {
     // Show appropriate screen
     if (!data.initialized || !data.tested) {
         // Don't flash setup screen during restart if we were already on main screen
-        if (_wasOnMainScreen) {
+        if (store.wasOnMainScreen) {
             return;
         }
         showSetupScreen();
-        if (data.hardware_scanned && wizardStep === 'intro') {
+        if (data.hardware_scanned && store.wizardStep === 'intro') {
             renderDiscoveredHardware({
                 fans: data.fans,
                 temps: data.temp_sensors,
                 disks: data.hdd_sensors
             });
-            wizardStep = 'results';
+            store.wizardStep = 'results';
             setDiscoverButtonState(false);
         }
         return;
@@ -368,15 +125,15 @@ function updateUI(data) {
     buildSensorList(data);
     
     // Update inspector if a fan is selected
-    if (currentFanId && data.fans && data.fans[currentFanId]) {
-        updateInspector(data.fans[currentFanId]);
+    if (store.currentFanId && data.fans && data.fans[store.currentFanId]) {
+        updateInspector(data.fans[store.currentFanId]);
     }
     
     // Update chart
     updateChart();
 
     // Refresh server tree
-    if (_dashboardLoaded) buildServerTree();
+    if (dashboard.loaded) buildServerTree();
 
     // Dashboard live updates handled by startPickerLiveUpdate
 }
@@ -393,16 +150,14 @@ function showSetupScreen() {
     if (panel) panel.classList.add('hidden');
 }
 
-let _wasOnMainScreen = false;
-
 function showMainScreen() {
-    _wasOnMainScreen = true;
+    store.wasOnMainScreen = true;
     const mainScreen = document.getElementById('main-screen');
     const wasOnSetup = mainScreen?.classList.contains('hidden');
 
     document.getElementById('setup-screen').classList.add('hidden');
     mainScreen?.classList.remove('hidden');
-    if (!currentState || !currentState.testing) {
+    if (!store.state || !store.state.testing) {
         hideCalibrationModal();
     }
     if (wasOnSetup) showView('dashboard');
@@ -414,7 +169,7 @@ function showMainScreen() {
             startSystemUpdate();
         });
     } else {
-        if (!_pickerLiveTimer) startPickerLiveUpdate();
+        if (!dashboard.liveTimer) startPickerLiveUpdate();
         startSystemUpdate();
     }
 }
@@ -448,7 +203,7 @@ function buildFanList(fans) {
     let html = '';
     
     for (const [fanId, fan] of Object.entries(fans)) {
-        const isSelected = fanId === currentFanId;
+        const isSelected = fanId === store.currentFanId;
         const borderColor = isSelected ? 'border-neon-purple' : 'border-cyber-accent';
         const bgColor = isSelected ? 'bg-cyber-accent' : 'bg-cyber-card';
         const healthStatus = fan.health?.status || 'healthy';
@@ -550,7 +305,7 @@ function stopCardPulse(card) {
 }
 
 function selectFan(fanId) {
-    currentFanId = fanId;
+    store.currentFanId = fanId;
     
     // Update card highlights
     document.querySelectorAll('.fan-card').forEach(card => {
@@ -565,8 +320,8 @@ function selectFan(fanId) {
     }
     
     // Show inspector
-    if (currentState && currentState.fans && currentState.fans[fanId]) {
-        updateInspector(currentState.fans[fanId]);
+    if (store.state && store.state.fans && store.state.fans[fanId]) {
+        updateInspector(store.state.fans[fanId]);
     }
 }
 
@@ -584,7 +339,7 @@ function buildServerTree() {
     html += renderLocalServerTree();
 
     // Remote nodes
-    for (const node of nodesData) {
+    for (const node of store.nodesData) {
         html += renderRemoteNodeTree(node);
     }
 
@@ -597,11 +352,11 @@ function buildServerTree() {
 }
 
 function getHiddenSensors() {
-    return _hiddenSensors || [];
+    return dashboard.hiddenSensors || [];
 }
 
 function setHiddenSensors(hidden) {
-    _hiddenSensors = hidden;
+    dashboard.hiddenSensors = hidden;
     scheduleDashboardSave();
 }
 
@@ -643,11 +398,11 @@ function restoreAllSensors() {
 }
 
 function renderLocalServerTree() {
-    if (!currentState || !currentState.fans) return '';
+    if (!store.state || !store.state.fans) return '';
 
-    const fans = currentState.fans;
-    const temps = currentState.temp_sensors || {};
-    const disks = currentState.hdd_sensors || {};
+    const fans = store.state.fans;
+    const temps = store.state.temp_sensors || {};
+    const disks = store.state.hdd_sensors || {};
     const hidden = getHiddenSensors();
 
     const visibleFans = Object.entries(fans).filter(([id]) => !hidden.includes(`fan:${id}`));
@@ -658,7 +413,7 @@ function renderLocalServerTree() {
     const hiddenDisks = Object.entries(disks).filter(([id]) => hidden.includes(`disk:${id}`));
     const hasHidden = hiddenFans.length + hiddenTemps.length + hiddenDisks.length > 0;
 
-    const serverVer = currentState?.config_version || '';
+    const serverVer = store.state?.config_version || '';
 
     let html = `
         <div class="node-group" data-node="local">
@@ -666,7 +421,7 @@ function renderLocalServerTree() {
                  onclick="toggleNodeGroup('local')">
                 <div class="flex items-center gap-1.5">
                     <span class="w-2 h-2 bg-neon-cyan rounded-full flex-shrink-0"></span>
-                    <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(currentState.server_name || t('nodes.local_server', 'My Server'))}</span>
+                    <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(store.state.server_name || t('nodes.local_server', 'My Server'))}</span>
                     ${serverVer ? `<span class="text-[10px] text-gray-600" title="${escapeHtml(serverVer)}">${escapeHtml(serverVer)}</span>` : ''}
                     <button onclick="event.stopPropagation(); openServerNameEdit()"
                             class="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-neon-cyan rounded text-[10px] flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename">✎</button>
@@ -682,17 +437,15 @@ function renderLocalServerTree() {
     `;
 
     for (const [fanId, fan] of visibleFans) {
-        const isSelected = fanId === currentFanId;
+        const isSelected = fanId === store.currentFanId;
         const fanHealth = fan.health?.status || 'healthy';
-        const healthIcon = fanHealth === 'stopped' ? '<span class="text-red-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.stopped', 'Fan stopped') + '">⛔</span>' :
-                          fanHealth === 'slowing' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.slowing', 'Fan slowing — bearing wear') + '">⚠</span>' :
-                          fanHealth === 'needs_calibration' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.needs_calibration', 'Calibration required') + '">⚠</span>' : '';
+        const _healthIcon = healthIcon(fan);
         html += `
             <div data-sensor-id="fan:${escapeHtml(fanId)}" class="flex items-center gap-1.5 p-1 rounded cursor-pointer transition-all group ${isSelected ? 'bg-cyber-accent border-l-2 border-neon-purple' : 'hover:bg-cyber-accent border-l-2 border-transparent'}"
                  onclick="selectFanFromTree('${escapeHtml(fanId)}', 'local')">
                 ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(fan.label)}</span>
-                ${healthIcon}
+                ${_healthIcon}
                 <span class="ml-auto text-xs font-mono text-neon-cyan" id="tree-fan-rpm-${escapeHtml(fanId)}">${fan.rpm || 0}</span>
                 <button onclick="event.stopPropagation(); hideSensor('fan:${escapeHtml(fanId)}')" class="text-gray-600 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity px-0.5">×</button>
             </div>
@@ -779,7 +532,7 @@ function renderRemoteNodeTree(node) {
     const fanCount = Object.keys(fans).length;
     const statusDot = node.status === 'online' ? 'bg-neon-green' : 'bg-gray-500';
 
-    const serverVer = currentState?.config_version || '';
+    const serverVer = store.state?.config_version || '';
     const agentVer = node.agent_version || '';
     const updateStarted = node.update_started;
 
@@ -825,15 +578,13 @@ function renderRemoteNodeTree(node) {
         const cleanLabel = (fan.label || fanId).replace(/\s*\(Synology-[^)]+\)/, '');
         const isDsm = fan.control_method === 'dsm_scemd';
         const fanHealth = fan.health?.status || 'healthy';
-        const healthIcon = fanHealth === 'stopped' ? '<span class="text-red-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.stopped', 'Fan stopped') + '">⛔</span>' :
-                          fanHealth === 'slowing' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.slowing', 'Fan slowing — bearing wear') + '">⚠</span>' :
-                          fanHealth === 'needs_calibration' ? '<span class="text-yellow-400 text-[10px] ml-1 alert-pulse" title="' + t('fan.health.needs_calibration', 'Calibration required') + '">⚠</span>' : '';
+        const _healthIcon = healthIcon(fan);
         html += `
             <div class="flex items-center gap-2 p-1.5 rounded cursor-pointer hover:bg-cyber-accent"
                  onclick="selectNodeFan('${escapeHtml(node.node_id)}', '${escapeHtml(fanId)}')">
                 ${fanIcon(fan)}
                 <span class="text-xs text-gray-300 truncate flex-1">${escapeHtml(cleanLabel)}${isDsm ? ' <span class="text-blue-400 text-[10px]">DSM</span>' : ''}</span>
-                ${healthIcon}
+                ${_healthIcon}
                 <span class="ml-auto text-xs font-mono text-neon-cyan">${fan.rpm || 0}</span>
             </div>
         `;
@@ -883,11 +634,11 @@ function toggleNodeGroup(nodeId) {
 }
 
 function selectFanFromTree(fanId, source) {
-    currentFanId = fanId;
+    store.currentFanId = fanId;
 
     // Check if this is a DSM fan — open scheme editor instead of inspector
-    if (currentState && currentState.fans && currentState.fans[fanId]) {
-        const fan = currentState.fans[fanId];
+    if (store.state && store.state.fans && store.state.fans[fanId]) {
+        const fan = store.state.fans[fanId];
         if (fan.control_method === 'dsm_scemd') {
             showView('dsm-scheme');
             buildServerTree();
@@ -899,8 +650,8 @@ function selectFanFromTree(fanId, source) {
     showView('inspector');
 
     // Update inspector
-    if (source === 'local' && currentState && currentState.fans && currentState.fans[fanId]) {
-        updateInspector(currentState.fans[fanId]);
+    if (source === 'local' && store.state && store.state.fans && store.state.fans[fanId]) {
+        updateInspector(store.state.fans[fanId]);
     }
 
     // Rebuild server tree to highlight selected
@@ -909,11 +660,11 @@ function selectFanFromTree(fanId, source) {
 
 function selectNodeFan(nodeId, fanId) {
     // Check if this is a DSM fan on a remote node
-    const node = nodesData.find(n => n.node_id === nodeId);
+    const node = store.nodesData.find(n => n.node_id === nodeId);
     if (node && node.telemetry && node.telemetry.fans && node.telemetry.fans[fanId]) {
         const fan = node.telemetry.fans[fanId];
         if (fan.control_method === 'dsm_scemd') {
-            _currentRemoteNodeId = nodeId;
+            store.currentRemoteNodeId = nodeId;
             showView('dsm-scheme');
             renderDsmSchemeEditor(nodeId);
             return;
@@ -921,8 +672,6 @@ function selectNodeFan(nodeId, fanId) {
     }
     console.log('[FanControl] Select node fan:', nodeId, fanId);
 }
-
-let _currentRemoteNodeId = null;
 
 // ============================================================================
 // DASHBOARD CARDS
@@ -945,7 +694,7 @@ function populatePickerSources() {
     const select = document.getElementById('picker-source');
     if (!select) return;
     select.innerHTML = `<option value="local">${t('picker.my_server', 'My Server (local)')}</option>`;
-    for (const node of nodesData) {
+    for (const node of store.nodesData) {
         select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name || node.node_id)}</option>`;
     }
 }
@@ -959,20 +708,20 @@ function updatePickerElements() {
     let elements = [];
 
     if (source === 'local') {
-        if (type === 'fan' && currentState?.fans) {
-            elements = Object.entries(currentState.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
-        } else if (type === 'temperature' && currentState?.temp_sensors) {
-            elements = Object.entries(currentState.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
-        } else if (type === 'disk' && currentState?.hdd_sensors) {
-            elements = Object.entries(currentState.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
+        if (type === 'fan' && store.state?.fans) {
+            elements = Object.entries(store.state.fans).map(([id, f]) => ({ id, label: f.label || id, extra: `${f.rpm || 0} RPM` }));
+        } else if (type === 'temperature' && store.state?.temp_sensors) {
+            elements = Object.entries(store.state.temp_sensors).map(([id, s]) => ({ id, label: s.label || id, extra: `${s.value || 0}°C` }));
+        } else if (type === 'disk' && store.state?.hdd_sensors) {
+            elements = Object.entries(store.state.hdd_sensors).map(([id, d]) => ({ id, label: d.label || id, extra: `${d.temp || 0}°C` }));
         } else if (type === 'system') {
             elements = [
-                { id: 'max_temp', label: t('picker.max_temp', 'Макс. температура'), extra: `${currentState?.max_hdd_temp || '--'}°C` },
+                { id: 'max_temp', label: t('picker.max_temp', 'Макс. температура'), extra: `${store.state?.max_hdd_temp || '--'}°C` },
                 { id: 'fans_summary', label: t('picker.fans_summary', 'Сводка по вентиляторам'), extra: '' },
             ];
         }
     } else {
-        const node = nodesData.find(n => n.node_id === source);
+        const node = store.nodesData.find(n => n.node_id === source);
         if (node?.telemetry) {
             const tel = node.telemetry;
             if (type === 'fan' && tel.fans) {
@@ -1153,7 +902,7 @@ function renderPickerCard(card) {
 
     if (type === 'disk') {
         el.addEventListener('click', (e) => {
-            if (_cardDragOccurred || e.target.closest('button')) return;
+            if (cardDrag.occurred || e.target.closest('button')) return;
             showSmartModal(id);
         });
     }
@@ -1164,7 +913,7 @@ function renderPickerCard(card) {
 function snapCardToGrid(cardEl) {
     const cardId = cardEl.dataset?.cardId;
     if (!cardId) return;
-    if (_cardMouseDown?.cardId === cardId || _cardResizing?.cardId === cardId) return;
+    if (cardDrag.mouseDown?.cardId === cardId || cardResize.resizing?.cardId === cardId) return;
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
@@ -1194,8 +943,6 @@ function snapCardToGrid(cardEl) {
     }
 }
 
-let _cardDragOccurred = false;
-
 function toggleCardLockSize(cardId) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
@@ -1215,15 +962,6 @@ function toggleCardLockSize(cardId) {
     if (handle) handle.style.display = card.lockSize ? 'none' : '';
     el.style.cursor = card.lockSize ? 'default' : 'grab';
 }
-let _dropTarget = null;
-
-let _cardResizing = null;
-let _cardResizeStartX = 0;
-let _cardResizeStartY = 0;
-let _cardResizeStartW = 0;
-let _cardResizeStartH = 0;
-let _cardResizeMinRowSpan = 1;
-
 function computeMinRows(el) {
     const contentEl = el.querySelector('.card-content');
     el.style.alignSelf = 'start';
@@ -1249,13 +987,13 @@ function onCardResizeStart(e, cardId) {
     const card = saved.find(c => c.id === cardId);
     if (card?.lockSize) return;
 
-    _cardResizeMinRowSpan = computeMinRows(el);
+    cardResize.minRowSpan = computeMinRows(el);
 
-    _cardResizing = { cardId, el, col: card?.col, row: card?.row };
-    _cardResizeStartX = e.clientX;
-    _cardResizeStartY = e.clientY;
-    _cardResizeStartW = el.offsetWidth;
-    _cardResizeStartH = el.offsetHeight;
+    cardResize.resizing = { cardId, el, col: card?.col, row: card?.row };
+    cardResize.startX = e.clientX;
+    cardResize.startY = e.clientY;
+    cardResize.startW = el.offsetWidth;
+    cardResize.startH = el.offsetHeight;
 
     el.setAttribute('draggable', 'false');
     document.body.style.cursor = 'se-resize';
@@ -1288,13 +1026,13 @@ function updateCanvasColumns() {
 }
 
 function onCardResizeMove(e) {
-    if (!_cardResizing) return;
-    const el = _cardResizing.el;
+    if (!cardResize.resizing) return;
+    const el = cardResize.resizing.el;
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return;
 
-    const dx = e.clientX - _cardResizeStartX;
-    const dy = e.clientY - _cardResizeStartY;
+    const dx = e.clientX - cardResize.startX;
+    const dy = e.clientY - cardResize.startY;
     const cols = getCanvasCols();
     const gap = 8;
     const padL = parseInt(getComputedStyle(canvas).paddingLeft) || 16;
@@ -1304,21 +1042,21 @@ function onCardResizeMove(e) {
     const rowHeight = 100;
     const rowStep = rowHeight + gap;
 
-    const newW = _cardResizeStartW + dx;
-    const newH = _cardResizeStartH + dy;
+    const newW = cardResize.startW + dx;
+    const newH = cardResize.startH + dy;
     const newColSpan = Math.max(2, Math.min(cols, Math.round(newW / (colWidth + gap))));
-    const newRowSpan = Math.max(_cardResizeMinRowSpan, Math.min(8, Math.round(newH / rowStep)));
+    const newRowSpan = Math.max(cardResize.minRowSpan, Math.min(8, Math.round(newH / rowStep)));
 
-    el.style.gridColumn = `${_cardResizing.col || 'auto'} / span ${newColSpan}`;
-    el.style.gridRow = `${_cardResizing.row || 'auto'} / span ${newRowSpan}`;
+    el.style.gridColumn = `${cardResize.resizing.col || 'auto'} / span ${newColSpan}`;
+    el.style.gridRow = `${cardResize.resizing.row || 'auto'} / span ${newRowSpan}`;
     el._resizeColSpan = newColSpan;
     el._resizeRowSpan = newRowSpan;
 }
 
 function onCardResizeEnd(e) {
-    if (!_cardResizing) return;
-    const el = _cardResizing.el;
-    const cardId = _cardResizing.cardId;
+    if (!cardResize.resizing) return;
+    const el = cardResize.resizing.el;
+    const cardId = cardResize.resizing.cardId;
 
     let colSpan = el._resizeColSpan || 3;
     let rowSpan = el._resizeRowSpan || 1;
@@ -1332,7 +1070,7 @@ function onCardResizeEnd(e) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (card) {
-        if (rowSpan < _cardResizeMinRowSpan) rowSpan = _cardResizeMinRowSpan;
+        if (rowSpan < cardResize.minRowSpan) rowSpan = cardResize.minRowSpan;
         const cols = getCanvasCols();
         if (card.col + colSpan - 1 > cols) colSpan = cols - card.col + 1;
 
@@ -1353,9 +1091,9 @@ function onCardResizeEnd(e) {
         setPickerCards(saved);
     }
 
-    _cardResizing = null;
-    _cardDragOccurred = true;
-    setTimeout(() => { _cardDragOccurred = false; }, 200);
+    cardResize.resizing = null;
+    cardDrag.occurred = true;
+    setTimeout(() => { cardDrag.occurred = false; }, 200);
     updateCanvasMinHeight();
 }
 
@@ -1402,10 +1140,6 @@ function findNextPosition(savedCards, colSpan) {
     return { col: 1, row: 1 };
 }
 
-let _cardMouseDown = null;
-let _cardDragClone = null;
-let _dragGridCache = null;
-
 function _computeGridCache() {
     const canvas = document.getElementById('dashboard-canvas');
     if (!canvas) return null;
@@ -1445,7 +1179,7 @@ function onCardMouseDown(e) {
     const domCol = gridColMatch ? parseInt(gridColMatch[1]) : (card.col || 1);
     const domRow = gridRowMatch ? parseInt(gridRowMatch[1]) : (card.row || 1);
 
-    _cardMouseDown = {
+    cardDrag.mouseDown = {
         cardId, cardEl, card,
         startX: e.clientX, startY: e.clientY,
         offsetX, offsetY, dragging: false,
@@ -1454,7 +1188,7 @@ function onCardMouseDown(e) {
         cardCol: domCol,
         cardRow: domRow
     };
-    _dragGridCache = _computeGridCache();
+    cardDrag.gridCache = _computeGridCache();
 
     console.log(`[DOWN] card=${cardId} pos(col=${card.col},row=${card.row}) span(col=${card.colSpan||3},row=${card.rowSpan||1}) offset(X=${Math.round(offsetX)},Y=${Math.round(offsetY)}) cardRect(left=${Math.round(rect.left)},top=${Math.round(rect.top)},w=${Math.round(rect.width)},h=${Math.round(rect.height)})`);
 
@@ -1463,15 +1197,15 @@ function onCardMouseDown(e) {
 }
 
 function onCardMouseMove(e) {
-    if (!_cardMouseDown) return;
-    const dx = Math.abs(e.clientX - _cardMouseDown.startX);
-    const dy = Math.abs(e.clientY - _cardMouseDown.startY);
-    if (!_cardMouseDown.dragging && (dx < 4 && dy < 4)) return;
+    if (!cardDrag.mouseDown) return;
+    const dx = Math.abs(e.clientX - cardDrag.mouseDown.startX);
+    const dy = Math.abs(e.clientY - cardDrag.mouseDown.startY);
+    if (!cardDrag.mouseDown.dragging && (dx < 4 && dy < 4)) return;
 
-    if (!_cardMouseDown.dragging) {
-        _cardMouseDown.dragging = true;
-        _cardMouseDown.cardEl.classList.add('opacity-40');
-        _cardDragOccurred = true;
+    if (!cardDrag.mouseDown.dragging) {
+        cardDrag.mouseDown.dragging = true;
+        cardDrag.mouseDown.cardEl.classList.add('opacity-40');
+        cardDrag.occurred = true;
 
         const canvas = document.getElementById('dashboard-canvas');
         const cs = getComputedStyle(canvas);
@@ -1482,43 +1216,43 @@ function onCardMouseMove(e) {
         const cols = getCanvasCols();
         const gap = 8;
         const colW = (contentW - (cols - 1) * gap) / cols;
-        const cardW = _cardMouseDown.cardEl.offsetWidth;
+        const cardW = cardDrag.mouseDown.cardEl.offsetWidth;
         const rowH = 100;
         const rowStep = rowH + gap;
-        _cardMouseDown.gridSnapshot = {
-            padL, padT, cardW, cardElH: _cardMouseDown.cardEl.offsetHeight, cols, gap, colW, rowH, rowStep,
+        cardDrag.mouseDown.gridSnapshot = {
+            padL, padT, cardW, cardElH: cardDrag.mouseDown.cardEl.offsetHeight, cols, gap, colW, rowH, rowStep,
             canvasLeft: canvas.getBoundingClientRect().left,
             canvasTop: canvas.getBoundingClientRect().top
         };
 
-        _cardDragClone = _cardMouseDown.cardEl.cloneNode(true);
-        _cardDragClone.classList.remove('opacity-40');
-        _cardDragClone.style.cssText = `
+        cardDrag.dragClone = cardDrag.mouseDown.cardEl.cloneNode(true);
+        cardDrag.dragClone.classList.remove('opacity-40');
+        cardDrag.dragClone.style.cssText = `
             position:fixed;z-index:10000;pointer-events:none;
-            width:${_cardMouseDown.cardEl.offsetWidth}px;
-            height:${_cardMouseDown.cardEl.offsetHeight}px;
+            width:${cardDrag.mouseDown.cardEl.offsetWidth}px;
+            height:${cardDrag.mouseDown.cardEl.offsetHeight}px;
             opacity:0.85;
             box-shadow:0 8px 32px rgba(0,0,0,0.4);
             transition:none;
             overflow:hidden;
         `;
-        document.body.appendChild(_cardDragClone);
+        document.body.appendChild(cardDrag.dragClone);
     }
 
-    const cloneW = _cardMouseDown.cardEl.offsetWidth;
-    const cloneH = _cardMouseDown.cardEl.offsetHeight;
-    _cardDragClone.style.left = (e.clientX - _cardMouseDown.offsetX) + 'px';
-    _cardDragClone.style.top = (e.clientY - _cardMouseDown.offsetY) + 'px';
+    const cloneW = cardDrag.mouseDown.cardEl.offsetWidth;
+    const cloneH = cardDrag.mouseDown.cardEl.offsetHeight;
+    cardDrag.dragClone.style.left = (e.clientX - cardDrag.mouseDown.offsetX) + 'px';
+    cardDrag.dragClone.style.top = (e.clientY - cardDrag.mouseDown.offsetY) + 'px';
 
     const canvas = document.getElementById('dashboard-canvas');
-    const card = _cardMouseDown.card;
-    const colSpan = _cardMouseDown.colSpan;
-    const rowSpan = _cardMouseDown.rowSpan;
+    const card = cardDrag.mouseDown.card;
+    const colSpan = cardDrag.mouseDown.colSpan;
+    const rowSpan = cardDrag.mouseDown.rowSpan;
     const cols = getCanvasCols();
-    const snap = _cardMouseDown.gridSnapshot;
+    const snap = cardDrag.mouseDown.gridSnapshot;
 
-    const cardCol = _cardMouseDown.cardCol;
-    const cardRow = _cardMouseDown.cardRow;
+    const cardCol = cardDrag.mouseDown.cardCol;
+    const cardRow = cardDrag.mouseDown.cardRow;
 
     const cardLeft = snap.canvasLeft + snap.padL + (cardCol - 1) * (snap.colW + snap.gap);
     const cardTop = snap.canvasTop + snap.padT + (cardRow - 1) * snap.rowStep;
@@ -1547,27 +1281,27 @@ function onCardMouseMove(e) {
     }
     const occupied = isCellOccupied(newCol, newRow, colSpan, rowSpan, card.id);
 
-    if (!_cardDropPreview) {
-        _cardDropPreview = document.createElement('div');
-        _cardDropPreview.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;border:2px dashed #06b6d4;border-radius:12px;transition:none;background:rgba(6,182,212,0.08);';
-        document.body.appendChild(_cardDropPreview);
+    if (!cardDrag.dropPreview) {
+        cardDrag.dropPreview = document.createElement('div');
+        cardDrag.dropPreview.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;border:2px dashed #06b6d4;border-radius:12px;transition:none;background:rgba(6,182,212,0.08);';
+        document.body.appendChild(cardDrag.dropPreview);
     }
 
-    _cardDropPreview.style.left = (snap.canvasLeft + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
-    _cardDropPreview.style.top = (snap.canvasTop + snap.padT + (newRow - 1) * snap.rowStep) + 'px';
-    _cardDropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
-    _cardDropPreview.style.height = (rowSpan * snap.rowStep - snap.gap) + 'px';
-    _cardDropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
-    _cardDropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
-    _cardDropPreview.style.display = 'block';
+    cardDrag.dropPreview.style.left = (snap.canvasLeft + snap.padL + (newCol - 1) * (snap.colW + snap.gap)) + 'px';
+    cardDrag.dropPreview.style.top = (snap.canvasTop + snap.padT + (newRow - 1) * snap.rowStep) + 'px';
+    cardDrag.dropPreview.style.width = (colSpan * snap.colW + (colSpan - 1) * snap.gap) + 'px';
+    cardDrag.dropPreview.style.height = (rowSpan * snap.rowStep - snap.gap) + 'px';
+    cardDrag.dropPreview.style.borderColor = occupied ? '#ef4444' : '#06b6d4';
+    cardDrag.dropPreview.style.background = occupied ? 'rgba(239,68,68,0.08)' : 'rgba(6,182,212,0.08)';
+    cardDrag.dropPreview.style.display = 'block';
 
-    _dropTarget = { col: newCol, row: newRow, occupied };
+    cardDrag.dropTarget = { col: newCol, row: newRow, occupied };
 
     console.log(`[MOVE] card=${card.id} stored(col=${cardCol},row=${cardRow}) span(${colSpan}x${rowSpan}) relX=${Math.round(relX)},relY=${Math.round(relY)} halfW=${Math.round(halfW)},halfH=${Math.round(halfH)} → new(col=${newCol},row=${newRow}) occ=${occupied}`);
 
     const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => el.classList.remove('drag-hover'));
-    if (groupEl && !groupEl.contains(_cardMouseDown.cardEl)) {
+    if (groupEl && !groupEl.contains(cardDrag.mouseDown.cardEl)) {
         groupEl.classList.add('drag-hover');
         groupEl.style.borderColor = '#a855f7';
         groupEl.style.background = 'rgba(168,85,247,0.1)';
@@ -1578,12 +1312,12 @@ function onCardMouseUp(e) {
     document.removeEventListener('mousemove', onCardMouseMove);
     document.removeEventListener('mouseup', onCardMouseUp);
 
-    if (_cardDragClone) {
-        _cardDragClone.remove();
-        _cardDragClone = null;
+    if (cardDrag.dragClone) {
+        cardDrag.dragClone.remove();
+        cardDrag.dragClone = null;
     }
-    if (_cardDropPreview) {
-        _cardDropPreview.style.display = 'none';
+    if (cardDrag.dropPreview) {
+        cardDrag.dropPreview.style.display = 'none';
     }
 
     document.querySelectorAll('[data-group-id].drag-hover').forEach(el => {
@@ -1592,15 +1326,15 @@ function onCardMouseUp(e) {
         el.style.background = '';
     });
 
-    if (!_cardMouseDown) return;
+    if (!cardDrag.mouseDown) return;
 
-    const { cardEl, card, dragging } = _cardMouseDown;
-    const totalDx = Math.abs(e.clientX - _cardMouseDown.startX);
-    const totalDy = Math.abs(e.clientY - _cardMouseDown.startY);
-    if (totalDx > 2 || totalDy > 2) _cardDragOccurred = true;
+    const { cardEl, card, dragging } = cardDrag.mouseDown;
+    const totalDx = Math.abs(e.clientX - cardDrag.mouseDown.startX);
+    const totalDy = Math.abs(e.clientY - cardDrag.mouseDown.startY);
+    if (totalDx > 2 || totalDy > 2) cardDrag.occurred = true;
     cardEl.classList.remove('opacity-40');
 
-    if (dragging && _dropTarget) {
+    if (dragging && cardDrag.dropTarget) {
         const groupEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-group-id]');
         if (groupEl && !groupEl.contains(cardEl)) {
             const groupCards = groupEl.querySelector('.group-cards');
@@ -1620,8 +1354,8 @@ function onCardMouseUp(e) {
             const cardData = saved.find(c => c.id === card.id);
                 if (cardData) {
                     const oldCol = cardData.col, oldRow = cardData.row;
-                    let newCol = _dropTarget.col;
-                    let newRow = _dropTarget.row;
+                    let newCol = cardDrag.dropTarget.col;
+                    let newRow = cardDrag.dropTarget.row;
                     const colSp = cardData.colSpan || 3;
                     const rowSp = cardData.rowSpan || 1;
                     const cols = getCanvasCols();
@@ -1644,10 +1378,10 @@ function onCardMouseUp(e) {
         }
     }
 
-    _cardMouseDown = null;
-    _dropTarget = null;
-    _dragGridCache = null;
-    setTimeout(() => { _cardDragOccurred = false; }, 200);
+    cardDrag.mouseDown = null;
+    cardDrag.dropTarget = null;
+    cardDrag.gridCache = null;
+    setTimeout(() => { cardDrag.occurred = false; }, 200);
 }
 
 function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
@@ -1663,7 +1397,7 @@ function isCellOccupied(col, row, colSpan, rowSpan, excludeCardId) {
     }
     const canvas = document.getElementById('dashboard-canvas');
     if (canvas) {
-        const g = _dragGridCache || _computeGridCache();
+        const g = cardDrag.gridCache || _computeGridCache();
         if (g) {
             const ne = col + colSpan - 1;
             const nr = row + rowSpan - 1;
@@ -1772,8 +1506,6 @@ function findFreePosition(savedCards, colSpan, rowSpan, excludeCardId) {
     return { col: 1, row: 1 };
 }
 
-let _cardDropPreview = null;
-
 function getDragAfterElement(container, x, y) {
     const cards = [...container.querySelectorAll('[data-card-id]:not(.opacity-40), [data-group-id]:not(.opacity-40)')];
     let closest = null;
@@ -1811,10 +1543,8 @@ function removePickerCard(cardId) {
     updateCanvasMinHeight();
 }
 
-let _editingCardId = null;
-
 function showCardEdit(cardId) {
-    _editingCardId = cardId;
+    cardEdit.editingCardId = cardId;
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
@@ -1831,23 +1561,23 @@ function showCardEdit(cardId) {
 function hideCardEdit() {
     const modal = document.getElementById('card-edit-modal');
     if (modal) modal.classList.add('hidden');
-    _editingCardId = null;
+    cardEdit.editingCardId = null;
 }
 
 function saveCardEdit() {
-    if (!_editingCardId) return;
+    if (!cardEdit.editingCardId) return;
 
     const label = document.getElementById('card-edit-label').value.trim();
     if (!label) return;
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _editingCardId);
+    const card = saved.find(c => c.id === cardEdit.editingCardId);
     if (!card) return;
 
     card.label = label;
     setPickerCards(saved);
 
-    const cardEl = document.querySelector(`[data-card-id="${_editingCardId}"]`);
+    const cardEl = document.querySelector(`[data-card-id="${cardEdit.editingCardId}"]`);
     if (cardEl) {
         const labelEl = cardEl.querySelector('.text-sm.text-gray-300');
         if (labelEl) labelEl.textContent = label;
@@ -1856,10 +1586,8 @@ function saveCardEdit() {
     hideCardEdit();
 }
 
-let _configuringCardId = null;
-
 function showCardConfig(cardId) {
-    _configuringCardId = cardId;
+    cardEdit.configuringCardId = cardId;
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
     if (!card || card.type !== 'fan') return;
@@ -1895,15 +1623,8 @@ function showCardConfig(cardId) {
 function hideCardConfig() {
     const modal = document.getElementById('card-config-modal');
     if (modal) modal.classList.add('hidden');
-    _configuringCardId = null;
+    cardEdit.configuringCardId = null;
 }
-
-let _smartModalCardId = null;
-let _smartModalDiskId = null;
-let _smartModalSource = 'local';
-let _smartAttributes = [];
-let _smartAttrType = 'sata';
-let _smartCache = {};
 
 async function fetchDiskSmart(diskId, forceRefresh = false, source = 'local', nodeId = null) {
     try {
@@ -1931,15 +1652,15 @@ function showSmartModal(cardId) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
 
-    _smartModalCardId = cardId;
-    _smartModalDiskId = card.sourceId;
-    _smartModalSource = card.source || 'local';
+    smart.modalCardId = cardId;
+    smart.modalDiskId = card.sourceId;
+    smart.modalSource = card.source || 'local';
 
     let disk;
-    if (_smartModalSource === 'local') {
-        disk = currentState?.hdd_sensors?.[card.sourceId];
+    if (smart.modalSource === 'local') {
+        disk = store.state?.hdd_sensors?.[card.sourceId];
     } else {
-        const node = nodesData.find(n => n.node_id === _smartModalSource);
+        const node = store.nodesData.find(n => n.node_id === smart.modalSource);
         disk = node?.telemetry?.hdd_sensors?.[card.sourceId];
     }
 
@@ -1955,25 +1676,25 @@ function showSmartModal(cardId) {
 
 function hideSmartModal() {
     document.getElementById('smart-modal')?.classList.add('hidden');
-    _smartModalCardId = null;
-    _smartModalDiskId = null;
-    _smartModalSource = 'local';
+    smart.modalCardId = null;
+    smart.modalDiskId = null;
+    smart.modalSource = 'local';
 }
 
 async function refreshSmartData() {
-    if (!_smartModalDiskId) return;
+    if (!smart.modalDiskId) return;
     const container = document.getElementById('smart-attributes-container');
     if (!container) return;
 
-    container.innerHTML = '<div class="text-center text-gray-400 py-4">Загрузка...</div>';
+    container.innerHTML = `<div class="text-center text-gray-400 py-4">${t('smart.loading', 'Loading...')}</div>`;
 
-    const data = await fetchDiskSmart(_smartModalDiskId, true, _smartModalSource);
+    const data = await fetchDiskSmart(smart.modalDiskId, true, smart.modalSource);
     if (!data || data.error) {
-        container.innerHTML = `<div class="text-center text-red-400 py-4">${data?.error || 'Ошибка загрузки SMART данных'}</div>`;
+        container.innerHTML = `<div class="text-center text-red-400 py-4">${data?.error || t('smart.load_error', 'SMART data load error')}</div>`;
         return;
     }
 
-    _smartCache[_smartModalDiskId] = data;
+    smart.cache[smart.modalDiskId] = data;
 
     const infoEl = document.getElementById('smart-device-info');
     if (infoEl && data.device_info) {
@@ -1981,8 +1702,8 @@ async function refreshSmartData() {
         infoEl.textContent = [info.model, info.serial, info.firmware, info.capacity].filter(Boolean).join(' | ');
     }
 
-    _smartAttrType = data.attr_type || 'sata';
-    _smartAttributes = data.attributes || [];
+    smart.attrType = data.attr_type || 'sata';
+    smart.attributes = data.attributes || [];
 
     renderSmartAttributes();
 }
@@ -1992,10 +1713,10 @@ function renderSmartAttributes() {
     if (!container) return;
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalCardId);
+    const card = saved.find(c => c.id === smart.modalCardId);
     const selectedIds = card?.smartAttributes || [];
 
-    if (_smartAttrType === 'nvme') {
+    if (smart.attrType === 'nvme') {
         renderNvmeAttributes(container, selectedIds);
     } else {
         renderSataAttributes(container, selectedIds);
@@ -2003,22 +1724,22 @@ function renderSmartAttributes() {
 }
 
 function renderSataAttributes(container, selectedIds) {
-    if (!_smartAttributes.length) {
-        container.innerHTML = '<div class="text-center text-gray-400 py-4">Нет SMART атрибутов</div>';
+    if (!smart.attributes.length) {
+        container.innerHTML = `<div class="text-center text-gray-400 py-4">${t('smart.no_attributes', 'No SMART attributes')}</div>`;
         return;
     }
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalCardId);
+    const card = saved.find(c => c.id === smart.modalCardId);
     const smartUnits = card?.smartUnits || {};
 
-    container.innerHTML = _smartAttributes.map(attr => {
+    container.innerHTML = smart.attributes.map(attr => {
         const statusColor = attr.status === 'critical' ? 'text-red-400' :
                            attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
         const statusBg = attr.status === 'critical' ? 'bg-red-500/10' :
                         attr.status === 'warning' ? 'bg-yellow-500/10' : 'bg-green-500/10';
-        const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
-                         attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
+        const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
+                         attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(String(attr.id)) ? 'checked' : '';
 
         let unitHtml = '';
@@ -2054,9 +1775,9 @@ function renderSataAttributes(container, selectedIds) {
         } else if (attr.unit === 'hours') {
             const unit = smartUnits[attr.id] || 'raw';
             if (unit === 'days') {
-                displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + ' дн';
+                displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + t('smart.unit.days_short', ' дн');
             } else if (unit === 'months') {
-                displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + ' мес';
+                displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + t('smart.unit.months_short', ' мес');
             }
         }
 
@@ -2085,20 +1806,10 @@ function renderSataAttributes(container, selectedIds) {
     }).join('');
 }
 
-function formatBytes(bytes, unit) {
-    if (isNaN(bytes) || bytes === 0) return '0';
-    const units = { 'kb': 1024, 'mb': 1024*1024, 'gb': 1024*1024*1024, 'tb': 1024*1024*1024*1024 };
-    const divisor = units[unit] || 1;
-    const result = bytes / divisor;
-    if (result >= 1000) return result.toFixed(0);
-    if (result >= 100) return result.toFixed(1);
-    return result.toFixed(2);
-}
-
 function onSmartUnitChange(attrId, unit) {
-    if (!_smartModalCardId) return;
+    if (!smart.modalCardId) return;
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalCardId);
+    const card = saved.find(c => c.id === smart.modalCardId);
     if (!card) return;
 
     if (!card.smartUnits) card.smartUnits = {};
@@ -2108,21 +1819,21 @@ function onSmartUnitChange(attrId, unit) {
 }
 
 function renderNvmeAttributes(container, selectedIds) {
-    const attrs = _smartAttributes;
+    const attrs = smart.attributes;
     if (!Object.keys(attrs).length) {
-        container.innerHTML = '<div class="text-center text-gray-400 py-4">Нет NVMe атрибутов</div>';
+        container.innerHTML = `<div class="text-center text-gray-400 py-4">${t('smart.no_nvme_attributes', 'No NVMe attributes')}</div>`;
         return;
     }
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalCardId);
+    const card = saved.find(c => c.id === smart.modalCardId);
     const smartUnits = card?.smartUnits || {};
 
     container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
         const statusColor = attr.criticality === 'critical' ? 'text-red-400' :
                            attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
-        const critBadge = attr.criticality === 'critical' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">КРИТИЧНЫЙ</span>' :
-                         attr.criticality === 'important' ? '<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">ВАЖНЫЙ</span>' : '';
+        const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
+                         attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(key) ? 'checked' : '';
 
         let unitHtml = '';
@@ -2163,8 +1874,8 @@ function renderNvmeAttributes(container, selectedIds) {
         if (key === 'temperature') suffix = '°C';
         else if (key === 'percentage_used' || key === 'available_spare' || key === 'available_spare_threshold') suffix = '%';
         else if (key === 'controller_busy_time' || key === 'warning_temp_time' || key === 'critical_comp_time') suffix = ' мин';
-        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'days') suffix = ' дн';
-        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'months') suffix = ' мес';
+        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'days') suffix = t('smart.unit.days_short', ' дн');
+        else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'months') suffix = t('smart.unit.months_short', ' мес');
 
         return `
         <div class="flex items-center gap-3 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
@@ -2187,10 +1898,10 @@ function renderNvmeAttributes(container, selectedIds) {
 }
 
 function saveSmartSelection() {
-    if (!_smartModalCardId) return;
+    if (!smart.modalCardId) return;
 
     const saved = getPickerCards();
-    const card = saved.find(c => c.id === _smartModalCardId);
+    const card = saved.find(c => c.id === smart.modalCardId);
     if (!card) return;
 
     const checkboxes = document.querySelectorAll('#smart-attributes-container input[type="checkbox"]');
@@ -2211,8 +1922,8 @@ function saveSmartSelection() {
     card.smartAttributes = selected;
     card.smartUnits = units;
     setPickerCards(saved);
-    updateCardDetails(_smartModalCardId);
-    const cardEl = document.querySelector(`[data-card-id="${_smartModalCardId}"]`);
+    updateCardDetails(smart.modalCardId);
+    const cardEl = document.querySelector(`[data-card-id="${smart.modalCardId}"]`);
     if (cardEl) snapCardToGrid(cardEl);
     hideSmartModal();
     saveDashboardToServer();
@@ -2235,18 +1946,18 @@ function toggleCardOption(cardId, option, enabled) {
 }
 
 function getFanData(source, sourceId) {
-    if (source === 'local') return currentState?.fans?.[sourceId] || null;
-    const node = nodesData.find(n => n.node_id === source);
+    if (source === 'local') return store.state?.fans?.[sourceId] || null;
+    const node = store.nodesData.find(n => n.node_id === source);
     return node?.telemetry?.fans?.[sourceId] || null;
 }
 
 function getSensorLabel(sensorId) {
     if (sensorId.startsWith('hdd:')) {
         const id = sensorId.slice(4);
-        return currentState?.hdd_sensors?.[id]?.label || id;
+        return store.state?.hdd_sensors?.[id]?.label || id;
     } else if (sensorId.startsWith('temp:')) {
         const id = sensorId.slice(5);
-        return currentState?.temp_sensors?.[id]?.label || id;
+        return store.state?.temp_sensors?.[id]?.label || id;
     }
     return sensorId;
 }
@@ -2296,7 +2007,7 @@ function updateDiskCardDetails(card, detailsEl) {
         return;
     }
 
-    const diskData = currentState?.hdd_sensors?.[card.sourceId];
+    const diskData = store.state?.hdd_sensors?.[card.sourceId];
     if (!diskData) return;
 
     let html = '';
@@ -2305,7 +2016,7 @@ function updateDiskCardDetails(card, detailsEl) {
     for (const attrKey of card.smartAttributes) {
         const attrId = parseInt(attrKey);
         if (!isNaN(attrId)) {
-            const cachedSmart = _smartCache?.[card.sourceId];
+            const cachedSmart = smart.cache?.[card.sourceId];
             if (cachedSmart?.attributes) {
                 const attr = cachedSmart.attributes.find(a => a.id === attrId);
                 if (attr) {
@@ -2320,9 +2031,9 @@ function updateDiskCardDetails(card, detailsEl) {
                     } else if (attr.unit === 'hours') {
                         const unit = smartUnits[attr.id] || 'raw';
                         if (unit === 'days') {
-                            displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + ' дн';
+                            displayValue = (parseInt(attr.raw || '0') / 24).toFixed(1) + t('smart.unit.days_short', ' дн');
                         } else if (unit === 'months') {
-                            displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + ' мес';
+                            displayValue = (parseInt(attr.raw || '0') / 720).toFixed(1) + t('smart.unit.months_short', ' мес');
                         }
                     } else if (attr.unit === 'nvme_blocks') {
                         const unit = smartUnits[attr.id] || 'raw';
@@ -2337,7 +2048,7 @@ function updateDiskCardDetails(card, detailsEl) {
                 }
             }
         } else {
-            const cachedSmart = _smartCache?.[card.sourceId];
+            const cachedSmart = smart.cache?.[card.sourceId];
             if (cachedSmart?.attributes?.[attrKey]) {
                 const attr = cachedSmart.attributes[attrKey];
                 const color = attr.criticality === 'critical' ? 'text-red-400' :
@@ -2355,10 +2066,10 @@ function updateDiskCardDetails(card, detailsEl) {
                     const unit = smartUnits[attrKey] || 'raw';
                     if (unit === 'days') {
                         displayValue = (parseInt(attr.value || '0') / 24).toFixed(1);
-                        suffix = ' дн';
+                        suffix = t('smart.unit.days_short', ' дн');
                     } else if (unit === 'months') {
                         displayValue = (parseInt(attr.value || '0') / 720).toFixed(1);
-                        suffix = ' мес';
+                        suffix = t('smart.unit.months_short', ' мес');
                     }
                 }
                 html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
@@ -2372,28 +2083,14 @@ function updateDiskCardDetails(card, detailsEl) {
     if (html) detailsEl.innerHTML = html;
 }
 
-function getUnitLabel(unit) {
-    const labels = { 'bytes': 'Б', 'kb': 'КБ', 'mb': 'МБ', 'gb': 'ГБ', 'tb': 'ТБ' };
-    return labels[unit] || '';
-}
-
-let _pickerCards = null;
-let _pickerGroups = null;
-let _hiddenSensors = null;
-let _dashboardLoaded = false;
-let _dashboardSaveTimer = null;
-
-const _sparklineHistory = {};
-const SPARKLINE_MAX = 20;
-
 function pushSparkline(key, value) {
-    if (!_sparklineHistory[key]) _sparklineHistory[key] = [];
-    _sparklineHistory[key].push(value);
-    if (_sparklineHistory[key].length > SPARKLINE_MAX) _sparklineHistory[key].shift();
+    if (!sparklineHistory[key]) sparklineHistory[key] = [];
+    sparklineHistory[key].push(value);
+    if (sparklineHistory[key].length > SPARKLINE_MAX) sparklineHistory[key].shift();
 }
 
 function getSparkline(key) {
-    return _sparklineHistory[key] || [];
+    return sparklineHistory[key] || [];
 }
 
 function renderSparkline(key, color = '#22d3ee', width = 120, height = 30) {
@@ -2420,40 +2117,40 @@ async function loadDashboardFromServer() {
         const resp = await fetch('/api/dashboard');
         if (resp.ok) {
             const data = await resp.json();
-            _pickerCards = data.cards || [];
-            _pickerGroups = data.groups || [];
-            _hiddenSensors = data.hiddenSensors || [];
-            _dashboardLoaded = true;
+            dashboard.cards = data.cards || [];
+            dashboard.groups = data.groups || [];
+            dashboard.hiddenSensors = data.hiddenSensors || [];
+            dashboard.loaded = true;
             return;
         }
-    } catch (e) {}
-    _pickerCards = [];
-    _pickerGroups = [];
-    _hiddenSensors = [];
-    _dashboardLoaded = true;
+    } catch (e) { console.warn('Dashboard load failed:', e); }
+    dashboard.cards = [];
+    dashboard.groups = [];
+    dashboard.hiddenSensors = [];
+    dashboard.loaded = true;
 }
 
 function getPickerCards() {
-    return _pickerCards || [];
+    return dashboard.cards || [];
 }
 
 function setPickerCards(cards) {
-    _pickerCards = cards;
+    dashboard.cards = cards;
     scheduleDashboardSave();
 }
 
 function getPickerGroups() {
-    return _pickerGroups || [];
+    return dashboard.groups || [];
 }
 
 function setPickerGroups(groups) {
-    _pickerGroups = groups;
+    dashboard.groups = groups;
     scheduleDashboardSave();
 }
 
 function scheduleDashboardSave() {
-    if (_dashboardSaveTimer) clearTimeout(_dashboardSaveTimer);
-    _dashboardSaveTimer = setTimeout(saveDashboardToServer, 500);
+    if (dashboard.saveTimer) clearTimeout(dashboard.saveTimer);
+    dashboard.saveTimer = setTimeout(saveDashboardToServer, 500);
 }
 
 async function saveDashboardToServer() {
@@ -2461,9 +2158,9 @@ async function saveDashboardToServer() {
         await fetch('/api/dashboard', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cards: _pickerCards || [], groups: _pickerGroups || [], hiddenSensors: _hiddenSensors || [] })
+            body: JSON.stringify({ cards: dashboard.cards || [], groups: dashboard.groups || [], hiddenSensors: dashboard.hiddenSensors || [] })
         });
-    } catch (e) {}
+    } catch (e) { console.warn('Dashboard save failed:', e); }
 }
 
 async function loadPickerCards() {
@@ -2558,30 +2255,28 @@ function updateCanvasMinHeight() {
 async function prefetchSmartForCards() {
     const cards = getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length);
     for (const card of cards) {
-        if (_smartCache[card.sourceId]) continue;
+        if (smart.cache[card.sourceId]) continue;
         try {
             const data = await fetchDiskSmart(card.sourceId, false, card.source || 'local');
             if (data && !data.error) {
-                _smartCache[card.sourceId] = data;
+                smart.cache[card.sourceId] = data;
                 updateCardDetails(card.id);
             }
-        } catch (e) {}
+        } catch (e) { console.warn('SMART prefetch failed:', e); }
     }
 }
 
-let _pickerLiveTimer = null;
-
 function startPickerLiveUpdate() {
-    if (_pickerLiveTimer) return;
-    _pickerLiveTimer = setInterval(() => {
+    if (dashboard.liveTimer) return;
+    dashboard.liveTimer = setInterval(() => {
         document.querySelectorAll('[data-fan-id]').forEach(el => {
             const src = el.dataset.source;
             const id = el.dataset.fanId;
             let fan = null;
-            if (src === 'local' && currentState?.fans?.[id]) {
-                fan = currentState.fans[id];
+            if (src === 'local' && store.state?.fans?.[id]) {
+                fan = store.state.fans[id];
             } else {
-                const node = nodesData.find(n => n.node_id === src);
+                const node = store.nodesData.find(n => n.node_id === src);
                 fan = node?.telemetry?.fans?.[id];
             }
             if (fan) {
@@ -2608,10 +2303,10 @@ function startPickerLiveUpdate() {
             const src = el.dataset.source;
             const id = el.dataset.tempId;
             let val = null;
-            if (src === 'local' && currentState?.temp_sensors?.[id]) {
-                val = currentState.temp_sensors[id].value;
+            if (src === 'local' && store.state?.temp_sensors?.[id]) {
+                val = store.state.temp_sensors[id].value;
             } else {
-                const node = nodesData.find(n => n.node_id === src);
+                const node = store.nodesData.find(n => n.node_id === src);
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
             if (val != null) el.textContent = val;
@@ -2622,9 +2317,9 @@ function startPickerLiveUpdate() {
             const src = el.dataset.source;
             let temp = null;
             if (src === 'local') {
-                temp = currentState?.hdd_sensors?.[id]?.temp;
+                temp = store.state?.hdd_sensors?.[id]?.temp;
             } else {
-                const node = nodesData.find(n => n.node_id === src);
+                const node = store.nodesData.find(n => n.node_id === src);
                 temp = node?.telemetry?.hdd_sensors?.[id]?.temp;
             }
             if (temp != null) {
@@ -2633,7 +2328,7 @@ function startPickerLiveUpdate() {
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
-            if (_smartCache[c.sourceId]) {
+            if (smart.cache[c.sourceId]) {
                 const cardEl = document.querySelector(`[data-card-id="${c.id}"]`);
                 if (cardEl) {
                     const detailsEl = cardEl.querySelector('.card-details');
@@ -2645,16 +2340,15 @@ function startPickerLiveUpdate() {
 }
 
 function stopPickerLiveUpdate() {
-    if (_pickerLiveTimer) {
-        clearInterval(_pickerLiveTimer);
-        _pickerLiveTimer = null;
+    if (dashboard.liveTimer) {
+        clearInterval(dashboard.liveTimer);
+        dashboard.liveTimer = null;
     }
 }
 
-let _systemTimer = null;
 function startSystemUpdate() {
-    if (_systemTimer) return;
-    _systemTimer = setInterval(async () => {
+    if (timers.system) return;
+    timers.system = setInterval(async () => {
         try {
             const resp = await fetch('/api/system');
             const data = await resp.json();
@@ -2667,7 +2361,7 @@ function startSystemUpdate() {
     }, 5000);
 }
 function stopSystemUpdate() {
-    if (_systemTimer) { clearInterval(_systemTimer); _systemTimer = null; }
+    if (timers.system) { clearInterval(timers.system); timers.system = null; }
 }
 
 function showGroupCreator() {
@@ -2770,9 +2464,9 @@ function onGroupDragLeave(e) {
 }
 
 function onGroupDropOutside(e) {
-    if (_draggedGroup) {
-        _draggedGroup.classList.remove('opacity-40');
-        _draggedGroup = null;
+    if (groupDrag.draggedGroup) {
+        groupDrag.draggedGroup.classList.remove('opacity-40');
+        groupDrag.draggedGroup = null;
     }
 }
 
@@ -2803,76 +2497,69 @@ function onGroupDrop(e) {
     }
 }
 
-let _resizingGroupId = null;
-let _resizeStartY = 0;
-let _resizeStartH = 0;
-
 function startGroupResize(e, groupId) {
     e.preventDefault();
     e.stopPropagation();
-    _resizingGroupId = groupId;
+    groupDrag.resizingGroupId = groupId;
     const el = document.querySelector(`[data-group-id="${groupId}"]`);
     if (!el) return;
-    _resizeStartY = e.clientY;
-    _resizeStartH = el.offsetHeight;
+    groupDrag.resizeStartY = e.clientY;
+    groupDrag.resizeStartH = el.offsetHeight;
     document.addEventListener('mousemove', onGroupResize);
     document.addEventListener('mouseup', stopGroupResize);
 }
 
 function onGroupResize(e) {
-    if (!_resizingGroupId) return;
-    const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
+    if (!groupDrag.resizingGroupId) return;
+    const el = document.querySelector(`[data-group-id="${groupDrag.resizingGroupId}"]`);
     if (!el) return;
-    const h = Math.max(100, _resizeStartH + (e.clientY - _resizeStartY));
+    const h = Math.max(100, groupDrag.resizeStartH + (e.clientY - groupDrag.resizeStartY));
     el.style.minHeight = h + 'px';
 }
 
 function stopGroupResize() {
-    if (!_resizingGroupId) return;
+    if (!groupDrag.resizingGroupId) return;
     const groups = getPickerGroups();
-    const group = groups.find(g => g.id === _resizingGroupId);
-    const el = document.querySelector(`[data-group-id="${_resizingGroupId}"]`);
+    const group = groups.find(g => g.id === groupDrag.resizingGroupId);
+    const el = document.querySelector(`[data-group-id="${groupDrag.resizingGroupId}"]`);
     if (group && el) {
         group.minHeight = el.style.minHeight;
         setPickerGroups(groups);
     }
-    _resizingGroupId = null;
+    groupDrag.resizingGroupId = null;
     document.removeEventListener('mousemove', onGroupResize);
     document.removeEventListener('mouseup', stopGroupResize);
 }
 
-let _draggedGroup = null;
-let _groupDropTarget = null;
-
 function onGroupDragStart(e) {
     if (e.target.closest('.group-resize-handle') || e.target.closest('button') || e.target.closest('input')) return;
-    _draggedGroup = this;
-    _groupDropTarget = null;
+    groupDrag.draggedGroup = this;
+    groupDrag.dropTarget = null;
     this.classList.add('opacity-40');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/group', this.dataset.groupId);
 }
 
 function onGroupDragOver(e) {
-    if (!_draggedGroup) return;
+    if (!groupDrag.draggedGroup) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const canvas = document.getElementById('dashboard-canvas');
-    _groupDropTarget = getDragAfterElement(canvas, e.clientX, e.clientY);
+    groupDrag.dropTarget = getDragAfterElement(canvas, e.clientX, e.clientY);
 }
 
 function onGroupDragEnd() {
-    if (_draggedGroup) {
-        if (_groupDropTarget !== undefined) {
+    if (groupDrag.draggedGroup) {
+        if (groupDrag.dropTarget !== undefined) {
             const canvas = document.getElementById('dashboard-canvas');
-            if (_groupDropTarget) {
-                canvas.insertBefore(_draggedGroup, _groupDropTarget);
+            if (groupDrag.dropTarget) {
+                canvas.insertBefore(groupDrag.draggedGroup, groupDrag.dropTarget);
             } else {
-                canvas.appendChild(_draggedGroup);
+                canvas.appendChild(groupDrag.draggedGroup);
             }
         }
-        _draggedGroup.classList.remove('opacity-40');
-        _draggedGroup = null;
+        groupDrag.draggedGroup.classList.remove('opacity-40');
+        groupDrag.draggedGroup = null;
         saveGroupOrder();
     }
 }
@@ -2999,7 +2686,7 @@ function updateInspector(fan) {
         }
     }
     
-    if (!isDragging) {
+    if (!store.isDragging) {
         const slider = document.getElementById('pwm-slider');
         const pct = fan.current_pct != null ? fan.current_pct : (fan.manual_pct != null ? fan.manual_pct : 50);
         if (slider) {
@@ -3010,18 +2697,7 @@ function updateInspector(fan) {
         if (pwmValueDisplay) pwmValueDisplay.textContent = `${pct}%`;
     }
     
-    const btnManual = document.getElementById('btn-mode-manual');
-    const btnAuto = document.getElementById('btn-mode-auto');
-    
-    if (btnManual && btnAuto) {
-        if (mode === 'manual') {
-            btnManual.className = BTN_MANUAL_ACTIVE;
-            btnAuto.className = BTN_AUTO_INACTIVE;
-        } else {
-            btnManual.className = BTN_MANUAL_INACTIVE;
-            btnAuto.className = BTN_AUTO_ACTIVE;
-        }
-    }
+    setModeButtonStyles(mode);
     
     const autoSettings = document.getElementById('auto-settings');
     if (autoSettings) {
@@ -3034,11 +2710,11 @@ function updateInspector(fan) {
     }
     
     // Store config
-    if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
-    fanConfigs[currentFanId].sensors = fan.sensors || [];
-    fanConfigs[currentFanId].target_temp = fan.target_temp || 31;
-    fanConfigs[currentFanId].mode = mode;
-    fanConfigs[currentFanId].sensor_mode = fan.sensor_mode || 'max';
+    if (!store.fanConfigs[store.currentFanId]) store.fanConfigs[store.currentFanId] = {};
+    store.fanConfigs[store.currentFanId].sensors = fan.sensors || [];
+    store.fanConfigs[store.currentFanId].target_temp = fan.target_temp || 31;
+    store.fanConfigs[store.currentFanId].mode = mode;
+    store.fanConfigs[store.currentFanId].sensor_mode = fan.sensor_mode || 'max';
 
     // Calibration params
     const cal = fan.calibration || {};
@@ -3093,7 +2769,7 @@ function updateInspector(fan) {
 // ============================================================================
 
 function showServiceFanModal(fanId) {
-    const fan = currentState?.fans?.[fanId];
+    const fan = store.state?.fans?.[fanId];
     if (!fan) return;
 
     const overlay = document.createElement('div');
@@ -3148,13 +2824,13 @@ async function recordFanService(fanId, action, btnEl) {
             ]);
 
             // Update local state
-            if (currentState?.fans?.[fanId]) {
-                currentState.fans[fanId].health = data.health;
+            if (store.state?.fans?.[fanId]) {
+                store.state.fans[fanId].health = data.health;
             }
-            if (currentFanId === fanId) {
-                updateInspector(currentState.fans[fanId]);
+            if (store.currentFanId === fanId) {
+                updateInspector(store.state.fans[fanId]);
             }
-            buildFanList(currentState.fans || {});
+            buildFanList(store.state.fans || {});
             buildServerTree();
         }
     } catch (e) {
@@ -3178,28 +2854,18 @@ async function startFanCalibration(fanId) {
 }
 
 function setFanMode(mode) {
-    if (!currentFanId) return;
+    if (!store.currentFanId) return;
     
     // Update local state immediately for instant UI feedback
-    if (currentState?.fans?.[currentFanId]) {
-        currentState.fans[currentFanId].mode = mode;
+    if (store.state?.fans?.[store.currentFanId]) {
+        store.state.fans[store.currentFanId].mode = mode;
     }
-    if (fanConfigs[currentFanId]) {
-        fanConfigs[currentFanId].mode = mode;
+    if (store.fanConfigs[store.currentFanId]) {
+        store.fanConfigs[store.currentFanId].mode = mode;
     }
     
     // Update button styles immediately
-    const btnManual = document.getElementById('btn-mode-manual');
-    const btnAuto = document.getElementById('btn-mode-auto');
-    if (btnManual && btnAuto) {
-        if (mode === 'manual') {
-            btnManual.className = BTN_MANUAL_ACTIVE;
-            btnAuto.className = BTN_AUTO_INACTIVE;
-        } else {
-            btnManual.className = BTN_MANUAL_INACTIVE;
-            btnAuto.className = BTN_AUTO_ACTIVE;
-        }
-    }
+    setModeButtonStyles(mode);
     
     document.getElementById('auto-settings').style.display = (mode === 'auto') ? 'block' : 'none';
     if (mode === 'auto') {
@@ -3208,7 +2874,7 @@ function setFanMode(mode) {
     
     sendControl({
         action: 'set_fan_config',
-        fan: currentFanId,
+        fan: store.currentFanId,
         fan_mode: mode
     });
 }
@@ -3219,8 +2885,14 @@ function sendControl(payload) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
-    .then(r => r.json())
-    .catch(err => console.error('Control error:', err));
+    .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    })
+    .catch(err => {
+        console.error('Control error:', err);
+        showToast(t('toast.control_error', 'Control command failed'), 'error');
+    });
 }
 
 // ============================================================================
@@ -3239,26 +2911,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     slider.addEventListener('mousedown', () => {
-        isDragging = true;
+        store.isDragging = true;
     });
     
     slider.addEventListener('mouseup', (e) => {
-        isDragging = false;
+        store.isDragging = false;
         applyPWM(e.target.value);
     });
     
     slider.addEventListener('touchend', (e) => {
-        isDragging = false;
+        store.isDragging = false;
         applyPWM(e.target.value);
     });
 });
 
 function applyPWM(value) {
-    if (!currentFanId) return;
+    if (!store.currentFanId) return;
     
     sendControl({
         action: 'set_fan_pwm',
-        fan: currentFanId,
+        fan: store.currentFanId,
         pwm: parseInt(value)
     });
 }
@@ -3268,13 +2940,13 @@ function applyPWM(value) {
 // ============================================================================
 
 function buildSensorList(data) {
-    allSensors = [];
+    store.allSensors = [];
     const hidden = getHiddenSensors();
 
     if (data.hdd_sensors) {
         for (const [id, disk] of Object.entries(data.hdd_sensors)) {
             if (hidden.includes(`disk:${id}`)) continue;
-            allSensors.push({
+            store.allSensors.push({
                 id: `hdd:${id}`,
                 label: disk.label,
                 temp: disk.temp,
@@ -3287,7 +2959,7 @@ function buildSensorList(data) {
     if (data.temp_sensors) {
         for (const [id, sensor] of Object.entries(data.temp_sensors)) {
             if (hidden.includes(`temp:${id}`)) continue;
-            allSensors.push({
+            store.allSensors.push({
                 id: `temp:${id}`,
                 label: sensor.label,
                 temp: sensor.value,
@@ -3306,34 +2978,8 @@ function toggleSensorPopup() {
     
     if (popup.classList.contains('hidden')) {
         // Build list
-        const currentSensors = fanConfigs[currentFanId]?.sensors || [];
-        
-        // Group sensors
-        const groups = {};
-        allSensors.forEach(s => {
-            if (!groups[s.group]) groups[s.group] = [];
-            groups[s.group].push(s);
-        });
-        
-        let html = '';
-        for (const [group, sensors] of Object.entries(groups)) {
-            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${t(group, group)}</div>`;
-            sensors.forEach(s => {
-                const checked = currentSensors.includes(s.id);
-                html += `
-                    <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-cyber-accent rounded px-2">
-                        <input type="checkbox" value="${escapeHtml(s.id)}" ${checked ? 'checked' : ''} 
-                               class="accent-neon-purple">
-                        <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
-                        <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? t('sensor.sleep', 'Sleep') : formatTemp(s.temp)}
-                        </span>
-                    </label>
-                `;
-            });
-        }
-        
-        list.innerHTML = html;
+        const currentSensors = store.fanConfigs[store.currentFanId]?.sensors || [];
+        list.innerHTML = buildSensorCheckboxList(store.allSensors, currentSensors);
         popup.classList.remove('hidden');
     } else {
         closeSensorPopup();
@@ -3359,18 +3005,18 @@ function closeSensorPopup() {
     const checked = popup.querySelectorAll('input[type=checkbox]:checked');
     const sensors = Array.from(checked).map(cb => cb.value);
     
-    if (currentFanId) {
-        if (!fanConfigs[currentFanId]) fanConfigs[currentFanId] = {};
-        fanConfigs[currentFanId].sensors = sensors;
+    if (store.currentFanId) {
+        if (!store.fanConfigs[store.currentFanId]) store.fanConfigs[store.currentFanId] = {};
+        store.fanConfigs[store.currentFanId].sensors = sensors;
         
         sendControl({
             action: 'set_fan_config',
-            fan: currentFanId,
+            fan: store.currentFanId,
             sensors: sensors
         });
         
         // Update no-sensor warning and sensor mode section
-        const mode = fanConfigs[currentFanId]?.mode || 'manual';
+        const mode = store.fanConfigs[store.currentFanId]?.mode || 'manual';
         const noSensorWarning = document.getElementById('no-sensor-warning');
         const sensorModeSection = document.getElementById('sensor-mode-section');
         if (noSensorWarning) {
@@ -3383,120 +3029,6 @@ function closeSensorPopup() {
     
     popup.classList.add('hidden');
 }
-
-// ============================================================================
-// CHART (ApexCharts)
-// ============================================================================
-
-function updateChart() {
-    const now = Date.now();
-    if (now - lastChartUpdate < CHART_UPDATE_INTERVAL) return;
-    
-    const chartContainer = document.getElementById('temp-chart');
-    if (!chartContainer || chartContainer.offsetParent === null) return;
-    
-    lastChartUpdate = now;
-    
-    fetch('/api/history?hours=24')
-        .then(r => r.json())
-        .then(data => {
-            if (!data.has_data) return;
-            
-            const series = [
-                {
-                    name: t('chart.max_hdd_temp', 'Max HDD Temp'),
-                    data: data.timestamps.map((ts, i) => ({
-                        x: new Date(ts).getTime(),
-                        y: data.temps[i]
-                    }))
-                },
-                {
-                    name: t('chart.avg_pwm', 'Avg PWM'),
-                    data: data.timestamps.map((ts, i) => ({
-                        x: new Date(ts).getTime(),
-                        y: data.pwm[i]
-                    }))
-                }
-            ];
-            
-            if (!chart) {
-                chart = new ApexCharts(chartContainer, {
-                    chart: {
-                        type: 'line',
-                        height: 250,
-                        background: 'transparent',
-                        foreColor: '#9ca3af',
-                        toolbar: { show: false },
-                        zoom: { enabled: false },
-                        animations: {
-                            enabled: true,
-                            easing: 'easeinout',
-                            speed: 800
-                        }
-                    },
-                    theme: { mode: 'dark' },
-                    stroke: {
-                        curve: 'smooth',
-                        width: [2, 1.5],
-                        dashArray: [0, 5]
-                    },
-                    colors: ['#ff2d55', '#00f0ff'],
-                    fill: {
-                        type: 'gradient',
-                        gradient: {
-                            shade: 'dark',
-                            type: 'vertical',
-                            opacityFrom: 0.3,
-                            opacityTo: 0
-                        }
-                    },
-                    markers: {
-                        size: 0,
-                        hover: { size: 4 }
-                    },
-                    grid: {
-                        borderColor: '#1a1f2e',
-                        strokeDashArray: 4
-                    },
-                    xaxis: {
-                        type: 'datetime',
-                        labels: {
-                            style: { colors: '#6b7280' }
-                        }
-                    },
-                    yaxis: [
-                        {
-                            title: { text: getTempUnitSymbol(), style: { color: '#ff2d55' } },
-                            labels: { style: { colors: '#6b7280' } }
-                        },
-                        {
-                            opposite: true,
-                            title: { text: '%', style: { color: '#00f0ff' } },
-                            labels: { style: { colors: '#6b7280' } },
-                            min: 0,
-                            max: 100
-                        }
-                    ],
-                    legend: {
-                        position: 'top',
-                        labels: { colors: '#9ca3af' }
-                    },
-                    tooltip: {
-                        theme: 'dark',
-                        x: { format: 'HH:mm' }
-                    }
-                });
-                
-                chart.render();
-            } else {
-                chart.updateSeries(series);
-            }
-        })
-        .catch(err => console.error('Chart error:', err));
-}
-
-// Update chart every 60 seconds
-setInterval(updateChart, 60000);
 
 // ============================================================================
 // DISKS LIST (Left Panel Bottom)
@@ -3535,13 +3067,6 @@ function buildDisksList(disks) {
     container.innerHTML = html || `<div class="text-xs text-gray-500">${t('setup.no_disks', 'No disks detected')}</div>`;
 }
 
-function getTempColorClass(temp) {
-    if (temp <= 0) return 'text-gray-500';
-    if (temp <= 35) return 'text-neon-cyan';
-    if (temp <= 45) return 'text-neon-orange';
-    return 'text-neon-red';
-}
-
 // ============================================================================
 // SETUP WIZARD
 // ============================================================================
@@ -3550,7 +3075,7 @@ function runDiscovery() {
     console.log('[FanControl] Starting hardware discovery...');
     
     setDiscoverButtonState(true);
-    wizardStep = 'scanning';
+    store.wizardStep = 'scanning';
     
     fetch('/api/discover', { method: 'POST' })
         .then(r => r.json())
@@ -3559,20 +3084,20 @@ function runDiscovery() {
             
             if (data.status === 'ok') {
                 renderDiscoveredHardware(data);
-                wizardStep = 'results';
+                store.wizardStep = 'results';
                 
                 document.getElementById('setup-step-intro').classList.add('hidden');
                 document.getElementById('setup-step-results').classList.remove('hidden');
             } else {
                 alert(t('discover.scan_error', 'Scan error: ') + data.message);
-                wizardStep = 'intro';
+                store.wizardStep = 'intro';
             }
         })
         .catch(err => {
             console.error('Discovery error:', err);
             alert(t('discover.connection_error', 'Connection error'));
             setDiscoverButtonState(false);
-            wizardStep = 'intro';
+            store.wizardStep = 'intro';
         });
 }
 
@@ -3715,8 +3240,6 @@ function renderDiscoveredHardware(data) {
     }
 }
 
-let _wizardHardwareData = null;
-
 function selectControlMode(mode) {
     const hwmonAction = document.getElementById('hwmon-action');
     const dsmAction = document.getElementById('dsm-action');
@@ -3739,14 +3262,14 @@ function selectControlMode(mode) {
 
 function applyDsmAndContinue() {
     // Skip calibration, go straight to DSM scheme editor
-    fetch('/api/skip-calibration', { method: 'POST' }).catch(() => {});
+    fetch('/api/skip-calibration', { method: 'POST' }).catch(err => console.error('Skip calibration error:', err));
     fetch('/api/dsm/fan-speed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ speed: 50 })
-    }).catch(() => {});
-    wizardStep = 'done';
-    currentState = { ...currentState, initialized: true, tested: true };
+    }).catch(err => console.error('DSM fan speed error:', err));
+    store.wizardStep = 'done';
+    store.state = { ...store.state, initialized: true, tested: true };
     showMainScreen();
     setTimeout(() => showView('dsm-scheme'), 500);
 }
@@ -3754,10 +3277,9 @@ function applyDsmAndContinue() {
 function skipCalibration() {
     console.log('[FanControl] Skipping calibration — monitoring-only mode');
     fetch('/api/skip-calibration', { method: 'POST' })
-        .then(() => {})
-        .catch(() => {});
-    wizardStep = 'done';
-    currentState = { ...currentState, initialized: true, tested: true };
+        .catch(err => console.error('Skip calibration error:', err));
+    store.wizardStep = 'done';
+    store.state = { ...store.state, initialized: true, tested: true };
     showMainScreen();
 }
 
@@ -3773,9 +3295,9 @@ function applyDsmFanSpeed() {
     .then(r => r.json())
     .then(data => {
         if (data.status === 'ok') {
-            fetch('/api/skip-calibration', { method: 'POST' }).catch(() => {});
-            wizardStep = 'done';
-            currentState = { ...currentState, initialized: true, tested: true };
+            fetch('/api/skip-calibration', { method: 'POST' }).catch(err => console.error('Skip calibration error:', err));
+            store.wizardStep = 'done';
+            store.state = { ...store.state, initialized: true, tested: true };
             showMainScreen();
         } else {
             alert('Error: ' + (data.message || t('toast.speed_failed', 'Failed to set fan speed')));
@@ -3791,9 +3313,6 @@ function applyDsmFanSpeed() {
 // DSM SCHEME EDITOR
 // ============================================================================
 
-let _dsmSchemes = [];
-let _dsmActiveScheme = null;
-
 async function renderDsmSchemeEditor(remoteNodeId) {
     const container = document.getElementById('dsm-scheme-inner');
     if (!container) return;
@@ -3805,7 +3324,7 @@ async function renderDsmSchemeEditor(remoteNodeId) {
 
         if (remoteNodeId) {
             // Remote node — use schemes from node state
-            const node = nodesData.find(n => n.node_id === remoteNodeId);
+            const node = store.nodesData.find(n => n.node_id === remoteNodeId);
             if (!node) {
                 container.innerHTML = `<div class="text-red-400 text-center py-8">${t('dsm.node_not_found', 'Node not found')}</div>`;
                 return;
@@ -3827,11 +3346,11 @@ async function renderDsmSchemeEditor(remoteNodeId) {
             return;
         }
 
-        _dsmSchemes = schemesData.schemes || [];
-        _dsmActiveScheme = activeData.active_scheme || null;
+        dsm.schemes = schemesData.schemes || [];
+        dsm.activeScheme = activeData.active_scheme || null;
 
-        if (_dsmSchemes.length === 0) {
-            container.innerHTML = '<div class="text-gray-500 text-center py-8">No fan schemes found in scemd.xml</div>';
+        if (dsm.schemes.length === 0) {
+            container.innerHTML = `<div class="text-gray-500 text-center py-8">${t('dsm.no_schemes', 'No fan schemes found in scemd.xml')}</div>`;
             return;
         }
 
@@ -3845,8 +3364,8 @@ async function renderDsmSchemeEditor(remoteNodeId) {
                 </div>
         `;
 
-        for (const scheme of _dsmSchemes) {
-            const isActive = scheme.type === _dsmActiveScheme;
+        for (const scheme of dsm.schemes) {
+            const isActive = scheme.type === dsm.activeScheme;
             const schemeLabel = _schemeLabel(scheme.type);
 
             html += `
@@ -3931,7 +3450,7 @@ function _schemeLabel(type) {
 }
 
 async function editDsmEntry(schemeType, index) {
-    const scheme = _dsmSchemes.find(s => s.type === schemeType);
+    const scheme = dsm.schemes.find(s => s.type === schemeType);
     if (!scheme || !scheme.entries[index]) return;
 
     const entry = scheme.entries[index];
@@ -3949,7 +3468,7 @@ async function editDsmEntry(schemeType, index) {
     entry.action = newAction.toUpperCase() === 'SHUTDOWN' ? 'SHUTDOWN' : 'NONE';
     entry.threshold_temp = parseInt(newThreshold) || 0;
 
-    if (_currentRemoteNodeId) {
+    if (store.currentRemoteNodeId) {
         // Remote — local edit only, applied when user clicks "Apply"
         renderDsmSchemeEditor();
         return;
@@ -3979,16 +3498,16 @@ async function editDsmEntry(schemeType, index) {
 
 async function applyDsmScheme(schemeType) {
     try {
-        if (_currentRemoteNodeId) {
+        if (store.currentRemoteNodeId) {
             // Remote node — push scheme via WebSocket
-            const node = nodesData.find(n => n.node_id === _currentRemoteNodeId);
+            const node = store.nodesData.find(n => n.node_id === store.currentRemoteNodeId);
             const scheme = (node?.telemetry?.dsm_schemes || node?.config?.dsm_schemes || node?.dsm_schemes || []).find(s => s.type === schemeType);
             if (!scheme) {
                 showToast(t('dsm.node_not_found', 'Node not found'), 'error');
                 return;
             }
             socket.emit('server:dsm:apply', {
-                node_id: _currentRemoteNodeId,
+                node_id: store.currentRemoteNodeId,
                 scheme_type: schemeType,
                 entries: scheme.entries.map((e, i) => ({
                     index: i,
@@ -4018,7 +3537,7 @@ function runCalibration() {
     
     document.getElementById('calibrate-btn').disabled = true;
     document.getElementById('calibrate-loader').classList.remove('hidden');
-    wizardStep = 'calibrating';
+    store.wizardStep = 'calibrating';
     
     document.getElementById('calibration-modal').classList.remove('hidden');
     document.getElementById('calibration-status').textContent = t('calibration.starting', 'Starting...');
@@ -4057,8 +3576,8 @@ function hideCalibrationModal() {
 }
 
 function updateCalibrationParam(param, value) {
-    if (!currentFanId || !currentState || !currentState.fans) return;
-    const fan = currentState.fans[currentFanId];
+    if (!store.currentFanId || !store.state || !store.state.fans) return;
+    const fan = store.state.fans[store.currentFanId];
     if (!fan) return;
 
     if (!fan.calibration) fan.calibration = {};
@@ -4074,7 +3593,7 @@ function updateCalibrationParam(param, value) {
         document.getElementById('cal-max-pwm-val').textContent = value;
     }
 
-    saveFanCalibration(currentFanId, fan.calibration);
+    saveFanCalibration(store.currentFanId, fan.calibration);
 }
 
 function saveFanCalibration(fanId, calibration) {
@@ -4113,18 +3632,18 @@ function renderScheduleGrid() {
     const container = document.getElementById('schedule-grid');
     if (!container) return;
     
-    const fan = currentState?.fans?.[currentFanId];
-    const schedule = fan?.schedule || [];
-    scheduleData = {};
-    schedule.forEach(item => {
+    const fan = store.state?.fans?.[store.currentFanId];
+    const fanSchedule = fan?.schedule || [];
+    schedule.data = {};
+    fanSchedule.forEach(item => {
         const key = `${item.day}_${item.time_start}`;
-        scheduleData[key] = item;
+        schedule.data[key] = item;
     });
     
     // Build color map for cells
     const colorMap = {};
     const groups = {};
-    schedule.forEach(item => {
+    fanSchedule.forEach(item => {
         const key = ruleKey(item);
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -4155,7 +3674,7 @@ function renderScheduleGrid() {
         for (let h = 0; h < 24; h++) {
             const timeStr = String(h).padStart(2, '0') + ':00';
             const key = `${day}_${timeStr}`;
-            const item = scheduleData[key];
+            const item = schedule.data[key];
             
             let bgStyle = 'background:#1f2937';
             if (item) {
@@ -4219,17 +3738,17 @@ function renderScheduleRules() {
     const container = document.getElementById('schedule-rules');
     if (!container) return;
     
-    const fan = currentState?.fans?.[currentFanId];
-    const schedule = fan?.schedule || [];
+    const fan = store.state?.fans?.[store.currentFanId];
+    const fanSchedule = fan?.schedule || [];
     
-    if (schedule.length === 0) {
+    if (fanSchedule.length === 0) {
         container.innerHTML = `<p class="text-xs text-gray-500 italic">${t('schedule.no_rules', 'No rules configured')}</p>`;
         return;
     }
     
     // Group by identical settings
     const groups = {};
-    schedule.forEach(item => {
+    fanSchedule.forEach(item => {
         const key = ruleKey(item);
         if (!groups[key]) groups[key] = { item, cells: [] };
         groups[key].cells.push(item);
@@ -4246,7 +3765,7 @@ function renderScheduleRules() {
         let settings = '';
         if (item.mode === 'auto') {
             const sensorNames = (item.sensors || []).map(s => {
-                const sen = allSensors.find(x => x.id === s);
+                const sen = store.allSensors.find(x => x.id === s);
                 return sen ? sen.label : s.split(':').pop();
             });
             settings = `${formatTemp(item.target_temp || 31)}`;
@@ -4345,7 +3864,7 @@ function renderScheduleRules() {
     container._groups = groupList;
     
     // Restore expanded state
-    expandedRuleGroups.forEach(idx => {
+    schedule.expandedRuleGroups.forEach(idx => {
         const el = document.getElementById(`rule-subperiods-${idx}`);
         const chevron = document.getElementById(`rule-chevron-${idx}`);
         if (el) {
@@ -4361,9 +3880,9 @@ function toggleRuleGroup(idx) {
     if (!el) return;
     el.classList.toggle('hidden');
     if (el.classList.contains('hidden')) {
-        expandedRuleGroups.delete(idx);
+        schedule.expandedRuleGroups.delete(idx);
     } else {
-        expandedRuleGroups.add(idx);
+        schedule.expandedRuleGroups.add(idx);
     }
     if (chevron) chevron.textContent = el.classList.contains('hidden') ? '▸' : '▾';
 }
@@ -4379,7 +3898,7 @@ function editSinglePeriod(day, fromHour, toHour) {
 function deleteSinglePeriod(day, fromHour, toHour) {
     for (let h = fromHour; h <= toHour; h++) {
         const key = `${day}_${String(h).padStart(2, '0')}:00`;
-        delete scheduleData[key];
+        delete schedule.data[key];
     }
     applyScheduleToFan();
 }
@@ -4398,43 +3917,43 @@ function deleteRuleGroup(idx) {
     if (!group) return;
     group.cells.forEach(cell => {
         const key = `${cell.day}_${cell.time_start}`;
-        delete scheduleData[key];
+        delete schedule.data[key];
     });
-    expandedRuleGroups.delete(idx);
+    schedule.expandedRuleGroups.delete(idx);
     applyScheduleToFan();
 }
 
 function onScheduleMouseDown(e, day, hour) {
     e.preventDefault();
-    isDraggingSchedule = true;
-    dragStartCell = { day, hour };
-    scheduleSelection = [{ day, hour }];
+    schedule.isDragging = true;
+    schedule.dragStartCell = { day, hour };
+    schedule.selection = [{ day, hour }];
     highlightSelection();
 }
 
 function onScheduleMouseEnter(e, day, hour) {
-    if (!isDraggingSchedule || !dragStartCell) return;
+    if (!schedule.isDragging || !schedule.dragStartCell) return;
     
-    const startH = dragStartCell.hour;
-    const startD = DAYS.indexOf(dragStartCell.day);
+    const startH = schedule.dragStartCell.hour;
+    const startD = DAYS.indexOf(schedule.dragStartCell.day);
     const endD = DAYS.indexOf(day);
     const minD = Math.min(startD, endD);
     const maxD = Math.max(startD, endD);
     
-    scheduleSelection = [];
+    schedule.selection = [];
     
     if (minD === maxD) {
         // Same day: select hour range
         const hFrom = Math.min(startH, hour);
         const hTo = Math.max(startH, hour);
         for (let h = hFrom; h <= hTo; h++) {
-            scheduleSelection.push({ day: DAYS[minD], hour: h });
+            schedule.selection.push({ day: DAYS[minD], hour: h });
         }
     } else {
         // Cross-day: select ALL hours on each day in range
         for (let d = minD; d <= maxD; d++) {
             for (let h = 0; h < 24; h++) {
-                scheduleSelection.push({ day: DAYS[d], hour: h });
+                schedule.selection.push({ day: DAYS[d], hour: h });
             }
         }
     }
@@ -4443,7 +3962,7 @@ function onScheduleMouseEnter(e, day, hour) {
 
 function highlightSelection() {
     clearHighlight();
-    for (const cell of scheduleSelection) {
+    for (const cell of schedule.selection) {
         const el = document.querySelector(`.schedule-cell[data-day="${cell.day}"][data-hour="${cell.hour}"]`);
         if (el) {
             el.style.outline = '2px solid #00f0ff';
@@ -4462,15 +3981,15 @@ function clearHighlight() {
 }
 
 document.addEventListener('mouseup', () => {
-    if (!isDraggingSchedule) return;
-    isDraggingSchedule = false;
+    if (!schedule.isDragging) return;
+    schedule.isDragging = false;
     
-    if (scheduleSelection.length === 1) {
-        openScheduleEditor([scheduleSelection[0]]);
-    } else if (scheduleSelection.length > 1) {
-        openScheduleEditor([...scheduleSelection]);
+    if (schedule.selection.length === 1) {
+        openScheduleEditor([schedule.selection[0]]);
+    } else if (schedule.selection.length > 1) {
+        openScheduleEditor([...schedule.selection]);
     }
-    scheduleSelection = [];
+    schedule.selection = [];
     clearHighlight();
 });
 
@@ -4479,8 +3998,8 @@ document.addEventListener('mouseup', () => {
 // ============================================================================
 
 function openScheduleEditor(cells) {
-    editingCells = cells;
-    scheduleEditorSensors = [];
+    schedule.editingCells = cells;
+    schedule.editorSensors = [];
     
     const editor = document.getElementById('schedule-editor');
     editor.classList.remove('hidden');
@@ -4490,14 +4009,14 @@ function openScheduleEditor(cells) {
     
     // Get existing data from first cell
     const key = `${cells[0].day}_${String(cells[0].hour).padStart(2, '0')}:00`;
-    const existing = scheduleData[key];
+    const existing = schedule.data[key];
     
     if (existing) {
         setScheduleMode(existing.mode);
         document.getElementById('sched-target-temp').value = existing.target_temp || 31;
         document.getElementById('sched-speed-slider').value = existing.speed_pct ?? 50;
         document.getElementById('sched-speed-value').textContent = `${existing.speed_pct ?? 50}%`;
-        scheduleEditorSensors = [...(existing.sensors || [])];
+        schedule.editorSensors = [...(existing.sensors || [])];
         if (existing.sensor_mode) setScheduleSensorMode(existing.sensor_mode);
     } else {
         setScheduleMode('auto');
@@ -4506,11 +4025,11 @@ function openScheduleEditor(cells) {
         document.getElementById('sched-speed-value').textContent = '50%';
         
         // Auto-fill sensors from first existing schedule item
-        const fan = currentState?.fans?.[currentFanId];
-        const schedule = fan?.schedule || [];
-        if (schedule.length > 0) {
-            const first = schedule[0];
-            scheduleEditorSensors = [...(first.sensors || [])];
+        const fan = store.state?.fans?.[store.currentFanId];
+        const fanSchedule = fan?.schedule || [];
+        if (fanSchedule.length > 0) {
+            const first = fanSchedule[0];
+            schedule.editorSensors = [...(first.sensors || [])];
             if (first.sensor_mode) setScheduleSensorMode(first.sensor_mode);
         }
     }
@@ -4543,14 +4062,14 @@ function updateScheduleEditorSensors() {
     const container = document.getElementById('sched-sensor-tags');
     if (!container) return;
     
-    if (scheduleEditorSensors.length === 0) {
+    if (schedule.editorSensors.length === 0) {
         container.innerHTML = `<span class="text-xs text-gray-500 italic">${t('editor.no_sensors', 'No sensors assigned')}</span>`;
         document.getElementById('sched-sensor-mode-section').classList.add('hidden');
         return;
     }
     
-    container.innerHTML = scheduleEditorSensors.map(s => {
-        const sensor = allSensors.find(x => x.id === s);
+    container.innerHTML = schedule.editorSensors.map(s => {
+        const sensor = store.allSensors.find(x => x.id === s);
         const label = sensor ? sensor.label : s;
         return `
             <span class="inline-flex items-center gap-1 bg-cyber-accent text-gray-300 text-xs px-2 py-1 rounded-full">
@@ -4560,11 +4079,11 @@ function updateScheduleEditorSensors() {
         `;
     }).join('');
     
-    document.getElementById('sched-sensor-mode-section').classList.toggle('hidden', scheduleEditorSensors.length <= 1);
+    document.getElementById('sched-sensor-mode-section').classList.toggle('hidden', schedule.editorSensors.length <= 1);
 }
 
 function removeScheduleSensor(sensorId) {
-    scheduleEditorSensors = scheduleEditorSensors.filter(s => s !== sensorId);
+    schedule.editorSensors = schedule.editorSensors.filter(s => s !== sensorId);
     updateScheduleEditorSensors();
 }
 
@@ -4574,31 +4093,7 @@ function toggleScheduleSensorPopup() {
     if (!popup || !list) return;
     
     if (popup.classList.contains('hidden')) {
-        const groups = {};
-        allSensors.forEach(s => {
-            if (!groups[s.group]) groups[s.group] = [];
-            groups[s.group].push(s);
-        });
-        
-        let html = '';
-        for (const [group, sensors] of Object.entries(groups)) {
-            html += `<div class="text-xs font-semibold text-gray-500 uppercase mb-2">${t(group, group)}</div>`;
-            sensors.forEach(s => {
-                const checked = scheduleEditorSensors.includes(s.id);
-                html += `
-                    <label class="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-cyber-accent rounded px-2">
-                        <input type="checkbox" value="${escapeHtml(s.id)}" ${checked ? 'checked' : ''} 
-                               class="accent-neon-purple">
-                        <span class="text-sm text-gray-300">${escapeHtml(s.label)}</span>
-                        <span class="text-xs text-gray-500 ml-auto">
-                            ${s.standby ? t('sensor.sleep', 'Sleep') : formatTemp(s.temp)}
-                        </span>
-                    </label>
-                `;
-            });
-        }
-        
-        list.innerHTML = html;
+        list.innerHTML = buildSensorCheckboxList(store.allSensors, schedule.editorSensors);
         popup.classList.remove('hidden');
         
         // Override close behavior for schedule context
@@ -4606,7 +4101,7 @@ function toggleScheduleSensorPopup() {
     } else {
         // Collect checked sensors
         const checked = popup.querySelectorAll('input[type=checkbox]:checked');
-        scheduleEditorSensors = Array.from(checked).map(cb => cb.value);
+        schedule.editorSensors = Array.from(checked).map(cb => cb.value);
         updateScheduleEditorSensors();
         popup.classList.add('hidden');
         popup._scheduleMode = false;
@@ -4617,7 +4112,7 @@ function saveScheduleEdit() {
     const mode = document.querySelector('#sched-btn-auto.bg-neon-cyan') ? 'auto'
         : document.querySelector('#sched-btn-manual.bg-neon-cyan') ? 'manual' : 'off';
     
-    const newItems = editingCells.map(cell => {
+    const newItems = schedule.editingCells.map(cell => {
         const key = `${cell.day}_${String(cell.hour).padStart(2, '0')}:00`;
         const item = {
             day: cell.day,
@@ -4628,7 +4123,7 @@ function saveScheduleEdit() {
         
         if (mode === 'auto') {
             item.target_temp = parseInt(document.getElementById('sched-target-temp').value) || 31;
-            item.sensors = [...scheduleEditorSensors];
+            item.sensors = [...schedule.editorSensors];
             const activeSensorMode = document.querySelector('#sched-btn-sensor-max.bg-neon-cyan') ? 'max'
                 : document.querySelector('#sched-btn-sensor-min.bg-neon-cyan') ? 'min' : 'avg';
             item.sensor_mode = activeSensorMode;
@@ -4636,7 +4131,7 @@ function saveScheduleEdit() {
             item.speed_pct = parseInt(document.getElementById('sched-speed-slider').value) || 50;
         }
         
-        scheduleData[key] = item;
+        schedule.data[key] = item;
         return item;
     });
     
@@ -4645,9 +4140,9 @@ function saveScheduleEdit() {
 }
 
 function deleteScheduleEdit() {
-    for (const cell of editingCells) {
+    for (const cell of schedule.editingCells) {
         const key = `${cell.day}_${String(cell.hour).padStart(2, '0')}:00`;
-        delete scheduleData[key];
+        delete schedule.data[key];
     }
     closeScheduleEditor();
     applyScheduleToFan();
@@ -4655,16 +4150,16 @@ function deleteScheduleEdit() {
 
 function closeScheduleEditor() {
     document.getElementById('schedule-editor').classList.add('hidden');
-    editingCells = [];
+    schedule.editingCells = [];
 }
 
 function clearSchedule() {
-    scheduleData = {};
+    schedule.data = {};
     applyScheduleToFan();
 }
 
 function fillScheduleDefaults() {
-    const fan = currentState?.fans?.[currentFanId];
+    const fan = store.state?.fans?.[store.currentFanId];
     const defaultSensors = fan?.sensors || [];
     const defaultSensorMode = fan?.sensor_mode || 'max';
     const defaultTemp = fan?.target_temp || 31;
@@ -4672,8 +4167,8 @@ function fillScheduleDefaults() {
     for (const day of DAYS) {
         for (let hour = 0; hour < 24; hour++) {
             const key = `${day}_${String(hour).padStart(2, '0')}:00`;
-            if (!scheduleData[key]) {
-                scheduleData[key] = {
+            if (!schedule.data[key]) {
+                schedule.data[key] = {
                     day: day,
                     time_start: String(hour).padStart(2, '0') + ':00',
                     time_end: String(hour).padStart(2, '0') + ':59',
@@ -4689,17 +4184,17 @@ function fillScheduleDefaults() {
 }
 
 function applyScheduleToFan() {
-    const schedule = Object.values(scheduleData);
+    const fanSchedule = Object.values(schedule.data);
     
     // Update local state immediately so render sees new data
-    if (currentState?.fans?.[currentFanId]) {
-        currentState.fans[currentFanId].schedule = schedule;
+    if (store.state?.fans?.[store.currentFanId]) {
+        store.state.fans[store.currentFanId].schedule = fanSchedule;
     }
     
     sendControl({
         action: 'set_fan_config',
-        fan: currentFanId,
-        schedule: schedule
+        fan: store.currentFanId,
+        schedule: fanSchedule
     });
     renderScheduleGrid();
 }
@@ -4736,8 +4231,8 @@ function describeCells(cells) {
 }
 
 function validateSchedule() {
-    const fan = currentState?.fans?.[currentFanId];
-    const schedule = fan?.schedule || [];
+    const fan = store.state?.fans?.[store.currentFanId];
+    const fanSchedule = fan?.schedule || [];
     const coverage = document.getElementById('schedule-coverage');
     const warning = document.getElementById('schedule-incomplete-warning');
     const detail = document.getElementById('schedule-incomplete-detail');
@@ -4745,7 +4240,7 @@ function validateSchedule() {
     if (!coverage) return;
     
     const total = 7 * 24;
-    const filled = schedule.length;
+    const filled = fanSchedule.length;
     const pct = Math.round((filled / total) * 100);
     
     coverage.textContent = `${filled}/${total} (${pct}%)`;
@@ -4754,7 +4249,7 @@ function validateSchedule() {
     if (pct < 100) {
         const emptyDays = [];
         for (let i = 0; i < DAYS.length; i++) {
-            const dayHours = schedule.filter(s => s.day === DAYS[i]).length;
+            const dayHours = fanSchedule.filter(s => s.day === DAYS[i]).length;
             if (dayHours < 24) emptyDays.push(tDay(i));
         }
         warning.classList.remove('hidden');
@@ -4793,10 +4288,10 @@ function updateLangButtons() {
     const setupEn = document.getElementById('setup-lang-en');
     const setupRu = document.getElementById('setup-lang-ru');
     
-    if (enBtn) enBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
-    if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
-    if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
-    if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (enBtn) enBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${i18n.currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (ruBtn) ruBtn.className = `flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all duration-300 border ${i18n.currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (setupEn) setupEn.className = `text-xs px-2 py-1 rounded border transition-all ${i18n.currentLang === 'en' ? BTN_ACTIVE : BTN_INACTIVE}`;
+    if (setupRu) setupRu.className = `text-xs px-2 py-1 rounded border transition-all ${i18n.currentLang === 'ru' ? BTN_ACTIVE : BTN_INACTIVE}`;
     
     updateSettingsUI();
 }
@@ -4839,25 +4334,22 @@ function updateSettingsUI() {
 // LOGGING LEVEL
 // ============================================================================
 
-let _currentLogLevel = 'INFO';
-let _currentRetention = 30;
-
 async function fetchLogSettings() {
     try {
         const resp = await fetch('/api/logging');
         const data = await resp.json();
-        _currentLogLevel = data.level || 'INFO';
-        _currentRetention = data.retention_days || 30;
+        logging.level = data.level || 'INFO';
+        logging.retention = data.retention_days || 30;
         updateLogLevelButtons();
         updateRetentionButtons();
-    } catch {}
+    } catch (err) { console.error('Failed to fetch log settings:', err); }
 }
 
 function updateLogLevelButtons() {
     ['DEBUG', 'INFO', 'WARNING', 'ERROR'].forEach(level => {
         const btn = document.getElementById(`log-btn-${level}`);
         if (btn) {
-            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${_currentLogLevel === level ? BTN_ACTIVE : BTN_INACTIVE}`;
+            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border ${logging.level === level ? BTN_ACTIVE : BTN_INACTIVE}`;
         }
     });
 }
@@ -4870,17 +4362,17 @@ async function setLogLevel(level) {
             body: JSON.stringify({ level })
         });
         if (resp.ok) {
-            _currentLogLevel = level;
+            logging.level = level;
             updateLogLevelButtons();
         }
-    } catch {}
+    } catch (err) { console.error('Failed to set log level:', err); }
 }
 
 function updateRetentionButtons() {
     [7, 14, 30, 60, 90, 180, 365].forEach(days => {
         const btn = document.getElementById(`retention-btn-${days}`);
         if (btn) {
-            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px] ${_currentRetention === days ? BTN_ACTIVE : BTN_INACTIVE}`;
+            btn.className = `flex-1 py-2 px-2 rounded-lg text-xs font-semibold transition-all duration-300 border min-w-[40px] ${logging.retention === days ? BTN_ACTIVE : BTN_INACTIVE}`;
         }
     });
 }
@@ -4893,17 +4385,17 @@ async function setLogRetention(days) {
             body: JSON.stringify({ retention_days: days })
         });
         if (resp.ok) {
-            _currentRetention = days;
+            logging.retention = days;
             updateRetentionButtons();
         }
-    } catch {}
+    } catch (err) { console.error('Failed to set log retention:', err); }
 }
 
 function setTempUnit(unit) {
     saveSettings({ tempUnit: unit });
     updateSettingsUI();
     // Re-render current data
-    if (currentState) updateUI(currentState);
+    if (store.state) updateUI(store.state);
 }
 
 function setRefreshInterval(ms) {
@@ -4923,12 +4415,11 @@ function setAutoUpdateInterval(ms) {
     scheduleAutoUpdate();
 }
 
-let _autoUpdateTimer = null;
 function scheduleAutoUpdate() {
-    if (_autoUpdateTimer) { clearInterval(_autoUpdateTimer); _autoUpdateTimer = null; }
+    if (timers.autoUpdate) { clearInterval(timers.autoUpdate); timers.autoUpdate = null; }
     const ms = getSettings().autoUpdateCheck;
     if (ms > 0) {
-        _autoUpdateTimer = setInterval(() => { _updateChecked = false; autoCheckUpdate(); }, ms);
+        timers.autoUpdate = setInterval(() => { update.checked = false; autoCheckUpdate(); }, ms);
     }
 }
 
@@ -4994,8 +4485,6 @@ async function checkForUpdates() {
     }
 }
 
-let _updateChecked = false;
-
 function copyAgentToken() {
     const token = document.getElementById('agent-token-value').textContent;
     if (token && navigator.clipboard) {
@@ -5011,7 +4500,7 @@ function openUpdateModal() {
     const applyBtn = document.getElementById('update-modal-apply');
     const closeBtn = document.getElementById('update-modal-close');
     
-    const onlineAgentCount = nodesData.filter(n => n.status === 'online').length;
+    const onlineAgentCount = store.nodesData.filter(n => n.status === 'online').length;
     const agentStep = onlineAgentCount > 0
         ? `<div id="upd-step-agents" class="flex items-center gap-3 text-sm opacity-40">
             <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-agents-icon">1</span>
@@ -5042,14 +4531,14 @@ function openUpdateModal() {
     // Show agents list if there are online agents
     const agentsSection = document.getElementById('update-modal-agents');
     const agentsList = document.getElementById('update-modal-agents-list');
-    const onlineAgents = nodesData.filter(n => n.status === 'online');
+    const onlineAgents = store.nodesData.filter(n => n.status === 'online');
     if (agentsSection) {
         if (onlineAgents.length > 0) {
             agentsSection.classList.remove('hidden');
             if (agentsList) {
                 agentsList.innerHTML = onlineAgents.map(agent => {
                     const ver = agent.agent_version || '—';
-                    const serverVer = currentState?.config_version || '?';
+                    const serverVer = store.state?.config_version || '?';
                     const needsUpdate = ver !== '—' && serverVer !== '?' && ver !== serverVer;
                     const checked = agent.auto_update ? 'checked' : '';
                     return `
@@ -5092,7 +4581,7 @@ async function toggleAgentAutoUpdate(nodeId, enabled) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled }),
         });
-    } catch {}
+    } catch (err) { console.error('Failed to toggle auto-update:', err); }
 }
 
 function setStepState(step, state) {
@@ -5114,39 +4603,23 @@ function setStepState(step, state) {
     }
 }
 
-let _updateAgentStates = {}; // {nodeId: {status, message, version}}
-let _updateResolve = null;   // resolve function for the waiting promise
-
-function setupUpdateListeners() {
-    if (socket.hasListeners('agent:update_progress')) return;
-    socket.on('agent:update_progress', (data) => {
-        const { node_id, status, message, version } = data;
-        _updateAgentStates[node_id] = { status, message, version };
-        renderUpdateAgentProgress();
-        // Check if all agents are done
-        checkAgentsDone();
-    });
-    socket.on('agent:logs', (data) => {
-        renderAgentLogsModal(data.node_id, data.lines);
-    });
-}
 
 function checkAgentsDone() {
-    const pending = Object.entries(_updateAgentStates).filter(([_, s]) =>
+    const pending = Object.entries(update.agentStates).filter(([_, s]) =>
         !['synced', 'error', 'skipped'].includes(s.status));
-    if (pending.length === 0 && _updateResolve) {
-        _updateResolve();
-        _updateResolve = null;
+    if (pending.length === 0 && update.resolve) {
+        update.resolve();
+        update.resolve = null;
     }
 }
 
 function renderUpdateAgentProgress() {
     const el = document.getElementById('update-modal-agents-progress');
     if (!el) return;
-    const serverVer = currentState?.config_version || '?';
+    const serverVer = store.state?.config_version || '?';
     let html = '';
-    for (const [nid, st] of Object.entries(_updateAgentStates)) {
-        const node = nodesData.find(n => n.node_id === nid);
+    for (const [nid, st] of Object.entries(update.agentStates)) {
+        const node = store.nodesData.find(n => n.node_id === nid);
         const name = node?.name || nid;
         let statusIcon = '', statusText = '', actions = '';
         switch (st.status) {
@@ -5191,18 +4664,18 @@ function renderUpdateAgentProgress() {
 }
 
 function retryAgentUpdate(nodeId) {
-    _updateAgentStates[nodeId] = { status: 'pending' };
+    update.agentStates[nodeId] = { status: 'pending' };
     renderUpdateAgentProgress();
     fetch('/api/update/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ node_ids: [nodeId] }),
-    }).catch(() => {});
+    }).catch(err => console.error('Agent update retry error:', err));
 }
 
 function skipAgentUpdate(nodeId) {
-    if (_updateAgentStates[nodeId]) {
-        _updateAgentStates[nodeId].status = 'skipped';
+    if (update.agentStates[nodeId]) {
+        update.agentStates[nodeId].status = 'skipped';
     }
     renderUpdateAgentProgress();
     checkAgentsDone();
@@ -5219,7 +4692,7 @@ function requestAgentLogs(nodeId) {
 }
 
 function renderAgentLogsModal(nodeId, lines) {
-    const node = nodesData.find(n => n.node_id === nodeId);
+    const node = store.nodesData.find(n => n.node_id === nodeId);
     const name = node?.name || nodeId;
     const overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/70 z-[90] flex items-center justify-center';
@@ -5246,8 +4719,8 @@ async function startUpdate() {
     const result = document.getElementById('update-modal-result');
     const closeBtn = document.getElementById('update-modal-close');
 
-    const serverVer = currentState?.config_version || '?';
-    const onlineAgents = nodesData.filter(n => n.status === 'online');
+    const serverVer = store.state?.config_version || '?';
+    const onlineAgents = store.nodesData.filter(n => n.status === 'online');
     const outdatedAgents = onlineAgents.filter(n => n.agent_version && n.agent_version !== serverVer);
 
     applyBtn.classList.add('hidden');
@@ -5255,17 +4728,15 @@ async function startUpdate() {
     progress.classList.remove('hidden');
     bar.style.width = '10%';
 
-    setupUpdateListeners();
-
     // Step 1: Send update to agents (while server is still running)
     if (outdatedAgents.length > 0) {
         setStepState('agents', 'active');
         bar.style.width = '5%';
 
         // Initialize agent states
-        _updateAgentStates = {};
+        update.agentStates = {};
         outdatedAgents.forEach(n => {
-            _updateAgentStates[n.node_id] = { status: 'pending' };
+            update.agentStates[n.node_id] = { status: 'pending' };
         });
         renderUpdateAgentProgress();
 
@@ -5289,13 +4760,13 @@ async function startUpdate() {
 
             // Wait for all agents to finish (no timeout)
             await new Promise((resolve) => {
-                _updateResolve = resolve;
+                update.resolve = resolve;
                 // Also check immediately in case all already done
                 checkAgentsDone();
             });
 
-            const skipped = Object.values(_updateAgentStates).filter(s => s.status === 'skipped').length;
-            const errors = Object.values(_updateAgentStates).filter(s => s.status === 'error').length;
+            const skipped = Object.values(update.agentStates).filter(s => s.status === 'skipped').length;
+            const errors = Object.values(update.agentStates).filter(s => s.status === 'error').length;
             setStepState('wait', errors > 0 && skipped === 0 ? 'error' : 'done');
 
             if (errors > 0 && skipped === 0) {
@@ -5378,8 +4849,8 @@ async function startServerUpdate(bar, result, applyBtn, closeBtn) {
 }
 
 function openUpdateAgentsModal() {
-    const serverVer = currentState?.config_version || '?';
-    const outdated = nodesData.filter(n =>
+    const serverVer = store.state?.config_version || '?';
+    const outdated = store.nodesData.filter(n =>
         n.status === 'online' && n.agent_version && n.agent_version !== serverVer);
 
     if (outdated.length === 0) {
@@ -5432,13 +4903,13 @@ function updateSingleAgent(nodeId) {
 }
 
 async function autoCheckUpdate() {
-    if (_updateChecked) return;
-    _updateChecked = true;
+    if (update.checked) return;
+    update.checked = true;
     await checkForUpdates();
 }
 
 async function switchLanguage(code) {
-    if (code === currentLang) return;
+    if (code === i18n.currentLang) return;
     
     const success = await loadLang(code);
     if (success) {
@@ -5448,11 +4919,11 @@ async function switchLanguage(code) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ language: code })
-        }).catch(() => {});
+        }).catch(err => console.error('Language save error:', err));
         
         // Re-render dynamic content
-        if (currentFanId) {
-            const fan = currentState?.fans?.[currentFanId];
+        if (store.currentFanId) {
+            const fan = store.state?.fans?.[store.currentFanId];
             if (fan) updateInspector(fan);
         }
     }
@@ -5466,14 +4937,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('[FanControl] Neon Cyberpunk Edition initialized');
 
     window.addEventListener('beforeunload', () => {
-        if (_dashboardSaveTimer) {
-            clearTimeout(_dashboardSaveTimer);
+        if (dashboard.saveTimer) {
+            clearTimeout(dashboard.saveTimer);
             saveDashboardToServer();
         }
     });
 
     // Load language
-    await loadLang(currentLang);
+    await loadLang(i18n.currentLang);
     updateLangButtons();
     updateSettingsUI();
     
@@ -5514,14 +4985,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 // NODE MANAGEMENT (Multi-node Dashboard)
 // ============================================================================
 
-let currentView = 'dashboard';
-let selectedNodeId = null;
-let nodesData = [];
-
 async function loadNodes() {
     try {
         const resp = await fetch('/api/nodes');
-        nodesData = await resp.json();
+        store.nodesData = await resp.json();
         buildServerTree();
         renderNodesOverview();
     } catch (e) {
@@ -5536,7 +5003,7 @@ function renderNodesOverview() {
     if (!container) return;
     
     let html = '';
-    for (const node of nodesData) {
+    for (const node of store.nodesData) {
         const telemetry = node.telemetry || {};
         const fans = telemetry.fans || {};
         const temps = telemetry.temp_sensors || {};
@@ -5566,7 +5033,7 @@ function renderNodesOverview() {
         `;
     }
     
-    if (nodesData.length === 0) {
+    if (store.nodesData.length === 0) {
         html = `<div class="text-gray-500 text-center py-8 col-span-2">${t('nodes.no_nodes', 'No nodes connected. Add a node to get started.')}</div>`;
     }
     
@@ -5574,8 +5041,8 @@ function renderNodesOverview() {
 }
 
 function selectNode(nodeId) {
-    selectedNodeId = nodeId;
-    currentView = 'node-detail';
+    store.selectedNodeId = nodeId;
+    store.currentView = 'node-detail';
     showView('node-detail');
     loadNodeDetail(nodeId);
 }
@@ -5656,7 +5123,7 @@ function renderNodeDetail(node) {
 }
 
 function showView(view) {
-    currentView = view;
+    store.currentView = view;
 
     const canvas = document.getElementById('dashboard-canvas-container');
     const inspector = document.getElementById('inspector-container');
@@ -5688,7 +5155,7 @@ function showView(view) {
         if (nodeDetail) nodeDetail.classList.remove('hidden');
     } else if (view === 'dsm-scheme') {
         if (dsmScheme) dsmScheme.classList.remove('hidden');
-        renderDsmSchemeEditor(_currentRemoteNodeId);
+        renderDsmSchemeEditor(store.currentRemoteNodeId);
     }
 
     // Update nav button styles
@@ -5746,8 +5213,8 @@ async function deleteNode(nodeId) {
     try {
         const resp = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, { method: 'DELETE' });
         if (resp.ok) {
-            if (selectedNodeId === nodeId) {
-                selectedNodeId = null;
+            if (store.selectedNodeId === nodeId) {
+                store.selectedNodeId = null;
                 showView('nodes');
             }
             loadNodes();
@@ -5763,7 +5230,7 @@ async function deleteNode(nodeId) {
 }
 
 function showNodeSettings(nodeId) {
-    const node = nodesData.find(n => n.node_id === nodeId);
+    const node = store.nodesData.find(n => n.node_id === nodeId);
     if (!node) return;
     document.getElementById('node-settings-id').value = nodeId;
     document.getElementById('node-settings-name').value = node.name || '';
@@ -5771,7 +5238,7 @@ function showNodeSettings(nodeId) {
     document.getElementById('node-settings-port').value = node.port || 5059;
     const versionEl = document.getElementById('node-settings-version');
     if (versionEl) {
-        const serverVer = currentState?.config_version || '?';
+        const serverVer = store.state?.config_version || '?';
         const agentVer = node.agent_version || '—';
         const needsUpdate = agentVer !== '—' && serverVer !== '?' && agentVer !== serverVer;
         versionEl.textContent = agentVer;
@@ -5803,7 +5270,7 @@ function hideNodeSettings() {
 
 function openServerNameEdit() {
     const input = document.getElementById('server-name-input');
-    input.value = currentState.server_name || '';
+    input.value = store.state.server_name || '';
     document.getElementById('server-name-modal').classList.remove('hidden');
     input.focus();
     input.select();
@@ -5825,7 +5292,7 @@ async function saveServerName() {
         });
         if (resp.ok) {
             hideServerNameModal();
-            currentState.server_name = name;
+            store.state.server_name = name;
             showToast(t('toast.server_renamed', 'Server renamed'), 'success');
         } else {
             const err = await resp.json().catch(() => ({}));
@@ -5942,109 +5409,6 @@ async function scanForAgents() {
     btn.textContent = '\uD83D\uDD0D';
 }
 
-socket.on('node:update', (data) => {
-    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
-    if (idx >= 0) {
-        nodesData[idx].status = data.status;
-        nodesData[idx].name = data.name || nodesData[idx].name;
-        if (data.ip) nodesData[idx].ip = data.ip;
-        if (data.control_mode) nodesData[idx].control_mode = data.control_mode;
-    }
-    buildServerTree();
-    renderNodesOverview();
-});
-
-socket.on('node:telemetry', (data) => {
-    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
-    if (idx >= 0) {
-        nodesData[idx].telemetry = data.telemetry;
-    } else {
-        // Node not yet in nodesData — fetch fresh list
-        loadNodes();
-        return;
-    }
-    buildServerTree();
-    renderNodesOverview();
-    if (selectedNodeId === data.node_id && currentView === 'node-detail') {
-        loadNodeDetail(data.node_id);
-    }
-});
-
-// ============================================================================
-// CONFIG SYNC & CONFLICT MANAGEMENT
-// ============================================================================
-
-let conflictData = null;
-
-socket.on('node:conflict', (data) => {
-    console.warn('[FanControl] Node conflict:', data);
-    conflictData = data;
-    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
-    if (idx >= 0) {
-        nodesData[idx].control_mode = 'manual';
-    }
-    buildServerTree();
-    showConflictModal(data);
-});
-
-socket.on('node:mode_changed', (data) => {
-    const idx = nodesData.findIndex(n => n.node_id === data.node_id);
-    if (idx >= 0) {
-        nodesData[idx].control_mode = data.mode;
-    }
-    buildServerTree();
-    renderNodesOverview();
-    if (data.mode === 'manual') {
-        showManualModeWarning(data.node_id);
-    }
-});
-
-function showToast(message, type = 'info', actions = []) {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-
-    let html = `<span>${escapeHtml(message)}</span>`;
-    actions.forEach(action => {
-        html += `<button class="toast-btn ${action.secondary ? 'toast-btn-secondary' : ''}" onclick="${action.onclick}">${escapeHtml(action.label)}</button>`;
-    });
-
-    toast.innerHTML = html;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 8000);
-}
-
-socket.on('node:discovered', (data) => {
-    if (data.already_connected) {
-        // Agent auto-registered via WebSocket — already connected, just notify
-        showToast(t('toast.agent_connected', 'Agent connected') + ': ' + data.name + ' (' + data.ip + ')', 'success');
-        loadNodes();
-    } else {
-        // SSDP-discovered agent — check if dismissed
-        const dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]');
-        if (dismissed.includes(data.node_id)) return;
-        const msg = t('toast.new_agent', 'New agent: ') + data.name + ' (' + data.ip + ')';
-        showToast(msg, 'warning', [
-            { label: t('toast.add', 'Add'), onclick: `acceptDiscoveredAgent('${data.node_id}')` },
-            { label: t('toast.dismiss', 'Don\'t remind'), onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
-        ]);
-    }
-});
-
-socket.on('server:name_changed', (data) => {
-    if (data.name) {
-        currentState.server_name = data.name;
-        buildServerTree();
-    }
-});
-
 async function acceptDiscoveredAgent(nodeId) {
     try {
         const resp = await fetch(`/api/discovered/${nodeId}/accept`, { method: 'POST' });
@@ -6091,16 +5455,16 @@ function showConflictModal(data) {
 
 function hideConflictModal() {
     document.getElementById('conflict-modal')?.classList.add('hidden');
-    conflictData = null;
+    conflict.data = null;
 }
 
 async function applyServerConfig() {
-    if (!conflictData) return;
+    if (!conflict.data) return;
     try {
-        await fetch(`/api/nodes/${conflictData.node_id}/config`, {
+        await fetch(`/api/nodes/${conflict.data.node_id}/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config: conflictData.server_config })
+            body: JSON.stringify({ config: conflict.data.server_config })
         });
         hideConflictModal();
     } catch (e) {
@@ -6109,12 +5473,12 @@ async function applyServerConfig() {
 }
 
 async function keepAgentConfig() {
-    if (!conflictData) return;
+    if (!conflict.data) return;
     try {
-        await fetch(`/api/nodes/${conflictData.node_id}/config`, {
+        await fetch(`/api/nodes/${conflict.data.node_id}/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config: conflictData.agent_config })
+            body: JSON.stringify({ config: conflict.data.agent_config })
         });
         hideConflictModal();
     } catch (e) {
@@ -6123,7 +5487,7 @@ async function keepAgentConfig() {
 }
 
 function showManualModeWarning(nodeId) {
-    const node = nodesData.find(n => n.node_id === nodeId);
+    const node = store.nodesData.find(n => n.node_id === nodeId);
     if (!node) return;
     const warning = document.getElementById('manual-mode-warning');
     if (!warning) return;
@@ -6170,13 +5534,11 @@ console.log('[FanControl] main.js loaded successfully');
 // DEBUG PANEL
 // ============================================================================
 
-let _debugOpen = false;
-
 function toggleDebugPanel() {
-    _debugOpen = !_debugOpen;
+    debug.open = !debug.open;
     const panel = document.getElementById('debug-panel');
     const btn = document.querySelector('[title="Debug"]');
-    if (_debugOpen) {
+    if (debug.open) {
         panel.classList.remove('hidden');
         btn.classList.add('hidden');
         renderDebugPanel();
@@ -6187,14 +5549,14 @@ function toggleDebugPanel() {
 }
 
 function renderDebugPanel() {
-    if (!_debugOpen) return;
+    if (!debug.open) return;
     const el = document.getElementById('debug-content');
     if (!el) return;
 
     const saved = getPickerCards();
-    const fans = currentState?.fans || {};
-    const temps = currentState?.temp_sensors || {};
-    const disks = currentState?.hdd_sensors || {};
+    const fans = store.state?.fans || {};
+    const temps = store.state?.temp_sensors || {};
+    const disks = store.state?.hdd_sensors || {};
 
     let html = '';
 
@@ -6249,13 +5611,77 @@ function renderDebugPanel() {
     }
 
     // Sparkline stats
-    const sparkKeys = Object.keys(_sparklineHistory);
+    const sparkKeys = Object.keys(sparklineHistory);
     html += `<div class="mb-3 mt-3"><span class="text-neon-cyan">Sparklines (${sparkKeys.length}):</span></div>`;
     for (const key of sparkKeys.slice(0, 10)) {
-        const data = _sparklineHistory[key];
+        const data = sparklineHistory[key];
         html += `<div class="ml-2 mb-1"><span class="text-gray-500">${key}:</span> <span class="text-gray-400">${data.length} pts, last=${data[data.length-1]}</span></div>`;
     }
 
     el.innerHTML = html;
-    requestAnimationFrame(() => { if (_debugOpen) renderDebugPanel(); });
+    requestAnimationFrame(() => { if (debug.open) renderDebugPanel(); });
 }
+
+
+// ============================================================================
+// WINDOW EXPORTS (for onclick handlers in HTML)
+// ============================================================================
+
+window.selectFan = selectFan;
+window.setFanMode = setFanMode;
+window.sendControl = sendControl;
+window.toggleSettings = toggleSettings;
+window.showView = showView;
+window.addNode = addNode;
+window.scanForAgents = scanForAgents;
+window.openUpdateModal = openUpdateModal;
+window.openUpdateAgentsModal = openUpdateAgentsModal;
+window.copyAgentToken = copyAgentToken;
+window.showCardPicker = showCardPicker;
+window.showGroupCreator = showGroupCreator;
+window.hideCardPicker = hideCardPicker;
+window.addSelectedCards = addSelectedCards;
+window.hideCardEdit = hideCardEdit;
+window.saveCardEdit = saveCardEdit;
+window.hideCardConfig = hideCardConfig;
+window.refreshSmartData = refreshSmartData;
+window.hideSmartModal = hideSmartModal;
+window.saveSmartSelection = saveSmartSelection;
+window.hideGroupCreator = hideGroupCreator;
+window.createGroup = createGroup;
+window.toggleDebugPanel = toggleDebugPanel;
+window.runDiscovery = runDiscovery;
+window.selectControlMode = selectControlMode;
+window.runCalibration = runCalibration;
+window.applyDsmAndContinue = applyDsmAndContinue;
+window.openServerNameEdit = openServerNameEdit;
+window.switchLanguage = switchLanguage;
+window.setTempUnit = setTempUnit;
+window.setRefreshInterval = setRefreshInterval;
+window.toggleCompactMode = toggleCompactMode;
+window.checkForUpdates = checkForUpdates;
+window.applyServerConfig = applyServerConfig;
+window.keepAgentConfig = keepAgentConfig;
+window.hideConflictModal = hideConflictModal;
+window.saveNodeSettings = saveNodeSettings;
+window.hideNodeSettings = hideNodeSettings;
+window.saveServerName = saveServerName;
+window.hideServerNameModal = hideServerNameModal;
+window.hideManualModeWarning = hideManualModeWarning;
+window.showServiceFanModal = showServiceFanModal;
+window.recordFanService = recordFanService;
+window.startCalibration = startCalibration;
+window.clearSchedule = clearSchedule;
+window.fillScheduleDefaults = fillScheduleDefaults;
+window.closeSensorPopupForContext = closeSensorPopupForContext;
+window.setScheduleMode = setScheduleMode;
+window.setScheduleSensorMode = setScheduleSensorMode;
+window.toggleScheduleSensorPopup = toggleScheduleSensorPopup;
+window.saveScheduleEdit = saveScheduleEdit;
+window.deleteScheduleEdit = deleteScheduleEdit;
+window.closeScheduleEditor = closeScheduleEditor;
+window.setLogLevel = setLogLevel;
+window.setLogRetention = setLogRetention;
+window.setAutoUpdateInterval = setAutoUpdateInterval;
+window.startUpdate = startUpdate;
+window.closeUpdateModal = closeUpdateModal;
