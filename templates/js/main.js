@@ -5701,3 +5701,7 @@ window.removeScheduleSensor = removeScheduleSensor;
 window.toggleRuleGroup = toggleRuleGroup;
 window.editRuleGroup = editRuleGroup;
 window.deleteRuleGroup = deleteRuleGroup;
+window.updateCalibrationParam = updateCalibrationParam;
+window.onSmartUnitChange = onSmartUnitChange;
+window.toggleAgentAutoUpdate = toggleAgentAutoUpdate;
+window.updatePickerElements = updatePickerElements;

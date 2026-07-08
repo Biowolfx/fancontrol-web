@@ -5,6 +5,7 @@ import { getTempUnitSymbol } from './utils.js';
 export function updateChart() {
     const now = Date.now();
     if (now - store.lastChartUpdate < CHART_UPDATE_INTERVAL) return;
+    if (typeof ApexCharts === 'undefined') return; // CDN not loaded yet
     
     const chartContainer = document.getElementById('temp-chart');
     if (!chartContainer || chartContainer.offsetParent === null) return;
