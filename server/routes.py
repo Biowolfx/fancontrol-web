@@ -720,12 +720,9 @@ def api_update_poll():
     version_mismatch = agent_version and agent_version != CONFIG_VERSION
     should_update = version_mismatch and (auto_update or pending)
 
-    if pending:
-        with state_lock:
-            state['nodes'].get(node_id, {})['pending_update'] = False
-        from server.node_registry import update_node_flags
-        update_node_flags(node_id, pending_update=False)
-        logger.info(f'[POLL] node={node_id} pending_update consumed')
+    # Don't consume pending_update here — clear it only when agent
+    # reconnects with matching version (handled in agent:connect).
+    # This allows retry on git fetch/reset failures.
 
     logger.info(f'[POLL] node={node_id} v={agent_version}→{CONFIG_VERSION} '
                 f'mismatch={version_mismatch} auto={auto_update} pending={pending} '

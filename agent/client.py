@@ -79,9 +79,11 @@ def _update_check_loop():
                 continue
 
             from core.state import CONFIG_VERSION
+            # Use state['node_id'] (may differ from module-level NODE_ID after server push)
+            current_node_id = state.get('node_id', NODE_ID)
             payload = _json.dumps({
                 'agent_version': CONFIG_VERSION,
-                'node_id': NODE_ID,
+                'node_id': current_node_id,
             }).encode()
 
             req = urllib.request.Request(
@@ -99,7 +101,7 @@ def _update_check_loop():
                 # Notify browser of update progress
                 if _sio:
                     _sio.emit('agent:update_result', {
-                        'node_id': NODE_ID,
+                        'node_id': current_node_id,
                         'status': 'pulling',
                         'version': server_ver,
                     })
@@ -110,7 +112,7 @@ def _update_check_loop():
                     logger.warning('[update-check] /repo has no .git — cannot auto-update')
                     if _sio:
                         _sio.emit('agent:update_result', {
-                            'node_id': NODE_ID,
+                            'node_id': current_node_id,
                             'status': 'error',
                             'message': 'No .git in /repo',
                         })
@@ -125,10 +127,11 @@ def _update_check_loop():
                     logger.error(f'[update-check] git fetch failed: {fetch.stderr[:200]}')
                     if _sio:
                         _sio.emit('agent:update_result', {
-                            'node_id': NODE_ID,
+                            'node_id': current_node_id,
                             'status': 'error',
                             'message': f'git fetch failed: {fetch.stderr[:200]}',
                         })
+                    # Don't consume pending_update on failure — retry next poll
                     continue
 
                 reset = subprocess.run(
@@ -140,19 +143,21 @@ def _update_check_loop():
                     logger.error(f'[update-check] git reset failed: {reset.stderr[:200]}')
                     if _sio:
                         _sio.emit('agent:update_result', {
-                            'node_id': NODE_ID,
+                            'node_id': current_node_id,
                             'status': 'error',
                             'message': f'git reset failed: {reset.stderr[:200]}',
                         })
+                    # Don't consume pending_update on failure — retry next poll
                     continue
 
                 logger.info(f'[update-check] Updated /repo to {server_ver}, restarting...')
                 if _sio:
                     _sio.emit('agent:update_result', {
-                        'node_id': NODE_ID,
+                        'node_id': current_node_id,
                         'status': 'synced',
                         'version': server_ver,
                     })
+                time.sleep(1)  # Ensure synced event is delivered before restart
                 threading.Timer(1.0, os._exit, args=[0]).start()
                 break
 
