@@ -409,5 +409,10 @@
   "toast.dismissed": "Больше не напоминать",
   "toast.new_agent": "Новый агент: ",
   "toast.node_refreshed": "Узел обновлён",
-  "toast.speed_failed": "Не удалось установить скорость"
+  "toast.speed_failed": "Не удалось установить скорость",
+
+  "update.wait_agents": "Ожидание агентов...",
+  "update.waiting_agents": "Ожидание обновления агентов...",
+  "update.agents_remaining": "Осталось ${count} агент(ов)...",
+  "update.agents_timeout": "Таймаут — продолжаем обновление сервера. Оставшиеся агенты обновятся позже."
 }

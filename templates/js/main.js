@@ -5018,10 +5018,17 @@ function openUpdateModal() {
             <span class="text-gray-300">${t('settings.step_agents', 'Updating agents...')}</span>
         </div>`
         : '';
-    const serverStepNum = onlineAgentCount > 0 ? '2' : '1';
-    const restartStepNum = onlineAgentCount > 0 ? '3' : '2';
+    const waitStep = onlineAgentCount > 0
+        ? `<div id="upd-step-wait" class="flex items-center gap-3 text-sm opacity-40">
+            <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-wait-icon">2</span>
+            <span class="text-gray-300">${t('update.wait_agents', 'Waiting for agents...')}</span>
+        </div>`
+        : '';
+    const serverStepNum = onlineAgentCount > 0 ? '3' : '1';
+    const restartStepNum = onlineAgentCount > 0 ? '4' : '2';
     steps.innerHTML = `
         ${agentStep}
+        ${waitStep}
         <div id="upd-step-pull" class="flex items-center gap-3 text-sm ${onlineAgentCount > 0 ? 'opacity-40' : ''}">
             <span class="w-5 h-5 rounded-full border-2 border-gray-600 flex-shrink-0 flex items-center justify-center text-[10px]" id="upd-step-pull-icon">${serverStepNum}</span>
             <span class="text-gray-300">${t('settings.step_pull', 'Pulling latest code...')}</span>
@@ -5114,8 +5121,10 @@ async function startUpdate() {
     const result = document.getElementById('update-modal-result');
     const closeBtn = document.getElementById('update-modal-close');
 
+    const serverVer = currentState?.config_version || '?';
     const onlineAgents = nodesData.filter(n => n.status === 'online');
-    const updateAgents = onlineAgents.length > 0;
+    const outdatedAgents = onlineAgents.filter(n => n.agent_version && n.agent_version !== serverVer);
+    const updateAgents = outdatedAgents.length > 0;
 
     applyBtn.classList.add('hidden');
     closeBtn.classList.add('hidden');
@@ -5127,10 +5136,53 @@ async function startUpdate() {
         setStepState('agents', 'active');
         bar.style.width = '5%';
         try {
-            const agentResp = await fetch('/api/update/agents', { method: 'POST' });
+            const agentResp = await fetch('/api/update/agents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node_ids: outdatedAgents.map(n => n.node_id) }),
+            });
             const agentData = await agentResp.json();
             setStepState('agents', 'done');
-            bar.style.width = '35%';
+            bar.style.width = '15%';
+
+            // Step 0.5: Wait for agents to finish updating
+            setStepState('wait', 'active');
+            result.classList.remove('hidden');
+            result.className = 'text-sm mb-4 p-3 rounded-lg bg-cyan-900/20 border border-cyan-800 text-neon-cyan';
+            result.innerHTML = `<div class="font-semibold mb-1">${t('update.waiting_agents', 'Waiting for agents to update...')}</div>
+                <div class="text-gray-400 text-xs">${outdatedAgents.map(n => escapeHtml(n.name)).join(', ')}</div>`;
+
+            const targetVersion = serverVer;
+            const maxWait = 120000; // 2 minutes max
+            const pollInterval = 3000; // check every 3s
+            const startTime = Date.now();
+            let allUpdated = false;
+
+            while (Date.now() - startTime < maxWait) {
+                await new Promise(r => setTimeout(r, pollInterval));
+                try {
+                    const nodesResp = await fetch('/api/nodes');
+                    const nodes = await nodesResp.json();
+                    const stillOutdated = nodes.filter(n =>
+                        n.status === 'online' && n.agent_version && n.agent_version !== targetVersion);
+                    if (stillOutdated.length === 0) {
+                        allUpdated = true;
+                        break;
+                    }
+                    // Update progress text
+                    const elapsed = Math.round((Date.now() - startTime) / 1000);
+                    result.innerHTML = `<div class="font-semibold mb-1">${t('update.waiting_agents', 'Waiting for agents to update...')}</div>
+                        <div class="text-gray-400 text-xs">${t('update.agents_remaining', '${count} agent(s) still updating...').replace('${count}', stillOutdated.length)} (${elapsed}s)</div>`;
+                } catch {}
+            }
+
+            setStepState('wait', allUpdated ? 'done' : 'error');
+            if (allUpdated) {
+                bar.style.width = '35%';
+            } else {
+                result.innerHTML += `<div class="text-yellow-400 text-xs mt-1">${t('update.agents_timeout', 'Timeout — proceeding with server update. Remaining agents will update later.')}</div>`;
+                bar.style.width = '35%';
+            }
         } catch (e) {
             console.error('Failed to notify agents:', e);
             setStepState('agents', 'error');

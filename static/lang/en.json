@@ -409,5 +409,10 @@
   "toast.dismissed": "Won't remind again",
   "toast.new_agent": "New agent: ",
   "toast.node_refreshed": "Node refreshed",
-  "toast.speed_failed": "Failed to set fan speed"
+  "toast.speed_failed": "Failed to set fan speed",
+
+  "update.wait_agents": "Waiting for agents...",
+  "update.waiting_agents": "Waiting for agents to update...",
+  "update.agents_remaining": "${count} agent(s) still updating...",
+  "update.agents_timeout": "Timeout — proceeding with server update. Remaining agents will update later."
 }
