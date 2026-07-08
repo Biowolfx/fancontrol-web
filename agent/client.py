@@ -96,10 +96,24 @@ def _update_check_loop():
                 server_ver = result.get('server_version', '?')
                 logger.info(f'[update-check] Server requests update: {CONFIG_VERSION} → {server_ver}')
 
+                # Notify browser of update progress
+                if _sio:
+                    _sio.emit('agent:update_result', {
+                        'node_id': NODE_ID,
+                        'status': 'pulling',
+                        'version': server_ver,
+                    })
+
                 repo_dir = '/repo'
                 git_dir = os.path.join(repo_dir, '.git')
                 if not os.path.isdir(git_dir):
                     logger.warning('[update-check] /repo has no .git — cannot auto-update')
+                    if _sio:
+                        _sio.emit('agent:update_result', {
+                            'node_id': NODE_ID,
+                            'status': 'error',
+                            'message': 'No .git in /repo',
+                        })
                     continue
 
                 fetch = subprocess.run(
@@ -109,6 +123,12 @@ def _update_check_loop():
                 )
                 if fetch.returncode != 0:
                     logger.error(f'[update-check] git fetch failed: {fetch.stderr[:200]}')
+                    if _sio:
+                        _sio.emit('agent:update_result', {
+                            'node_id': NODE_ID,
+                            'status': 'error',
+                            'message': f'git fetch failed: {fetch.stderr[:200]}',
+                        })
                     continue
 
                 reset = subprocess.run(
@@ -118,9 +138,21 @@ def _update_check_loop():
                 )
                 if reset.returncode != 0:
                     logger.error(f'[update-check] git reset failed: {reset.stderr[:200]}')
+                    if _sio:
+                        _sio.emit('agent:update_result', {
+                            'node_id': NODE_ID,
+                            'status': 'error',
+                            'message': f'git reset failed: {reset.stderr[:200]}',
+                        })
                     continue
 
                 logger.info(f'[update-check] Updated /repo to {server_ver}, restarting...')
+                if _sio:
+                    _sio.emit('agent:update_result', {
+                        'node_id': NODE_ID,
+                        'status': 'synced',
+                        'version': server_ver,
+                    })
                 threading.Timer(1.0, os._exit, args=[0]).start()
                 break
 
