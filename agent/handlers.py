@@ -106,13 +106,24 @@ def make_handlers(sio_ref):
         """Server requests agent to update itself — git pull + restart."""
         logger.info('=== AGENT UPDATE RECEIVED from server ===')
         import os
+        import time
 
         repo_dir = '/repo'
         if not os.path.isdir(os.path.join(repo_dir, '.git')):
             logger.error('[agent-update] /repo has no .git — cannot auto-update')
-            sio_ref.emit('agent:update_result', {
-                'status': 'error', 'message': 'No .git in /repo'})
+            try:
+                sio_ref.emit('agent:update_result', {
+                    'status': 'error', 'message': 'No .git in /repo'})
+            except Exception as e:
+                logger.error(f'[agent-update] emit failed: {e}')
             return
+
+        def _emit_safe(event, data):
+            try:
+                sio_ref.emit(event, data)
+                time.sleep(0.5)  # Ensure message is sent before next action
+            except Exception as e:
+                logger.error(f'[agent-update] emit {event} failed: {e}')
 
         def _do_update():
             from core.update_helper import do_git_pull, sync_repo_to_app, schedule_restart
@@ -120,19 +131,20 @@ def make_handlers(sio_ref):
                 success, version = do_git_pull(repo_dir)
                 if not success:
                     logger.error('[agent-update] git pull failed, aborting')
-                    sio_ref.emit('agent:update_result', {
+                    _emit_safe('agent:update_result', {
                         'status': 'error', 'message': 'git pull failed'})
                     return
                 logger.info(f'[agent-update] updated to: {version}')
-                sio_ref.emit('agent:update_result', {
+                _emit_safe('agent:update_result', {
                     'status': 'pulling', 'version': version})
                 sync_repo_to_app(repo_dir, '/app')
-                sio_ref.emit('agent:update_result', {
+                _emit_safe('agent:update_result', {
                     'status': 'synced', 'version': version})
+                time.sleep(1)  # Ensure synced event is delivered before restart
                 schedule_restart(delay=1.0)
             except Exception as e:
                 logger.error(f'[agent-update] error: {e}')
-                sio_ref.emit('agent:update_result', {
+                _emit_safe('agent:update_result', {
                     'status': 'error', 'message': str(e)})
 
         import threading

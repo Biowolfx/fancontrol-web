@@ -64,7 +64,7 @@ def _update_check_loop():
     import os
     import subprocess
 
-    POLL_INTERVAL = 60  # check every 60 seconds
+    POLL_INTERVAL = 15  # check every 15 seconds
 
     # Convert ws:// to http:// for HTTP requests
     http_url = SERVER_URL.replace('ws://', 'http://').replace('wss://', 'https://')
