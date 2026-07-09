@@ -2007,8 +2007,9 @@ function updateDiskCardDetails(card, detailsEl) {
         return;
     }
 
-    const diskData = store.state?.hdd_sensors?.[card.sourceId];
-    if (!diskData) return;
+    // diskData check removed — SMART attributes render from smart.cache independently
+    // of hdd_sensors state loading. This prevents race condition where live update
+    // skips rendering because hdd_sensors hasn't loaded yet.
 
     let html = '';
     const smartUnits = card.smartUnits || {};
