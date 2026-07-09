@@ -20,6 +20,8 @@ def _start_heartbeat_checker(socketio):
         while True:
             time.sleep(10)
             try:
+                from server.agent_handlers import cleanup_stale_sids
+                cleanup_stale_sids()
                 from server.node_registry import update_node_status, update_node
                 from core.state import state, state_lock, invalidate_state_cache
 

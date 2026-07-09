@@ -39,7 +39,8 @@ def _row_to_dict(row: sqlite3.Row) -> Dict:
             try:
                 d[field] = json.loads(d[field])
             except (json.JSONDecodeError, TypeError):
-                pass
+                logger.warning(f'Corrupted JSON in {field} for node {d.get("node_id", "?")}, using empty dict')
+                d[field] = {}
     return d
 
 
@@ -262,5 +263,9 @@ def get_agent_snapshot(node_id: str) -> Optional[Dict]:
             (node_id,)
         ).fetchone()
         if row and row['agent_config_snapshot']:
-            return json.loads(row['agent_config_snapshot'])
+            try:
+                return json.loads(row['agent_config_snapshot'])
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f'Corrupted agent snapshot for {node_id}')
+                return None
         return None

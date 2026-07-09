@@ -137,7 +137,8 @@ def api_set_logging():
         retention = data.get('retention_days')
         if retention is not None:
             retention = max(7, min(365, int(retention)))
-            state['log_retention_days'] = retention
+            with state_lock:
+                state['log_retention_days'] = retention
             result['retention_days'] = retention
 
         save_config()
@@ -155,16 +156,17 @@ def api_telegram_config():
     try:
         data = request.get_json(force=True)
 
-        if 'bot_token' in data:
-            state['telegram_bot_token'] = data['bot_token']
-        if 'chat_id' in data:
-            state['telegram_chat_id'] = data['chat_id']
-        if 'enabled' in data:
-            state['telegram_enabled'] = bool(data['enabled'])
-        if 'events' in data:
-            events = state.get('telegram_events', {})
-            events.update(data['events'])
-            state['telegram_events'] = events
+        with state_lock:
+            if 'bot_token' in data:
+                state['telegram_bot_token'] = data['bot_token']
+            if 'chat_id' in data:
+                state['telegram_chat_id'] = data['chat_id']
+            if 'enabled' in data:
+                state['telegram_enabled'] = bool(data['enabled'])
+            if 'events' in data:
+                events = state.get('telegram_events', {})
+                events.update(data['events'])
+                state['telegram_events'] = events
 
         # Apply config to telegram module
         from core.telegram import configure
@@ -546,7 +548,7 @@ def api_history():
         
         for row in rows:
             timestamps.append(row[0])
-            temps.append(row[4] if row[4] > 0 else None)
+            temps.append(row[4] if row[4] is not None and row[4] > 0 else None)
             pwm_speeds.append(row[2])
         
         return jsonify({
@@ -844,6 +846,11 @@ def handle_control():
             expired = [k for k, t in _control_rate_limit.items() if now - t > 60]
             for k in expired:
                 del _control_rate_limit[k]
+            # Safety limit: if dict grows beyond 1000 entries, clear all but recent 100
+            if len(_control_rate_limit) > 1000:
+                sorted_items = sorted(_control_rate_limit.items(), key=lambda x: x[1], reverse=True)
+                _control_rate_limit.clear()
+                _control_rate_limit.update(sorted_items[:100])
             _rate_limit_last_cleanup = now
         
         if data['action'] == 'set_fan_pwm':

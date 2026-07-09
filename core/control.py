@@ -37,6 +37,18 @@ _db_local = threading.local()
 def get_db_connection() -> sqlite3.Connection:
     """Thread-local persistent SQLite connection with WAL mode."""
     conn = getattr(_db_local, 'conn', None)
+    if conn is not None:
+        # Check if connection is still valid (detect stale connections from recycled threads)
+        try:
+            conn.execute('SELECT 1')
+            return conn
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _db_local.conn = None
+            conn = None
     if conn is None:
         conn = sqlite3.connect(DB_FILE, timeout=5)
         conn.execute('PRAGMA journal_mode=WAL')
@@ -77,7 +89,7 @@ def refresh_disks():
     for disk_id, future in futures_map.items():
         try:
             result = future.result(timeout=3)
-            temp, standby = result if result else (None, False)
+            temp, standby = result if isinstance(result, tuple) and len(result) == 2 else (None, False)
             
             if temp is not None:
                 health = calculate_disk_health(temp)

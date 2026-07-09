@@ -22,6 +22,20 @@ logger = logging.getLogger('fancontrol')
 _sid_to_node: dict = {}
 _node_to_sid: dict = {}
 
+
+def cleanup_stale_sids():
+    """Remove SID mappings where the node no longer exists in state."""
+    from core.state import state, state_lock
+    with state_lock:
+        nodes = set(state.get('nodes', {}).keys())
+    stale_sids = [sid for sid, nid in _sid_to_node.items() if nid not in nodes]
+    for sid in stale_sids:
+        nid = _sid_to_node.pop(sid, None)
+        if nid:
+            _node_to_sid.pop(nid, None)
+    if stale_sids:
+        logger.info(f'[SID] Cleaned up {len(stale_sids)} stale mappings')
+
 # Grace period: skip conflict detection for 30s after server startup
 # to avoid false conflicts when agents reconnect during restart
 import time as _time
@@ -233,8 +247,15 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
 
     @socketio.on('agent:telemetry')
     def handle_agent_telemetry(data):
+        if not isinstance(data, dict):
+            return
         agent_node_id = data.get('node_id')
         telemetry = data.get('telemetry', {})
+        
+        # Payload size limit (1MB)
+        if len(str(data)) > 1_000_000:
+            logger.warning(f'agent:telemetry DROPPED: payload too large ({len(str(data))} bytes)')
+            return
 
         # Resolve agent's node_id to registry node_id via SID mapping
         from flask import request as flask_request

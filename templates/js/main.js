@@ -1689,15 +1689,20 @@ async function refreshSmartData() {
     if (!smart.modalDiskId) return;
     const container = document.getElementById('smart-attributes-container');
     if (!container) return;
+    
+    // Use generation counter to detect stale fetches
+    const gen = ++smart.fetchGeneration || 0;
 
     container.innerHTML = `<div class="text-center text-gray-400 py-4">${t('smart.loading', 'Loading...')}</div>`;
 
     const data = await fetchDiskSmart(smart.modalDiskId, true, smart.modalSource);
     if (!data || data.error) {
+        if (gen !== smart.fetchGeneration) return; // stale
         container.innerHTML = `<div class="text-center text-red-400 py-4">${data?.error || t('smart.load_error', 'SMART data load error')}</div>`;
         return;
     }
 
+    if (gen !== smart.fetchGeneration) return; // stale — modal was reopened
     smart.cache[`${smart.modalSource}:${smart.modalDiskId}`] = data;
 
     const infoEl = document.getElementById('smart-device-info');
@@ -3290,7 +3295,7 @@ function applyDsmAndContinue() {
         body: JSON.stringify({ speed: 50 })
     }).catch(err => console.error('DSM fan speed error:', err));
     store.wizardStep = 'done';
-    store.state = { ...store.state, initialized: true, tested: true };
+    store.state.initialized = true; store.state.tested = true;
     showMainScreen();
     setTimeout(() => showView('dsm-scheme'), 500);
 }
@@ -3300,7 +3305,7 @@ function skipCalibration() {
     fetch('/api/skip-calibration', { method: 'POST' })
         .catch(err => console.error('Skip calibration error:', err));
     store.wizardStep = 'done';
-    store.state = { ...store.state, initialized: true, tested: true };
+    store.state.initialized = true; store.state.tested = true;
     showMainScreen();
 }
 
@@ -3318,7 +3323,7 @@ function applyDsmFanSpeed() {
         if (data.status === 'ok') {
             fetch('/api/skip-calibration', { method: 'POST' }).catch(err => console.error('Skip calibration error:', err));
             store.wizardStep = 'done';
-            store.state = { ...store.state, initialized: true, tested: true };
+            store.state.initialized = true; store.state.tested = true;
             showMainScreen();
         } else {
             alert('Error: ' + (data.message || t('toast.speed_failed', 'Failed to set fan speed')));
@@ -5757,7 +5762,7 @@ function renderDebugPanel() {
     }
 
     el.innerHTML = html;
-    requestAnimationFrame(() => { if (debug.open) renderDebugPanel(); });
+    setTimeout(() => { if (debug.open) renderDebugPanel(); }, 500);
 }
 
 

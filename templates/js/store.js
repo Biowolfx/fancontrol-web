@@ -159,6 +159,7 @@ export const smart = {
     attributes: [],
     attrType: 'sata',
     cache: {},
+    fetchGeneration: 0,
 };
 
 // ============================================================================
