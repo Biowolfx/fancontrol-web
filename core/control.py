@@ -492,32 +492,53 @@ def check_fan_health(socketio=None):
             changes.append((fan_id, fan.get('label', fan_id), old_status, new_status))
 
     # Emit alerts outside of the lock
-    if socketio and changes:
+    if changes:
+        # Telegram notifications
+        tg_enabled = state.get('telegram_enabled', False)
+        tg_events = state.get('telegram_events', {})
+        tg_fan = tg_enabled and tg_events.get('fan_health', True)
+
         for fan_id, label, old_s, new_s in changes:
             if new_s == 'stopped':
-                socketio.emit('fan:health', {
-                    'fan_id': fan_id, 'node_id': 'local',
-                    'status': 'stopped', 'label': label,
-                    'message': f'Вентилятор {label} остановлен!',
-                })
+                if socketio:
+                    socketio.emit('fan:health', {
+                        'fan_id': fan_id, 'node_id': 'local',
+                        'status': 'stopped', 'label': label,
+                        'message': f'Вентилятор {label} остановлен!',
+                    })
+                if tg_fan:
+                    from core.telegram import send_message
+                    send_message(f'⛔ <b>Вентилятор остановлен!</b>\n{label} ({fan_id})')
                 logger.warning(f'Fan STOPPED: {label} ({fan_id})')
             elif new_s == 'slowing':
-                socketio.emit('fan:health', {
-                    'fan_id': fan_id, 'node_id': 'local',
-                    'status': 'slowing', 'label': label,
-                    'message': f'Вентилятор {label} замедляется (износ подшипника)',
-                })
+                if socketio:
+                    socketio.emit('fan:health', {
+                        'fan_id': fan_id, 'node_id': 'local',
+                        'status': 'slowing', 'label': label,
+                        'message': f'Вентилятор {label} замедляется (износ подшипника)',
+                    })
+                if tg_fan:
+                    from core.telegram import send_message
+                    send_message(f'⚠️ <b>Вентилятор замедляется</b>\n{label} — износ подшипника')
                 logger.warning(f'Fan SLOWING: {label} ({fan_id})')
             elif new_s == 'needs_calibration':
-                socketio.emit('fan:health', {
-                    'fan_id': fan_id, 'node_id': 'local',
-                    'status': 'needs_calibration', 'label': label,
-                    'message': f'Вентилятор {label} требует калибровки',
-                })
+                if socketio:
+                    socketio.emit('fan:health', {
+                        'fan_id': fan_id, 'node_id': 'local',
+                        'status': 'needs_calibration', 'label': label,
+                        'message': f'Вентилятор {label} требует калибровки',
+                    })
+                if tg_fan:
+                    from core.telegram import send_message
+                    send_message(f'🔧 <b>Требуется калибровка</b>\n{label}')
             elif new_s == 'healthy' and old_s in ('stopped', 'slowing', 'needs_calibration'):
-                socketio.emit('fan:health:cleared', {
-                    'fan_id': fan_id, 'node_id': 'local',
-                })
+                if socketio:
+                    socketio.emit('fan:health:cleared', {
+                        'fan_id': fan_id, 'node_id': 'local',
+                    })
+                if tg_fan:
+                    from core.telegram import send_message
+                    send_message(f'✅ <b>Вентилятор восстановлен</b>\n{label}')
                 logger.info(f'Fan recovered: {label} ({fan_id}) → healthy')
 
 

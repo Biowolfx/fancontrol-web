@@ -4275,6 +4275,7 @@ function toggleSettings() {
         updateLangButtons();
         updateSettingsUI();
         fetchLogSettings();
+        fetchTelegramStatus();
         autoCheckUpdate();
     }
 }
@@ -4419,6 +4420,95 @@ function scheduleAutoUpdate() {
         timers.autoUpdate = setInterval(() => { update.checked = false; autoCheckUpdate(); }, ms);
     }
 }
+
+// ─── Telegram Notifications ──────────────────────────────────────────
+
+let tgConfig = { configured: false, enabled: false, events: {} };
+
+async function fetchTelegramStatus() {
+    try {
+        const resp = await fetch('/api/telegram/status');
+        tgConfig = await resp.json();
+        // Update UI
+        const toggle = document.getElementById('tg-enabled');
+        const tokenInput = document.getElementById('tg-bot-token');
+        const chatInput = document.getElementById('tg-chat-id');
+        if (toggle) toggle.checked = tgConfig.enabled;
+        if (tokenInput) tokenInput.value = tgConfig.has_token ? '••••••••' : '';
+        if (chatInput) chatInput.value = tgConfig.has_chat_id ? (store.state?.telegram_chat_id || '') : '';
+        // Update event checkboxes
+        const events = tgConfig.events || {};
+        const fanCb = document.getElementById('tg-evt-fan');
+        const agentCb = document.getElementById('tg-evt-agent');
+        const updateCb = document.getElementById('tg-evt-update');
+        if (fanCb) fanCb.checked = events.fan_health !== false;
+        if (agentCb) agentCb.checked = events.agent_status !== false;
+        if (updateCb) updateCb.checked = events.updates !== false;
+    } catch (err) { console.error('Failed to fetch Telegram status:', err); }
+}
+
+function saveTelegramConfig() {
+    const enabled = document.getElementById('tg-enabled')?.checked || false;
+    const tokenInput = document.getElementById('tg-bot-token')?.value || '';
+    const chatId = document.getElementById('tg-chat-id')?.value || '';
+    const events = {
+        fan_health: document.getElementById('tg-evt-fan')?.checked !== false,
+        agent_status: document.getElementById('tg-evt-agent')?.checked !== false,
+        updates: document.getElementById('tg-evt-update')?.checked !== false,
+    };
+
+    const body = { enabled, events };
+    // Only send token/chat_id if they're not placeholder
+    if (tokenInput && tokenInput !== '••••••••') body.bot_token = tokenInput;
+    if (chatId) body.chat_id = chatId;
+
+    fetch('/api/telegram/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    }).then(r => r.json()).then(data => {
+        if (data.status === 'ok') {
+            showToast('Telegram config saved', 'success');
+            fetchTelegramStatus();
+        } else {
+            showToast(data.message || 'Save failed', 'error');
+        }
+    }).catch(err => showToast('Save failed: ' + err.message, 'error'));
+}
+
+async function testTelegram() {
+    const btn = document.getElementById('tg-test-btn');
+    const result = document.getElementById('tg-test-result');
+    btn.disabled = true;
+    btn.textContent = '⏳ Sending...';
+    result.classList.add('hidden');
+
+    try {
+        const resp = await fetch('/api/telegram/test', { method: 'POST' });
+        const data = await resp.json();
+        result.classList.remove('hidden');
+        if (data.status === 'ok') {
+            result.className = 'text-xs text-center text-neon-green';
+            result.textContent = '✓ Message sent!';
+        } else {
+            result.className = 'text-xs text-center text-neon-red';
+            result.textContent = '✗ ' + (data.message || 'Failed');
+        }
+    } catch (err) {
+        result.classList.remove('hidden');
+        result.className = 'text-xs text-center text-neon-red';
+        result.textContent = '✗ ' + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📱 <span data-i18n="settings.telegram_test">Отправить тест</span>';
+        setTimeout(() => { result.classList.add('hidden'); }, 5000);
+    }
+}
+
+window.saveTelegramConfig = saveTelegramConfig;
+window.testTelegram = testTelegram;
+
+// ─── End Telegram ────────────────────────────────────────────────────
 
 async function checkForUpdates() {
     const btn = document.getElementById('update-check-btn');

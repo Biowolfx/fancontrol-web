@@ -1,7 +1,6 @@
 {
   "app.title": "FanControl",
   "app.subtitle": "Neon Cyberpunk Edition",
-
   "setup.heading": "Initial System Setup",
   "setup.description": "No configuration found. System needs to scan available data buses to automatically detect fans and temperature sensors.",
   "setup.scan_btn": "Start Hardware Scan",
@@ -21,11 +20,9 @@
   "setup.no_disks": "No disks detected",
   "setup.no_hardware": "No hardware detected",
   "setup.calibrate_btn_short": "Recalibrate",
-
   "header.synced": "Synced",
   "header.storage": "Storage",
   "header.settings": "Settings",
-
   "inspector.select": "Select a device",
   "inspector.hint": "Click on a fan to inspect",
   "inspector.fallback_id": "ID: unknown",
@@ -34,10 +31,8 @@
   "inspector.mode": "Mode",
   "inspector.hint_detail": "to view controls and analytics",
   "inspector.fan_name": "Fan Name",
-
   "mode.manual": "Manual",
   "mode.auto": "Auto",
-
   "status.nominal": "nominal",
   "status.warning": "warning",
   "status.critical": "critical",
@@ -56,7 +51,6 @@
   "status.stopped": "STOPPED",
   "status.slowing": "SLOWING",
   "status.needs_calibration": "CALIBRATION NEEDED",
-
   "schedule.weekly": "Weekly Schedule",
   "schedule.incomplete": "Schedule incomplete",
   "schedule.no_sensor_title": "No sensors assigned",
@@ -71,13 +65,12 @@
   "schedule.every_day": "Every day",
   "schedule.weekdays": "Weekdays",
   "schedule.weekends": "Weekends",
-  "schedule.days": "days",
+  "schedule.days": "${count} days",
   "schedule.periods": "periods",
   "schedule.period": "period",
   "schedule.hours_short": "h",
   "schedule.missing": "Missing",
   "schedule.empty_hours": "Empty hours = fan off.",
-
   "editor.title": "Edit Schedule",
   "editor.period": "Period",
   "editor.mode": "Mode",
@@ -93,23 +86,19 @@
   "editor.min": "Min",
   "editor.average": "Average",
   "editor.no_sensors": "No sensors assigned",
-
   "sensor.title": "Select Sensors",
   "sensor.done": "Done",
   "sensor.sleep": "Sleep",
-
   "calibration.title": "Calibrating Fans",
   "calibration.status": "Starting...",
   "calibration.step": "Step",
-  "calibration.step_label": "Step 0/11",
+  "calibration.step_label": "Step ${current}/${total}",
   "calibration.ready": "Ready!",
   "calibration.errors": "Completed with errors",
   "calibration.confirm": "Recalibrate all fans? This takes 1-2 minutes.",
-
   "chart.temp_history": "Temperature History (24h)",
   "chart.max_hdd_temp": "Max HDD Temp",
   "chart.avg_pwm": "Avg PWM",
-
   "fan.inv": "INV",
   "fan.inverted": "INVERTED",
   "fan.failsafe": "FAILSAFE",
@@ -123,10 +112,8 @@
   "fan.health.stopped": "Fan stopped — check power and connections",
   "fan.health.slowing": "Fan slowing — possible bearing wear. Replace soon to prevent overheating.",
   "fan.health.needs_calibration": "Fan was replaced/serviced — calibrate to ensure accurate speed control.",
-
   "discover.scan_error": "Scan error: ",
   "discover.connection_error": "Connection error during scan",
-
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.language_hint": "Select your preferred language",
@@ -171,7 +158,6 @@
   "settings.logging_hint": "Control log verbosity. WARNING reduces log file size significantly.",
   "settings.log_retention": "Log Retention",
   "settings.log_retention_hint": "How long to keep log files before automatic cleanup.",
-
   "common.edit": "Edit",
   "common.del": "Del",
   "common.save": "Save",
@@ -179,7 +165,6 @@
   "common.cancel": "Cancel",
   "common.delete": "Delete",
   "common.done": "Done",
-
   "tooltip.auto_mode": "Auto mode: fan speed adjusts automatically based on temperature sensors and schedule",
   "tooltip.manual_mode": "Manual mode: set fan speed manually with the slider",
   "tooltip.fan_speed": "Set fan speed from 0% (off) to 100% (maximum)",
@@ -189,7 +174,6 @@
   "tooltip.sensor_mode_avg": "Use the average temperature from all assigned sensors",
   "tooltip.schedule_grid": "Click or drag to select cells, then configure fan behavior for each time period",
   "tooltip.inverted": "This fan has inverted PWM control - higher PWM values produce lower RPM",
-
   "days.mon": "Mon",
   "days.tue": "Tue",
   "days.wed": "Wed",
@@ -197,10 +181,8 @@
   "days.fri": "Fri",
   "days.sat": "Sat",
   "days.sun": "Sun",
-
   "sensors.disks": "Disks",
   "sensors.sensors_group": "Sensors",
-
   "nav.dashboard": "Dashboard",
   "nav.nodes": "Nodes",
   "nodes.title": "Nodes",
@@ -211,7 +193,7 @@
   "nodes.back": "Back",
   "nodes.max_temp": "Max Temp",
   "nodes.total_rpm": "Total RPM",
-  "nodes.fans": "Fans",
+  "nodes.fans": "fans",
   "nodes.confirm_delete": "Delete this node?",
   "nodes.update_agents": "Update Agents",
   "nodes.update_n_agents": "Update {count} agent(s) to version {version}?",
@@ -223,7 +205,6 @@
   "nodes.click_to_update": "click to update",
   "node.temperatures": "Temperatures",
   "node.manual_mode": "Manual Mode",
-
   "conflict.title": "Config Conflict",
   "conflict.desc": "Agent config differs from server config.",
   "conflict.no_config": "No config",
@@ -234,26 +215,20 @@
   "conflict.manual_mode": "Manual Mode",
   "conflict.manual_warning": "Agent is controlling fans locally.",
   "conflict.switch_to_server": "Switch to Server Control",
-
   "calibration.pwm_range": "PWM Range",
-  "calibration.pwm_range_hint": "Dead zone boundaries. Min = lowest PWM where fan spins. Max = PWM where fan reaches full speed. 0-100% slider maps only to this range.",
+  "calibration.pwm_range_hint": "Overrides auto-calculated value. Recalibrate to restore automatic detection.",
   "calibration.min_pwm": "Min",
   "calibration.max_pwm": "Max",
   "calibration.curve_shape": "Curve Shape",
   "calibration.lambda_hint": "Controls fan response curve. 1.0 = linear. Lower = fan ramps up faster at low %. Higher = fan stays quiet longer, ramps up near 100%.",
-
-  "nav.dashboard": "Dashboard",
-  "nav.nodes": "Nodes",
   "nav.settings": "Settings",
   "dashboard.empty": "Dashboard is empty",
   "dashboard.empty_hint": "Click + to add monitoring cards",
   "dashboard.add_card": "Add Card",
   "dashboard.add_group": "Add Group",
   "nodes.local_server": "My Server",
-  "nodes.fans": "fans",
   "nodes.sensors": "sensors",
   "nodes.disks": "disks",
-
   "picker.type": "Type",
   "picker.fan": "🌀 Fan",
   "picker.temperature": "🌡 Temperature",
@@ -272,7 +247,6 @@
   "picker.title_placeholder": "Card title",
   "picker.card_display": "Card Display",
   "picker.close": "Close",
-
   "control.choose_mode": "Choose how to control fans:",
   "control.direct": "Direct Control",
   "control.direct_desc": "Direct fan speed control via Linux sysfs. Requires calibration to determine RPM curves.",
@@ -281,23 +255,10 @@
   "control.dsm_scheme_warning_title": "DSM Scheme Control",
   "control.dsm_scheme_warning_desc": "Direct speed control is not available in this mode. You configure temperature thresholds and corresponding fan speeds by editing the DSM scheme table.",
   "control.open_dsm_editor": "Open DSM Scheme Editor",
-
   "inspector.back": "← Back to Dashboard",
-  "calibration.pwm_range": "PWM Range",
-  "calibration.pwm_range_hint": "Overrides auto-calculated value. Recalibrate to restore automatic detection.",
-  "calibration.curve_shape": "Curve Shape",
-  "calibration.step_label": "Step ${current}/${total}",
   "calibration.starting": "Starting...",
   "calibration.determining": "Calibrating: determining PWM/RPM curves...",
-
-  "sensor.done": "Done",
-  "editor.max": "Max",
-  "editor.min": "Min",
-  "editor.average": "Average",
-
   "schedule.no_sensor_warning": "No sensors assigned",
-  "schedule.no_sensor_hint": "Assign sensors in the first schedule cell, or globally below.",
-
   "node.settings": "Node Settings",
   "node.name": "Name",
   "node.ip": "IP Address",
@@ -306,20 +267,16 @@
   "node.cancel": "Cancel",
   "node.server_name": "Server Name",
   "node.standalone_banner": "Server unavailable — running in standalone mode",
-
   "token.title": "API Token (paste on server)",
   "token.agent": "Agent Token",
   "token.agent_hint": "— paste this in server node settings",
   "token.copy": "Copy",
   "token.sidebar_hint": "Also visible in left sidebar",
-
   "update.off": "Off",
   "update.auto_agents": "${count} agent(s) will update automatically.",
-
   "smart.title": "SMART Data",
   "group.name_placeholder": "Group name (e.g., CPU Cooling)",
   "group.create": "Create",
-
   "dsm.loading": "Loading DSM schemes...",
   "dsm.node_not_found": "Node not found",
   "dsm.load_failed": "Failed to load schemes",
@@ -344,7 +301,6 @@
   "dsm.prompt_action": "Action (NONE or SHUTDOWN):",
   "dsm.prompt_threshold": "Threshold temperature °C:",
   "dsm.entry_failed": "Failed to update entry",
-
   "hw.custom_arc": "Custom ARC",
   "hw.official_synology": "Official Synology",
   "hw.unknown": "Unknown",
@@ -362,14 +318,12 @@
   "hw.no_hwmon_hint": "hwmon PWM not available on this kernel — only DSM scheme control available.",
   "hw.no_dsm_hint": "DSM schemes not found — only hwmon control available.",
   "hw.no_control": "No fan control method available.",
-
   "discovery.scanning": "Scanning network...",
   "discovery.refresh": "Refresh",
   "discovery.add": "+ Add",
   "discovery.no_agents": "No agents found. Use IP field below to add manually.",
   "discovery.scan_failed": "Scan failed",
   "discovery.token_copied": "Token copied!",
-
   "toast.token_copied": "Token copied!",
   "toast.name_required": "Name required",
   "toast.server_renamed": "Server renamed",
@@ -378,20 +332,15 @@
   "toast.add_node_failed": "Failed to add node",
   "toast.delete_failed": "Delete failed",
   "toast.agent_connected": "Agent connected: ${name} (${ip})",
-
   "node.detail.no_fans": "No fan data",
   "node.detail.no_temps": "No temperature data",
   "node.detail.manual": "Manual",
-
   "schedule.edit": "Edit",
   "schedule.delete": "Del",
-  "schedule.days": "${count} days",
   "schedule.next_day": "00:00 next day",
-
   "fan.status_label": "Fan status:",
   "fan.controllable": "Controllable",
   "fan.readonly_label": "Read-only",
-
   "calibration.started": "Calibration started...",
   "common.error": "Error",
   "common.later": "Later",
@@ -411,7 +360,6 @@
   "toast.node_refreshed": "Node refreshed",
   "toast.speed_failed": "Failed to set fan speed",
   "toast.control_error": "Control command failed",
-
   "update.wait_agents": "Waiting for agents...",
   "update.waiting_agents": "Waiting for agents to update...",
   "update.agents_remaining": "${count} agent(s) still updating...",
@@ -429,7 +377,6 @@
   "update.logs_failed": "Failed to request logs",
   "update.agents_errors": "Some agents had errors. Skip them or retry, then continue.",
   "update.continue_server": "Continue server update",
-
   "smart.loading": "Loading...",
   "smart.load_error": "SMART data load error",
   "smart.no_attributes": "No SMART attributes",
@@ -442,5 +389,11 @@
   "smart.unit.gb": "GB",
   "smart.unit.tb": "TB",
   "smart.unit.days_short": " d",
-  "smart.unit.months_short": " mo"
+  "smart.unit.months_short": " mo",
+  "settings.telegram": "Telegram Notifications",
+  "settings.telegram_hint": "Receive event notifications in Telegram",
+  "settings.telegram_enable": "Enable notifications",
+  "settings.telegram_token_hint": "From @BotFather in Telegram",
+  "settings.telegram_chat_hint": "Find: @userinfobot or @getmyid_bot",
+  "settings.telegram_test": "Send test"
 }

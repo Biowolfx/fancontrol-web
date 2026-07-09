@@ -49,6 +49,12 @@ def _start_heartbeat_checker(socketio):
                                         'status': 'offline',
                                         'name': node['name'],
                                     })
+                                    # Telegram notification
+                                    tg_enabled = state.get('telegram_enabled', False)
+                                    tg_events = state.get('telegram_events', {})
+                                    if tg_enabled and tg_events.get('agent_status', True):
+                                        from core.telegram import send_message
+                                        send_message(f'🔴 <b>Агент отключён</b>\n{node["name"]} ({nid})')
                                     logger.info(f'Agent {node["name"]} marked offline (no telemetry)')
                             elif node.get('ip') and age > 60:
                                 # Probe-only: re-probe every 60s, mark offline if unreachable
@@ -65,6 +71,12 @@ def _start_heartbeat_checker(socketio):
                                         'status': 'offline',
                                         'name': node['name'],
                                     })
+                                    # Telegram notification
+                                    tg_enabled = state.get('telegram_enabled', False)
+                                    tg_events = state.get('telegram_events', {})
+                                    if tg_enabled and tg_events.get('agent_status', True):
+                                        from core.telegram import send_message
+                                        send_message(f'🔴 <b>Агент отключён</b>\n{node["name"]} ({node["ip"]})')
                                     logger.info(f'Agent {node["name"]} ({node["ip"]}) marked offline (probe failed)')
                                 else:
                                     # Still reachable — refresh last_seen

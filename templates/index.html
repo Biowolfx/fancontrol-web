@@ -951,6 +951,67 @@
                 </div>
             </div>
 
+            <!-- Telegram Notifications -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.telegram">Telegram Уведомления</label>
+                <p class="text-xs text-gray-500 mb-3" data-i18n="settings.telegram_hint">Получайте уведомления о событиях в Telegram</p>
+
+                <div class="space-y-3">
+                    <!-- Enable/Disable -->
+                    <div class="flex items-center gap-3">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="tg-enabled" onchange="saveTelegramConfig()" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-neon-cyan"></div>
+                        </label>
+                        <span class="text-sm text-gray-300" data-i18n="settings.telegram_enable">Включить уведомления</span>
+                    </div>
+
+                    <!-- Bot Token -->
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Bot Token</label>
+                        <input id="tg-bot-token" type="password" placeholder="123456:ABC-DEF..."
+                               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-neon-cyan focus:outline-none"
+                               onchange="saveTelegramConfig()">
+                        <p class="text-[10px] text-gray-600 mt-1" data-i18n="settings.telegram_token_hint">От @BotFather в Telegram</p>
+                    </div>
+
+                    <!-- Chat ID -->
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Chat ID</label>
+                        <input id="tg-chat-id" type="text" placeholder="123456789"
+                               class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-neon-cyan focus:outline-none"
+                               onchange="saveTelegramConfig()">
+                        <p class="text-[10px] text-gray-600 mt-1" data-i18n="settings.telegram_chat_hint">Узнать: @userinfobot или @getmyid_bot</p>
+                    </div>
+
+                    <!-- Events -->
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-2">События</label>
+                        <div class="space-y-1.5">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="tg-evt-fan" onchange="saveTelegramConfig()" checked class="rounded bg-gray-900 border-gray-600 text-neon-cyan focus:ring-neon-cyan">
+                                <span class="text-xs text-gray-300">⛔ Вентиляторы (остановка/замедление)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="tg-evt-agent" onchange="saveTelegramConfig()" checked class="rounded bg-gray-900 border-gray-600 text-neon-cyan focus:ring-neon-cyan">
+                                <span class="text-xs text-gray-300">🔗 Агенты (подключение/отключение)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="tg-evt-update" onchange="saveTelegramConfig()" checked class="rounded bg-gray-900 border-gray-600 text-neon-cyan focus:ring-neon-cyan">
+                                <span class="text-xs text-gray-300">🔄 Обновления</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Test button -->
+                    <button onclick="testTelegram()" id="tg-test-btn"
+                            class="w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan hover:border-neon-cyan">
+                        📱 <span data-i18n="settings.telegram_test">Отправить тест</span>
+                    </button>
+                    <div id="tg-test-result" class="hidden text-xs text-center"></div>
+                </div>
+            </div>
+
             <!-- System Update -->
             <div class="mb-6">
                 <label class="text-sm font-semibold text-gray-300 block mb-1" data-i18n="settings.update">System Update</label>

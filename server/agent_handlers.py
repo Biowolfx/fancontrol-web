@@ -150,6 +150,13 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         if on_connect:
             on_connect(node_id)
 
+        # Telegram notification for agent connect
+        tg_enabled = state.get('telegram_enabled', False)
+        tg_events = state.get('telegram_events', {})
+        if tg_enabled and tg_events.get('agent_status', True):
+            from core.telegram import send_message
+            send_message(f'🟢 <b>Агент подключён</b>\n{node_name} ({agent_ip})')
+
         # Push node_id to agent so it uses the registry ID for telemetry
         _emit_to_node(socketio, 'server:node_id_push', {
             'node_id': node_id,

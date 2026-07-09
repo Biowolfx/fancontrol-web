@@ -147,6 +147,62 @@ def api_set_logging():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+# ─── Telegram notifications ───────────────────────────────────────────
+
+@routes.route('/api/telegram/config', methods=['POST'])
+def api_telegram_config():
+    """Save Telegram bot configuration and enable/disable notifications."""
+    try:
+        data = request.get_json(force=True)
+
+        if 'bot_token' in data:
+            state['telegram_bot_token'] = data['bot_token']
+        if 'chat_id' in data:
+            state['telegram_chat_id'] = data['chat_id']
+        if 'enabled' in data:
+            state['telegram_enabled'] = bool(data['enabled'])
+        if 'events' in data:
+            events = state.get('telegram_events', {})
+            events.update(data['events'])
+            state['telegram_events'] = events
+
+        # Apply config to telegram module
+        from core.telegram import configure
+        configure(state.get('telegram_bot_token', ''), state.get('telegram_chat_id', ''))
+
+        save_config()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        logger.error(f'Telegram config error: {e}', exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@routes.route('/api/telegram/test', methods=['POST'])
+def api_telegram_test():
+    """Send a test message to Telegram."""
+    from core.telegram import send_message, is_configured
+    if not is_configured():
+        return jsonify({'status': 'error', 'message': 'Telegram not configured'}), 400
+    ok = send_message('🧪 <b>FanControl</b>\nТестовое уведомление ✓')
+    return jsonify({'status': 'ok' if ok else 'failed'})
+
+
+@routes.route('/api/telegram/status')
+def api_telegram_status():
+    """Get Telegram configuration status."""
+    from core.telegram import is_configured
+    return jsonify({
+        'configured': is_configured(),
+        'enabled': bool(state.get('telegram_enabled', False)),
+        'has_token': bool(state.get('telegram_bot_token')),
+        'has_chat_id': bool(state.get('telegram_chat_id')),
+        'events': state.get('telegram_events', {}),
+    })
+
+
+# ─── End Telegram ─────────────────────────────────────────────────────
+
+
 @routes.route('/api/server-name', methods=['PUT'])
 def api_update_server_name():
     """Update server name and push to all connected clients."""

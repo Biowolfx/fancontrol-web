@@ -139,6 +139,13 @@ def _do_save_config():
         existing['server_name'] = state.get('server_name', 'FanControl Server')
         existing['log_level'] = state.get('log_level', 'INFO')
         existing['log_retention_days'] = state.get('log_retention_days', 30)
+        existing['telegram_bot_token'] = state.get('telegram_bot_token', '')
+        existing['telegram_chat_id'] = state.get('telegram_chat_id', '')
+        existing['telegram_enabled'] = state.get('telegram_enabled', False)
+        existing['telegram_events'] = state.get('telegram_events', {
+            'fan_health': True, 'agent_status': True,
+            'updates': True, 'temperature': True,
+        })
 
         fans_data = {}
         with state_lock:
@@ -211,6 +218,13 @@ def load_config():
                 state['server_name'] = cfg.get('server_name', 'FanControl Server')
                 state['log_level'] = cfg.get('log_level', 'INFO')
                 state['log_retention_days'] = cfg.get('log_retention_days', 30)
+                state['telegram_bot_token'] = cfg.get('telegram_bot_token', '')
+                state['telegram_chat_id'] = cfg.get('telegram_chat_id', '')
+                state['telegram_enabled'] = cfg.get('telegram_enabled', False)
+                state['telegram_events'] = cfg.get('telegram_events', {
+                    'fan_health': True, 'agent_status': True,
+                    'updates': True, 'temperature': True,
+                })
                 state['dashboard'] = cfg.get('dashboard', {'groups': [], 'cards': []})
 
             logger.info('Configuration loaded successfully')
