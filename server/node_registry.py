@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import sqlite3
 import threading
 import uuid
@@ -89,18 +90,28 @@ def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int
     if not api_token:
         api_token = uuid.uuid4().hex
     # Sanitize node_id: lowercase, replace spaces with hyphens, remove special chars
-    import re
     node_id = re.sub(r'[^a-z0-9\-]', '', name.lower().replace(' ', '-'))
     if not node_id:
         node_id = f'node-{uuid.uuid4().hex[:8]}'
     stable_id = uuid.uuid4().hex[:12]
     with _lock:
         conn = _get_conn()
-        conn.execute(
-            'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
-            (node_id, stable_id, name, api_token, ip, port)
-        )
-        conn.commit()
+        try:
+            conn.execute(
+                'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
+                (node_id, stable_id, name, api_token, ip, port)
+            )
+            conn.commit()
+        except Exception as e:
+            logger.error(f'add_node failed: {e}')
+            # If node_id already exists, try with a suffix
+            node_id = f'{node_id}-{uuid.uuid4().hex[:4]}'
+            stable_id = uuid.uuid4().hex[:12]
+            conn.execute(
+                'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
+                (node_id, stable_id, name, api_token, ip, port)
+            )
+            conn.commit()
         row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
         return _row_to_dict(row)
 
