@@ -4670,6 +4670,12 @@ function retryAgentUpdate(nodeId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ node_ids: [nodeId] }),
+    }).then(r => r.json()).then(data => {
+        if (data.already_ok && data.already_ok.includes(nodeId)) {
+            update.agentStates[nodeId] = { status: 'skipped' };
+            renderUpdateAgentProgress();
+            checkAgentsDone();
+        }
     }).catch(err => console.error('Agent update retry error:', err));
 }
 
@@ -4751,7 +4757,25 @@ async function startUpdate() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ node_ids: outdatedAgents.map(n => n.node_id) }),
             });
-            await agentResp.json();
+            const agentData = await agentResp.json();
+
+            // Mark agents already at correct version as skipped (not pending)
+            if (agentData.already_ok) {
+                agentData.already_ok.forEach(nid => {
+                    if (update.agentStates[nid]) {
+                        update.agentStates[nid] = { status: 'skipped' };
+                    }
+                });
+            }
+            // Mark agents with no SID as pending (will update via polling)
+            if (agentData.no_sid) {
+                agentData.no_sid.forEach(nid => {
+                    if (update.agentStates[nid]) {
+                        update.agentStates[nid] = { status: 'pending' };
+                    }
+                });
+            }
+
             setStepState('agents', 'done');
             bar.style.width = '15%';
 
