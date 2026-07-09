@@ -1691,7 +1691,7 @@ async function refreshSmartData() {
         return;
     }
 
-    smart.cache[smart.modalDiskId] = data;
+    smart.cache[`${smart.modalSource}:${smart.modalDiskId}`] = data;
 
     const infoEl = document.getElementById('smart-device-info');
     if (infoEl && data.device_info) {
@@ -2016,8 +2016,9 @@ function updateDiskCardDetails(card, detailsEl) {
 
     for (const attrKey of card.smartAttributes) {
         const attrId = parseInt(attrKey);
+        const cacheKey = `${card.source || 'local'}:${card.sourceId}`;
         if (!isNaN(attrId)) {
-            const cachedSmart = smart.cache?.[card.sourceId];
+            const cachedSmart = smart.cache?.[cacheKey];
             if (cachedSmart?.attributes) {
                 const attr = cachedSmart.attributes.find(a => a.id === attrId);
                 if (attr) {
@@ -2050,7 +2051,7 @@ function updateDiskCardDetails(card, detailsEl) {
                 }
             }
         } else {
-            const cachedSmart = smart.cache?.[card.sourceId];
+            const cachedSmart = smart.cache?.[`${card.source || 'local'}:${card.sourceId}`];
             if (cachedSmart?.attributes?.[attrKey]) {
                 const attr = cachedSmart.attributes[attrKey];
                 const severity = attr.status || attr.criticality || 'info';
@@ -2258,13 +2259,14 @@ function updateCanvasMinHeight() {
 async function prefetchSmartForCards() {
     const cards = getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length);
     // Fetch all SMART data in parallel for faster initial load
+    // Cache key = source:sourceId to avoid mixing local/remote data for same disk
     const promises = cards
-        .filter(c => !smart.cache[c.sourceId])
+        .filter(c => !smart.cache[`${c.source || 'local'}:${c.sourceId}`])
         .map(async (card) => {
             try {
                 const data = await fetchDiskSmart(card.sourceId, false, card.source || 'local');
                 if (data && !data.error) {
-                    smart.cache[card.sourceId] = data;
+                    smart.cache[`${card.source || 'local'}:${card.sourceId}`] = data;
                     updateCardDetails(card.id);
                 }
             } catch (e) { console.warn('SMART prefetch failed:', e); }
@@ -2334,7 +2336,7 @@ function startPickerLiveUpdate() {
             }
         });
         getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length).forEach(c => {
-            if (smart.cache[c.sourceId]) {
+            if (smart.cache[`${c.source || 'local'}:${c.sourceId}`]) {
                 const cardEl = document.querySelector(`[data-card-id="${c.id}"]`);
                 if (cardEl) {
                     const detailsEl = cardEl.querySelector('.card-details');
