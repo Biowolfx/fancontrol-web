@@ -320,8 +320,11 @@ def api_proxy_disk_smart(node_id, disk_id):
     node = get_node_by_stable_id(node_id) or get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
-    ip = node.get('ip', '')
+    ip = node.get('ip') or ''
     if not ip:
+        # Try to get IP from the agent's last known connection
+        logger.warning(f'SMART proxy: node {node_id} has no IP stored')
+        return jsonify({'error': f'Node IP unknown for {node_id}'}), 400
         return jsonify({'error': 'Node IP unknown'}), 400
     port = node.get('port', 5059)
     try:
