@@ -2251,16 +2251,19 @@ function updateCanvasMinHeight() {
 
 async function prefetchSmartForCards() {
     const cards = getPickerCards().filter(c => c.type === 'disk' && c.smartAttributes?.length);
-    for (const card of cards) {
-        if (smart.cache[card.sourceId]) continue;
-        try {
-            const data = await fetchDiskSmart(card.sourceId, false, card.source || 'local');
-            if (data && !data.error) {
-                smart.cache[card.sourceId] = data;
-                updateCardDetails(card.id);
-            }
-        } catch (e) { console.warn('SMART prefetch failed:', e); }
-    }
+    // Fetch all SMART data in parallel for faster initial load
+    const promises = cards
+        .filter(c => !smart.cache[c.sourceId])
+        .map(async (card) => {
+            try {
+                const data = await fetchDiskSmart(card.sourceId, false, card.source || 'local');
+                if (data && !data.error) {
+                    smart.cache[card.sourceId] = data;
+                    updateCardDetails(card.id);
+                }
+            } catch (e) { console.warn('SMART prefetch failed:', e); }
+        });
+    await Promise.all(promises);
 }
 
 function startPickerLiveUpdate() {
