@@ -1731,10 +1731,12 @@ function renderSataAttributes(container, selectedIds) {
     const smartUnits = card?.smartUnits || {};
 
     container.innerHTML = smart.attributes.map(attr => {
-        const statusColor = attr.status === 'critical' ? 'text-red-400' :
-                           attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
-        const statusBg = attr.status === 'critical' ? 'bg-red-500/10' :
-                        attr.status === 'warning' ? 'bg-yellow-500/10' : 'bg-green-500/10';
+        // Unified color: use status (SATA) or criticality (NVMe fallback)
+        const severity = attr.status || attr.criticality || 'ok';
+        const statusColor = severity === 'critical' ? 'text-red-400' :
+                           severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
+        const statusBg = severity === 'critical' ? 'bg-red-500/10' :
+                        severity === 'warning' || severity === 'important' ? 'bg-yellow-500/10' : 'bg-green-500/10';
         const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
                          attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(String(attr.id)) ? 'checked' : '';
@@ -1827,8 +1829,9 @@ function renderNvmeAttributes(container, selectedIds) {
     const smartUnits = card?.smartUnits || {};
 
     container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
-        const statusColor = attr.criticality === 'critical' ? 'text-red-400' :
-                           attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
+        const severity = attr.status || attr.criticality || 'info';
+        const statusColor = severity === 'critical' ? 'text-red-400' :
+                           severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
         const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
                          attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(key) ? 'checked' : '';
@@ -2017,8 +2020,9 @@ function updateDiskCardDetails(card, detailsEl) {
             if (cachedSmart?.attributes) {
                 const attr = cachedSmart.attributes.find(a => a.id === attrId);
                 if (attr) {
-                    const color = attr.status === 'critical' ? 'text-red-400' :
-                                 attr.status === 'warning' ? 'text-yellow-400' : 'text-neon-green';
+                    const severity = attr.status || attr.criticality || 'ok';
+                    const color = severity === 'critical' ? 'text-red-400' :
+                                 severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
                     let displayValue = attr.raw;
                     if (attr.unit === 'bytes' && attr.unit_divisor) {
                         const unit = smartUnits[attr.id] || 'raw';
@@ -2048,8 +2052,9 @@ function updateDiskCardDetails(card, detailsEl) {
             const cachedSmart = smart.cache?.[card.sourceId];
             if (cachedSmart?.attributes?.[attrKey]) {
                 const attr = cachedSmart.attributes[attrKey];
-                const color = attr.criticality === 'critical' ? 'text-red-400' :
-                             attr.criticality === 'important' ? 'text-yellow-400' : 'text-neon-green';
+                const severity = attr.status || attr.criticality || 'info';
+                const color = severity === 'critical' ? 'text-red-400' :
+                             severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
                 let displayValue = attr.value;
                 let suffix = attrKey === 'temperature' ? '°C' :
                             attrKey.includes('percentage') || attrKey.includes('spare') ? '%' : '';
