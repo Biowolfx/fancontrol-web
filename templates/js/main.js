@@ -1958,7 +1958,7 @@ function toggleCardOption(cardId, option, enabled) {
 }
 
 function findNode(source) {
-    """Find node by stable_id or node_id. Returns node object or null."""
+    // Find node by stable_id or node_id. Returns node object or null.
     if (!source || source === 'local') return null;
     return store.nodesData.find(n => n.stable_id === source || n.node_id === source) || null;
 }
@@ -2933,7 +2933,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!slider) return;
     
     slider.addEventListener('input', (e) => {
-        document.getElementById('pwm-value-display')?.textContent = `${e.target.value}%`;
+        const el = document.getElementById('pwm-value-display');
+        if (el) el.textContent = `${e.target.value}%`;
     });
     
     slider.addEventListener('mousedown', () => {
@@ -3566,9 +3567,9 @@ function runCalibration() {
     store.wizardStep = 'calibrating';
     
     document.getElementById('calibration-modal')?.classList.remove('hidden');
-    document.getElementById('calibration-status')?.textContent = t('calibration.starting', 'Starting...');
-    document.getElementById('calibration-progress-bar')?.style.width = '0%';
-    document.getElementById('calibration-step')?.textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
+    const _el1 = document.getElementById('calibration-status'); if (_el1) _el1.textContent = t('calibration.starting', 'Starting...');
+    const _el2 = document.getElementById('calibration-progress-bar'); if (_el2) _el2.style.width = '0%';
+    const _el3 = document.getElementById('calibration-step'); if (_el3) _el3.textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
     
     fetch('/api/initialize', { method: 'POST' })
         .then(r => r.json())
@@ -3589,12 +3590,11 @@ function updateCalibrationModal(progress) {
         modal.classList.remove('hidden');
     }
     
-    document.getElementById('calibration-status')?.textContent = progress.status;
-    document.getElementById('calibration-step')?.textContent =
-        t('calibration.step_label', 'Step ${current}/${total}').replace('${current}', progress.step).replace('${total}', progress.total);
+    const _el4 = document.getElementById('calibration-status'); if (_el4) _el4.textContent = progress.status;
+    const _el5 = document.getElementById('calibration-step'); if (_el5) _el5.textContent = t('calibration.step_label', 'Step ${current}/${total}').replace('${current}', progress.step).replace('${total}', progress.total);
     
     const pct = progress.total > 0 ? (progress.step / progress.total * 100) : 0;
-    document.getElementById('calibration-progress-bar')?.style.width = `${pct}%`;
+    const _el6 = document.getElementById('calibration-progress-bar'); if (_el6) _el6.style.width = `${pct}%`;
 }
 
 function hideCalibrationModal() {
@@ -3634,9 +3634,9 @@ function startCalibration() {
     if (!confirm(t('calibration.confirm', 'Recalibrate all fans? This takes 1-2 minutes.'))) return;
     
     document.getElementById('calibration-modal')?.classList.remove('hidden');
-    document.getElementById('calibration-status')?.textContent = t('calibration.starting', 'Starting...');
-    document.getElementById('calibration-progress-bar')?.style.width = '0%';
-    document.getElementById('calibration-step')?.textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
+    const _el7 = document.getElementById('calibration-status'); if (_el7) _el7.textContent = t('calibration.starting', 'Starting...');
+    const _el8 = document.getElementById('calibration-progress-bar'); if (_el8) _el8.style.width = '0%';
+    const _el9 = document.getElementById('calibration-step'); if (_el9) _el9.textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
     
     fetch('/api/initialize', { method: 'POST' })
         .catch(err => console.error('Calibration error:', err));
