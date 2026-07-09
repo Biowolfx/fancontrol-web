@@ -110,7 +110,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # Auto-register unknown agent — no manual setup needed
         if not node:
             from server.node_registry import add_node
-            node = add_node(node_name or node_id or 'Agent', api_token=api_token,
+            node = add_node(node_name or agent_node_id or 'Agent', api_token=api_token,
                             ip=agent_ip if agent_ip != '127.0.0.1' else '')
             logger.info(f'Auto-registered new agent: {node_name} ({agent_ip}) token={api_token[:8]}...')
             # Notify browser — agent is already connected via WebSocket
@@ -246,8 +246,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                     f'temps={list(telemetry.get("temp_sensors", {}).keys())}')
 
         if not node_id:
-            # Fallback: try direct lookup
-            node_id = agent_node_id
+            # No fallback — if SID mapping fails, drop the telemetry
+            # Agent should reconnect to get proper SID mapping
+            logger.warning(f'agent:telemetry DROPPED: no SID mapping for sid={agent_sid}')
+            return
 
         if not node_id or node_id not in state.get('nodes', {}):
             logger.warning(f'agent:telemetry DROPPED: resolved={node_id} '

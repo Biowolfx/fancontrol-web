@@ -1,10 +1,22 @@
 """Global state management — thread-safe state dict with caching."""
 
+import secrets
 import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.12.90"
+CONFIG_VERSION = "3.12.91"
+
+# Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
+# Import cfg lazily to avoid circular imports
+_auto_update_token = None
+
+def _ensure_update_token():
+    global _auto_update_token
+    if _auto_update_token is None:
+        from core.config import cfg
+        _auto_update_token = cfg.update_token or secrets.token_urlsafe(32)
+    return _auto_update_token
 
 state_lock = threading.RLock()
 

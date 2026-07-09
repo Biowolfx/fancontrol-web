@@ -30,6 +30,7 @@ export function registerSocketHandlers(socket, fns) {
     });
 
     socket.on('update', (data) => {
+        try {
         // Merge partial updates into store.state (don't replace)
         if (data != null && typeof data === 'object') Object.assign(store.state, data);
         // Sync node data from server state
@@ -93,6 +94,7 @@ export function registerSocketHandlers(socket, fns) {
             agentTokenBanner.classList.add('hidden');
         }
         // DSM scheme view is accessed by clicking DSM fans in tree — no nav button needed
+        } catch (e) { console.error('[FanControl] Error in update handler:', e); }
     });
 
     socket.on('hardware_discovered', (data) => {

@@ -648,7 +648,8 @@ def api_update_check():
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
     """Pull latest code, sync to /app, then exit process."""
-    update_token = cfg.update_token
+    from core.state import _ensure_update_token
+    update_token = cfg.update_token or _ensure_update_token()
     if update_token:
         provided = request.headers.get('X-Update-Token') or request.args.get('token')
         if provided != update_token:
@@ -1062,7 +1063,7 @@ def api_list_nodes():
 def api_add_node():
     """Add a new node."""
     from server.node_registry import add_node
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     name = data.get('name', '').strip()
     if not name:
         return jsonify({'error': 'Name required'}), 400
@@ -1102,7 +1103,7 @@ def api_update_node(node_id):
                 if name:
                     state['nodes'][node_id]['name'] = name
                 if ip:
-                    state['nodes'][node_id].get('ip', '') and state['nodes'][node_id].update({'ip': ip})
+                    state['nodes'][node_id]['ip'] = ip
         invalidate_state_cache()
         return jsonify({'status': 'ok'})
     return jsonify({'error': 'Update failed'}), 500
@@ -1129,7 +1130,7 @@ def api_push_config(node_id):
     node = get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     update_node_config(node_id, data.get('config', {}))
     from app import socketio
     _emit_to_node(socketio, 'server:config_push', {
@@ -1146,7 +1147,7 @@ def api_set_node_mode(node_id):
     node = get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     mode = data.get('mode', 'server')
     if mode not in ('server', 'manual'):
         return jsonify({'error': 'Invalid mode'}), 400
@@ -1206,7 +1207,7 @@ def api_probe_ip():
     """Probe a specific IP for an agent."""
     from server.discovery import probe_agent
     from server.node_registry import list_nodes, get_node
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     ip = (data.get('ip') or '').strip()
     port = int(data.get('port', 5059))
     if not ip:
@@ -1242,7 +1243,7 @@ def api_add_node_by_ip():
     """Add a node by IP address directly."""
     from server.node_registry import add_node, list_nodes
     from server.discovery import probe_agent
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     ip = (data.get('ip') or '').strip()
     name = (data.get('name') or '').strip()
     port = int(data.get('port', 5059))

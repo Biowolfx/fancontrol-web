@@ -129,8 +129,14 @@ def _do_save_config():
                     existing = json.load(f)
                 _cached_config_json = existing.copy()
                 _cached_config_mtime = current_mtime
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f'Failed to read config.json: {e}')
+                # Use cached config if available, otherwise abort to prevent data loss
+                if _cached_config_json is not None:
+                    existing = _cached_config_json.copy()
+                else:
+                    logger.error('No cached config available — aborting save to prevent data loss')
+                    return
 
         existing['config_version'] = CONFIG_VERSION
         existing['initialized'] = state.get('initialized', False)
@@ -172,7 +178,7 @@ def _do_save_config():
         logger.info('Configuration saved successfully')
 
     except Exception as e:
-        logger.error(f'Failed to save config: {e}', exc_info=True)
+        logger.error(f'Failed to save config: {e} — changes may be lost, will retry on next save', exc_info=True)
 
 
 def save_config():

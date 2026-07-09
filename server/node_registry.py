@@ -87,7 +87,11 @@ def init_nodes_table():
 def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int = 5059) -> Dict:
     if not api_token:
         api_token = uuid.uuid4().hex
-    node_id = name.lower().replace(' ', '-')
+    # Sanitize node_id: lowercase, replace spaces with hyphens, remove special chars
+    import re
+    node_id = re.sub(r'[^a-z0-9\-]', '', name.lower().replace(' ', '-'))
+    if not node_id:
+        node_id = f'node-{uuid.uuid4().hex[:8]}'
     stable_id = uuid.uuid4().hex[:12]
     with _lock:
         conn = _get_conn()

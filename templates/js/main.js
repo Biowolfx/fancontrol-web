@@ -68,15 +68,17 @@ function updateUI(data) {
     if (!data) return;
     
     // Update version displays
-    const ver = data.config_version || '';
+    const ver = data.config_version || store.state?.config_version || '';
     const headerVer = document.getElementById('header-version');
     if (headerVer && ver) headerVer.textContent = `v${ver}`;
     const versionLink = document.getElementById('version-link');
     if (versionLink && ver) versionLink.textContent = `FanControl Web v${ver}`;
     
-    // Show appropriate screen
-    if (!data.initialized || !data.tested) {
-        // Don't flash setup screen during restart if we were already on main screen
+    // Show appropriate screen — use store.state for initialized/tested check
+    // to avoid flashing setup screen on partial socket updates
+    const initialized = data.initialized ?? store.state?.initialized;
+    const tested = data.tested ?? store.state?.tested;
+    if (!initialized || !tested) {
         if (store.wasOnMainScreen) {
             return;
         }
@@ -139,8 +141,10 @@ function updateUI(data) {
 }
 
 function showSetupScreen() {
-    document.getElementById('setup-screen').classList.remove('hidden');
-    document.getElementById('main-screen').classList.add('hidden');
+    const setupScreen = document.getElementById('setup-screen');
+    const mainScreen = document.getElementById('main-screen');
+    if (setupScreen) setupScreen.classList.remove('hidden');
+    if (mainScreen) mainScreen.classList.add('hidden');
     stopPickerLiveUpdate();
     stopSystemUpdate();
     // Close settings panel if open
@@ -155,7 +159,7 @@ function showMainScreen() {
     const mainScreen = document.getElementById('main-screen');
     const wasOnSetup = mainScreen?.classList.contains('hidden');
 
-    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('setup-screen')?.classList.add('hidden');
     mainScreen?.classList.remove('hidden');
     if (!store.state || !store.state.testing) {
         hideCalibrationModal();
@@ -615,7 +619,9 @@ function renderRemoteNodeTree(node) {
     return html;
 }
 
-let _collapsedNodes = new Set(JSON.parse(localStorage.getItem('fc_collapsed_nodes') || '[]'));
+let _collapsedNodes;
+try { _collapsedNodes = new Set(JSON.parse(localStorage.getItem('fc_collapsed_nodes') || '[]')); }
+catch(e) { _collapsedNodes = new Set(); }
 
 function toggleNodeGroup(nodeId) {
     const children = document.getElementById(`node-children-${nodeId}`);
@@ -1126,7 +1132,7 @@ function findNextPosition(savedCards, colSpan) {
             }
         }
     }
-    for (let row = 1; row <= 20; row++) {
+    for (let row = 1; row <= 50; row++) {
         for (let col = 1; col <= cols - colSpan + 1; col++) {
             let fits = true;
             for (let c2 = col; c2 < col + colSpan && fits; c2++) {
@@ -2922,7 +2928,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!slider) return;
     
     slider.addEventListener('input', (e) => {
-        document.getElementById('pwm-value-display').textContent = `${e.target.value}%`;
+        document.getElementById('pwm-value-display')?.textContent = `${e.target.value}%`;
     });
     
     slider.addEventListener('mousedown', () => {
@@ -3101,8 +3107,8 @@ function runDiscovery() {
                 renderDiscoveredHardware(data);
                 store.wizardStep = 'results';
                 
-                document.getElementById('setup-step-intro').classList.add('hidden');
-                document.getElementById('setup-step-results').classList.remove('hidden');
+                document.getElementById('setup-step-intro')?.classList.add('hidden');
+                document.getElementById('setup-step-results')?.classList.remove('hidden');
             } else {
                 alert(t('discover.scan_error', 'Scan error: ') + data.message);
                 store.wizardStep = 'intro';
@@ -3206,8 +3212,8 @@ function renderDiscoveredHardware(data) {
     // Always show mode selection when fans are detected
     if (hasFans && (hasHwmon || hasDsm)) {
         controlSelect.classList.remove('hidden');
-        document.getElementById('hwmon-action').classList.add('hidden');
-        document.getElementById('dsm-action').classList.add('hidden');
+        document.getElementById('hwmon-action')?.classList.add('hidden');
+        document.getElementById('dsm-action')?.classList.add('hidden');
         actionDiv.classList.remove('hidden');
         
         // HWMon button state
@@ -3241,16 +3247,16 @@ function renderDiscoveredHardware(data) {
     } else if (hasFans && !hasHwmon && !hasDsm) {
         // Fans but no control method
         controlSelect.classList.add('hidden');
-        document.getElementById('hwmon-action').classList.add('hidden');
-        document.getElementById('dsm-action').classList.add('hidden');
+        document.getElementById('hwmon-action')?.classList.add('hidden');
+        document.getElementById('dsm-action')?.classList.add('hidden');
         actionDiv.classList.remove('hidden');
         hint.textContent = 'No fan control method available.';
         hint.classList.remove('hidden');
     } else {
         // No fans
         controlSelect.classList.add('hidden');
-        document.getElementById('hwmon-action').classList.add('hidden');
-        document.getElementById('dsm-action').classList.add('hidden');
+        document.getElementById('hwmon-action')?.classList.add('hidden');
+        document.getElementById('dsm-action')?.classList.add('hidden');
         actionDiv.classList.add('hidden');
     }
 }
@@ -3485,7 +3491,7 @@ async function editDsmEntry(schemeType, index) {
 
     if (store.currentRemoteNodeId) {
         // Remote — local edit only, applied when user clicks "Apply"
-        renderDsmSchemeEditor();
+        renderDsmSchemeEditor(store.currentRemoteNodeId);
         return;
     }
 
@@ -3551,13 +3557,13 @@ function runCalibration() {
     console.log('[FanControl] Starting calibration...');
     
     document.getElementById('calibrate-btn').disabled = true;
-    document.getElementById('calibrate-loader').classList.remove('hidden');
+    document.getElementById('calibrate-loader')?.classList.remove('hidden');
     store.wizardStep = 'calibrating';
     
-    document.getElementById('calibration-modal').classList.remove('hidden');
-    document.getElementById('calibration-status').textContent = t('calibration.starting', 'Starting...');
-    document.getElementById('calibration-progress-bar').style.width = '0%';
-    document.getElementById('calibration-step').textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
+    document.getElementById('calibration-modal')?.classList.remove('hidden');
+    document.getElementById('calibration-status')?.textContent = t('calibration.starting', 'Starting...');
+    document.getElementById('calibration-progress-bar')?.style.width = '0%';
+    document.getElementById('calibration-step')?.textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
     
     fetch('/api/initialize', { method: 'POST' })
         .then(r => r.json())
@@ -3568,7 +3574,7 @@ function runCalibration() {
             console.error('Calibration error:', err);
             hideCalibrationModal();
             document.getElementById('calibrate-btn').disabled = false;
-            document.getElementById('calibrate-loader').classList.add('hidden');
+            document.getElementById('calibrate-loader')?.classList.add('hidden');
         });
 }
 
@@ -3578,16 +3584,16 @@ function updateCalibrationModal(progress) {
         modal.classList.remove('hidden');
     }
     
-    document.getElementById('calibration-status').textContent = progress.status;
-    document.getElementById('calibration-step').textContent =
+    document.getElementById('calibration-status')?.textContent = progress.status;
+    document.getElementById('calibration-step')?.textContent =
         t('calibration.step_label', 'Step ${current}/${total}').replace('${current}', progress.step).replace('${total}', progress.total);
     
     const pct = progress.total > 0 ? (progress.step / progress.total * 100) : 0;
-    document.getElementById('calibration-progress-bar').style.width = `${pct}%`;
+    document.getElementById('calibration-progress-bar')?.style.width = `${pct}%`;
 }
 
 function hideCalibrationModal() {
-    document.getElementById('calibration-modal').classList.add('hidden');
+    document.getElementById('calibration-modal')?.classList.add('hidden');
 }
 
 function updateCalibrationParam(param, value) {
@@ -3622,10 +3628,10 @@ function saveFanCalibration(fanId, calibration) {
 function startCalibration() {
     if (!confirm(t('calibration.confirm', 'Recalibrate all fans? This takes 1-2 minutes.'))) return;
     
-    document.getElementById('calibration-modal').classList.remove('hidden');
-    document.getElementById('calibration-status').textContent = t('calibration.starting', 'Starting...');
-    document.getElementById('calibration-progress-bar').style.width = '0%';
-    document.getElementById('calibration-step').textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
+    document.getElementById('calibration-modal')?.classList.remove('hidden');
+    document.getElementById('calibration-status')?.textContent = t('calibration.starting', 'Starting...');
+    document.getElementById('calibration-progress-bar')?.style.width = '0%';
+    document.getElementById('calibration-step')?.textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
     
     fetch('/api/initialize', { method: 'POST' })
         .catch(err => console.error('Calibration error:', err));
@@ -5552,7 +5558,9 @@ async function acceptDiscoveredAgent(nodeId) {
 }
 
 function dismissAgentForever(nodeId) {
-    const dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]');
+    let dismissed;
+    try { dismissed = JSON.parse(localStorage.getItem('fc_dismissed_agents') || '[]'); }
+    catch(e) { dismissed = []; }
     if (!dismissed.includes(nodeId)) {
         dismissed.push(nodeId);
         localStorage.setItem('fc_dismissed_agents', JSON.stringify(dismissed));

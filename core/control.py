@@ -302,14 +302,15 @@ def _evaluate_fan_mode(fan_id: str, fan: Dict, sys_failsafe: bool, sys_standby: 
         current_time = now_dt.strftime('%H:%M')
         
         for item in schedule:
-            if item['day'] == 'all':
+            day = item.get('day', 'all')
+            if day == 'all':
                 days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-            elif item['day'] == 'weekday':
+            elif day == 'weekday':
                 days = ['mon', 'tue', 'wed', 'thu', 'fri']
-            elif item['day'] == 'weekend':
+            elif day == 'weekend':
                 days = ['sat', 'sun']
             else:
-                days = [item['day']]
+                days = [day]
             
             if current_day in days and item['time_start'] <= current_time <= item['time_end']:
                 schedule_applied = True
@@ -354,10 +355,12 @@ def log_telemetry():
     dict iteration. Values may be 1 cycle stale, acceptable for logging.
     """
     try:
-        fans = state.get('fans', {})
-        fan_count = len(fans)
-        disk_count = len(state.get('hdd_sensors', {}))
+        with state_lock:
+            fans = dict(state.get('fans', {}))
+            disk_count = len(state.get('hdd_sensors', {}))
+            max_temp = state.get('max_hdd_temp', 0)
 
+        fan_count = len(fans)
         if fan_count > 0:
             avg_pwm = sum(
                 f.get('raw_pwm', f.get('pwm_value', 0))
@@ -370,8 +373,6 @@ def log_telemetry():
         else:
             avg_pwm = 0
             avg_rpm = 0
-
-        max_temp = state.get('max_hdd_temp', 0)
 
         with get_db_connection() as conn:
             conn.execute(
@@ -411,85 +412,76 @@ def check_fan_health(socketio=None):
 
     with state_lock:
         fans = dict(state.get('fans', {}))
+        for fan_id, fan in fans.items():
+            if not fan.get('writable'):
+                continue
+            if fan.get('mode') == 'off':
+                continue
 
-    for fan_id, fan in fans.items():
-        if not fan.get('writable'):
-            continue
-        if fan.get('mode') == 'off':
-            continue
+            health = fan.setdefault('health', {
+                'status': 'healthy',
+                'rpm_baseline': 0,
+                'slowdown_since': None,
+                'stopped_since': None,
+                'last_service_date': None,
+                'calibration_required': False,
+            })
+            old_status = health.get('status', 'healthy')
+            rpm = fan.get('rpm', 0) or 0
+            pwm_from_pct = fan.get('current_pct', 0) or 0
+            pwm_from_manual = fan.get('manual_pct', 0) or 0
+            pwm_from_target = fan.get('target_pwm', 0) or 0
+            pwm = max(pwm_from_pct, pwm_from_manual, pwm_from_target)
+            cal = fan.get('calibration', {})
+            max_rpm = cal.get('max_rpm', 0)
+            new_status = old_status
 
-        health = fan.setdefault('health', {
-            'status': 'healthy',
-            'rpm_baseline': 0,
-            'slowdown_since': None,
-            'stopped_since': None,
-            'last_service_date': None,
-            'calibration_required': False,
-        })
-        old_status = health.get('status', 'healthy')
-        rpm = fan.get('rpm', 0) or 0
-        # Use the highest available PWM indicator — current_pct from control loop,
-        # manual_pct from user setting, or target_pwm as fallback. For inverted fans
-        # current_pct may lag by one cycle, so take the max of all three.
-        pwm_from_pct = fan.get('current_pct', 0) or 0
-        pwm_from_manual = fan.get('manual_pct', 0) or 0
-        pwm_from_target = fan.get('target_pwm', 0) or 0
-        pwm = max(pwm_from_pct, pwm_from_manual, pwm_from_target)
-        cal = fan.get('calibration', {})
-        max_rpm = cal.get('max_rpm', 0)
-        new_status = old_status
+            logger.debug(f'[health] {fan.get("label", fan_id)}: rpm={rpm} pwm={pwm} '
+                         f'pct={pwm_from_pct} manual={pwm_from_manual} target={pwm_from_target} '
+                         f'baseline={health.get("rpm_baseline", 0):.0f} status={old_status} '
+                         f'stopped_since={health.get("stopped_since")}')
 
-        logger.debug(f'[health] {fan.get("label", fan_id)}: rpm={rpm} pwm={pwm} '
-                     f'pct={pwm_from_pct} manual={pwm_from_manual} target={pwm_from_target} '
-                     f'baseline={health.get("rpm_baseline", 0):.0f} status={old_status} '
-                     f'stopped_since={health.get("stopped_since")}')
-
-        # --- STOP DETECTION ---
-        # RPM < 10 while fan should be spinning (pwm > 5) → stopped
-        # Also detect if fan was previously running (baseline > 0) and now RPM = 0
-        should_be_spinning = pwm > 5 or health.get('rpm_baseline', 0) > 0
-        if rpm < 10 and should_be_spinning:
-            if health.get('stopped_since') is None:
-                health['stopped_since'] = now
-            if now - health['stopped_since'] >= 10:
-                new_status = 'stopped'
-        else:
-            if health.get('stopped_since') is not None:
-                health['stopped_since'] = None
-            if old_status == 'stopped':
-                new_status = 'healthy'
-
-        # --- SLOWDOWN DETECTION (COMBINED) ---
-        if new_status != 'stopped' and rpm > 0 and pwm > 0:
-            if max_rpm > 0:
-                expected_rpm = max_rpm * (pwm / 100)
+            should_be_spinning = pwm > 5 or health.get('rpm_baseline', 0) > 0
+            if rpm < 10 and should_be_spinning:
+                if health.get('stopped_since') is None:
+                    health['stopped_since'] = now
+                if now - health['stopped_since'] >= 10:
+                    new_status = 'stopped'
             else:
-                if old_status in ('healthy', 'slowing'):
-                    if health.get('rpm_baseline', 0) == 0:
-                        health['rpm_baseline'] = rpm
-                    else:
-                        health['rpm_baseline'] = 0.9 * health['rpm_baseline'] + 0.1 * rpm
-                expected_rpm = health.get('rpm_baseline', 0)
-
-            if expected_rpm > 0 and rpm < expected_rpm * 0.5:
-                if health.get('slowing_since') is None:
-                    health['slowing_since'] = now
-                if now - health['slowing_since'] >= 15:
-                    new_status = 'slowing'
-            else:
-                if health.get('slowing_since') is not None:
-                    health['slowing_since'] = None
-                if old_status == 'slowing':
+                if health.get('stopped_since') is not None:
+                    health['stopped_since'] = None
+                if old_status == 'stopped':
                     new_status = 'healthy'
 
-        # --- NEEDS CALIBRATION ---
-        if health.get('calibration_required') and new_status != 'stopped':
-            new_status = 'needs_calibration'
+            if new_status != 'stopped' and rpm > 0 and pwm > 0:
+                if max_rpm > 0:
+                    expected_rpm = max_rpm * (pwm / 100)
+                else:
+                    if old_status in ('healthy', 'slowing'):
+                        if health.get('rpm_baseline', 0) == 0:
+                            health['rpm_baseline'] = rpm
+                        else:
+                            health['rpm_baseline'] = 0.9 * health['rpm_baseline'] + 0.1 * rpm
+                    expected_rpm = health.get('rpm_baseline', 0)
 
-        health['status'] = new_status
+                if expected_rpm > 0 and rpm < expected_rpm * 0.5:
+                    if health.get('slowing_since') is None:
+                        health['slowing_since'] = now
+                    if now - health['slowing_since'] >= 15:
+                        new_status = 'slowing'
+                else:
+                    if health.get('slowing_since') is not None:
+                        health['slowing_since'] = None
+                    if old_status == 'slowing':
+                        new_status = 'healthy'
 
-        if new_status != old_status:
-            changes.append((fan_id, fan.get('label', fan_id), old_status, new_status))
+            if health.get('calibration_required') and new_status != 'stopped':
+                new_status = 'needs_calibration'
+
+            health['status'] = new_status
+
+            if new_status != old_status:
+                changes.append((fan_id, fan.get('label', fan_id), old_status, new_status))
 
     # Emit alerts outside of the lock
     if changes:
