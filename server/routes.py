@@ -311,11 +311,11 @@ def api_get_disk_smart(disk_id):
 
 @routes.route('/api/nodes/<node_id>/disks/<disk_id>/smart')
 def api_proxy_disk_smart(node_id, disk_id):
-    """Proxy SMART request to a remote agent."""
+    """Proxy SMART request to a remote agent. Looks up by stable_id or node_id."""
     import logging
     logger = logging.getLogger('fancontrol')
-    from server.node_registry import get_node
-    node = get_node(node_id)
+    from server.node_registry import get_node, get_node_by_stable_id
+    node = get_node_by_stable_id(node_id) or get_node(node_id)
     if not node:
         return jsonify({'error': 'Node not found'}), 404
     ip = node.get('ip', '')

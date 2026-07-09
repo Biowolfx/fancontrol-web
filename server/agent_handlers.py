@@ -186,6 +186,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                 update_node_flags(node_id, pending_update=False)
             new_node = {
                 'node_id': node_id,
+                'stable_id': node.get('stable_id', ''),
                 'name': node['name'],
                 'status': 'online',
                 'control_mode': control_mode,

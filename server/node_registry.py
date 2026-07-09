@@ -49,6 +49,7 @@ def init_nodes_table():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS nodes (
                 node_id TEXT PRIMARY KEY,
+                stable_id TEXT UNIQUE,
                 name TEXT NOT NULL,
                 api_token TEXT UNIQUE NOT NULL,
                 ip TEXT DEFAULT '',
@@ -73,6 +74,13 @@ def init_nodes_table():
             conn.execute("ALTER TABLE nodes ADD COLUMN pending_update INTEGER DEFAULT 0")
         if 'auto_update' not in cols:
             conn.execute("ALTER TABLE nodes ADD COLUMN auto_update INTEGER DEFAULT 0")
+        if 'stable_id' not in cols:
+            conn.execute("ALTER TABLE nodes ADD COLUMN stable_id TEXT UNIQUE")
+            # Generate stable_id for existing nodes
+            for row in conn.execute('SELECT node_id FROM nodes WHERE stable_id IS NULL').fetchall():
+                sid = uuid.uuid4().hex[:12]
+                conn.execute('UPDATE nodes SET stable_id = ? WHERE node_id = ?', (sid, row[0]))
+                logger.info(f'[registry] Generated stable_id={sid} for existing node {row[0]}')
         conn.commit()
 
 
@@ -80,11 +88,12 @@ def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int
     if not api_token:
         api_token = uuid.uuid4().hex
     node_id = name.lower().replace(' ', '-')
+    stable_id = uuid.uuid4().hex[:12]
     with _lock:
         conn = _get_conn()
         conn.execute(
-            'INSERT INTO nodes (node_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?)',
-            (node_id, name, api_token, ip, port)
+            'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
+            (node_id, stable_id, name, api_token, ip, port)
         )
         conn.commit()
         row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
@@ -102,6 +111,13 @@ def get_node_by_token(api_token: str) -> Optional[Dict]:
     with _lock:
         conn = _get_conn()
         row = conn.execute('SELECT * FROM nodes WHERE api_token = ?', (api_token,)).fetchone()
+        return _row_to_dict(row) if row else None
+
+
+def get_node_by_stable_id(stable_id: str) -> Optional[Dict]:
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute('SELECT * FROM nodes WHERE stable_id = ?', (stable_id,)).fetchone()
         return _row_to_dict(row) if row else None
 
 

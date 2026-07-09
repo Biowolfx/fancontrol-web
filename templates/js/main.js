@@ -692,7 +692,8 @@ function populatePickerSources() {
     if (!select) return;
     select.innerHTML = `<option value="local">${t('picker.my_server', 'My Server (local)')}</option>`;
     for (const node of store.nodesData) {
-        select.innerHTML += `<option value="${escapeHtml(node.node_id)}">${escapeHtml(node.name || node.node_id)}</option>`;
+        const sourceId = node.stable_id || node.node_id;
+        select.innerHTML += `<option value="${escapeHtml(sourceId)}">${escapeHtml(node.name || node.node_id)}</option>`;
     }
 }
 
@@ -718,7 +719,7 @@ function updatePickerElements() {
             ];
         }
     } else {
-        const node = store.nodesData.find(n => n.node_id === source);
+        const node = store.nodesData.find(n => (n.stable_id || n.node_id) === source);
         if (node?.telemetry) {
             const tel = node.telemetry;
             if (type === 'fan' && tel.fans) {
@@ -1657,7 +1658,7 @@ function showSmartModal(cardId) {
     if (smart.modalSource === 'local') {
         disk = store.state?.hdd_sensors?.[card.sourceId];
     } else {
-        const node = store.nodesData.find(n => n.node_id === smart.modalSource);
+        const node = findNode(smart.modalSource);
         disk = node?.telemetry?.hdd_sensors?.[card.sourceId];
     }
 
@@ -1945,9 +1946,15 @@ function toggleCardOption(cardId, option, enabled) {
     if (el) snapCardToGrid(el);
 }
 
+function findNode(source) {
+    """Find node by stable_id or node_id. Returns node object or null."""
+    if (!source || source === 'local') return null;
+    return store.nodesData.find(n => n.stable_id === source || n.node_id === source) || null;
+}
+
 function getFanData(source, sourceId) {
     if (source === 'local') return store.state?.fans?.[sourceId] || null;
-    const node = store.nodesData.find(n => n.node_id === source);
+    const node = store.nodesData.find(n => (n.stable_id || n.node_id) === source);
     return node?.telemetry?.fans?.[sourceId] || null;
 }
 
@@ -2284,7 +2291,7 @@ function startPickerLiveUpdate() {
             if (src === 'local' && store.state?.fans?.[id]) {
                 fan = store.state.fans[id];
             } else {
-                const node = store.nodesData.find(n => n.node_id === src);
+                const node = findNode(src);
                 fan = node?.telemetry?.fans?.[id];
             }
             if (fan) {
@@ -2314,7 +2321,7 @@ function startPickerLiveUpdate() {
             if (src === 'local' && store.state?.temp_sensors?.[id]) {
                 val = store.state.temp_sensors[id].value;
             } else {
-                const node = store.nodesData.find(n => n.node_id === src);
+                const node = findNode(src);
                 val = node?.telemetry?.temp_sensors?.[id]?.value;
             }
             if (val != null) el.textContent = val;
@@ -2327,7 +2334,7 @@ function startPickerLiveUpdate() {
             if (src === 'local') {
                 temp = store.state?.hdd_sensors?.[id]?.temp;
             } else {
-                const node = store.nodesData.find(n => n.node_id === src);
+                const node = findNode(src);
                 temp = node?.telemetry?.hdd_sensors?.[id]?.temp;
             }
             if (temp != null) {
