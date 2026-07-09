@@ -653,11 +653,10 @@ def api_update_check():
 @routes.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
     """Pull latest code, sync to /app, then exit process."""
-    from core.state import _ensure_update_token
-    update_token = cfg.update_token or _ensure_update_token()
-    if update_token:
+    # Only require auth if FANCONTROL_UPDATE_TOKEN is explicitly configured
+    if cfg.update_token:
         provided = request.headers.get('X-Update-Token') or request.args.get('token')
-        if provided != update_token:
+        if provided != cfg.update_token:
             return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
     try:
