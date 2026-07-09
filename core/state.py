@@ -4,7 +4,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.12.87"
+CONFIG_VERSION = "3.12.88"
 
 state_lock = threading.RLock()
 
@@ -40,10 +40,16 @@ def _build_state_snapshot() -> Dict[str, Any]:
     """Build a fresh state snapshot (caller must hold state_lock).
     
     Uses shallow copy for dicts — fan/sensor/disk dicts are flat
-    (no nested mutable objects that need deep copy).
+    except for the nested 'health' dict in fans, which is copied separately.
     """
+    fans_snap = {}
+    for k, v in state['fans'].items():
+        fan_copy = v.copy()
+        if 'health' in v:
+            fan_copy['health'] = v['health'].copy()
+        fans_snap[k] = fan_copy
     return {
-        'fans': {k: v.copy() for k, v in state['fans'].items()},
+        'fans': fans_snap,
         'temp_sensors': {k: v.copy() for k, v in state['temp_sensors'].items()},
         'hdd_sensors': {k: v.copy() for k, v in state['hdd_sensors'].items()},
         'max_hdd_temp': state.get('max_hdd_temp', 0),

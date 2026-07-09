@@ -121,7 +121,7 @@ def _do_save_config():
         except OSError:
             current_mtime = 0.0
 
-        if _cached_config_json is not None and current_mtime == _cached_config_mtime:
+        if _cached_config_json is not None and abs(current_mtime - _cached_config_mtime) < 0.01:
             existing = _cached_config_json.copy()
         elif CONFIG_PATH.exists():
             try:
