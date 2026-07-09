@@ -858,7 +858,7 @@ function renderPickerCard(card) {
     el.className = `border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow,background-image] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${gradientClass}`;
     el.setAttribute('data-card-id', id);
     el.innerHTML = `
-        <div class="card-content overflow-hidden h-full">
+        <div class="card-content overflow-hidden h-full flex flex-col">
             <div class="flex items-center justify-between mb-1">
                 <div class="flex items-center gap-2">
                     <span class="text-gray-600 text-xs select-none">⠿</span>
@@ -870,7 +870,7 @@ function renderPickerCard(card) {
             </div>
             </div>
             ${valueHtml}
-            <div class="card-details"></div>
+            <div class="card-details flex-1 overflow-y-auto min-h-0"></div>
         </div>
         <div class="card-resize-handle"></div>`;
 
