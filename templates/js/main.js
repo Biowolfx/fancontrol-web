@@ -5859,3 +5859,4 @@ window.toggleAgentAutoUpdate = toggleAgentAutoUpdate;
 window.updatePickerElements = updatePickerElements;
 window.onScheduleMouseDown = onScheduleMouseDown;
 window.onScheduleMouseEnter = onScheduleMouseEnter;
+window.removePickerCard = removePickerCard;
