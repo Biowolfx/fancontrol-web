@@ -1,9 +1,11 @@
-"""Socket.IO event handlers for agent (node) connections."""
+"""Agent communication — Socket.IO handlers + HTTP command queue."""
 
 import json
 import logging
 import threading
 import time
+from collections import defaultdict
+from datetime import datetime
 
 from core.state import state, state_lock, invalidate_state_cache
 from server.node_registry import (
@@ -18,25 +20,30 @@ from server.node_registry import (
 
 logger = logging.getLogger('fancontrol')
 
-# Map agent SID → registry node_id, and reverse
+# Map agent SID → registry node_id, and reverse (for browser Socket.IO only)
 _sid_to_node: dict = {}
 _node_to_sid: dict = {}
-_socketio_ref = None  # Set by register_agent_handlers for forced disconnect
+_socketio_ref = None  # Set by register_agent_handlers
+
+# HTTP command queue — replaces Socket.IO push for agent communication
+_cmd_queue = defaultdict(list)
+_cmd_lock = threading.Lock()
 
 
-def force_disconnect_node(node_id):
-    """Force-disconnect an agent's WebSocket connection so it reconnects fresh."""
-    sid = _node_to_sid.get(node_id)
-    if not sid:
-        return False
-    if _socketio_ref:
-        try:
-            _socketio_ref.server.disconnect(sid)
-            logger.info(f'[disconnect] Force-disconnected node {node_id} (SID {sid[:8]}...)')
-            return True
-        except Exception as e:
-            logger.warning(f'[disconnect] Failed to disconnect node {node_id}: {e}')
-    return False
+def queue_command(node_id, command_type, payload=None):
+    """Queue a command for delivery to agent via HTTP poll."""
+    with _cmd_lock:
+        _cmd_queue[node_id].append({
+            'type': command_type,
+            'data': payload or {},
+        })
+    logger.info(f'[cmd-queue] Queued {command_type} for {node_id}')
+
+
+def drain_commands(node_id):
+    """Return and clear all pending commands for a node."""
+    with _cmd_lock:
+        return _cmd_queue.pop(node_id, [])
 
 
 def cleanup_stale_sids():
@@ -51,6 +58,72 @@ def cleanup_stale_sids():
             _node_to_sid.pop(nid, None)
     if stale_sids:
         logger.info(f'[SID] Cleaned up {len(stale_sids)} stale mappings')
+
+
+def _process_agent_data(node_id, telemetry):
+    """Process telemetry data for a node — update state, DB, broadcast to browsers.
+    Shared by both Socket.IO handler and HTTP endpoint."""
+    if not isinstance(telemetry, dict):
+        return
+
+    update_node_status(node_id, 'online', telemetry)
+
+    with state_lock:
+        if node_id in state.get('nodes', {}):
+            # Check for fan health status changes before updating telemetry
+            prev_telemetry = state['nodes'][node_id].get('telemetry', {})
+            prev_fans = prev_telemetry.get('fans', {})
+            new_fans = telemetry.get('fans', {})
+
+            for fan_id, new_fan in new_fans.items():
+                new_health = new_fan.get('health', {})
+                prev_health = prev_fans.get(fan_id, {}).get('health', {})
+                new_h_status = new_health.get('status', 'healthy')
+                prev_h_status = prev_health.get('status', 'healthy')
+
+                if new_h_status != prev_h_status:
+                    label = new_fan.get('label', fan_id)
+                    if new_h_status in ('stopped', 'slowing', 'needs_calibration'):
+                        _socketio_ref.emit('fan:health', {
+                            'fan_id': fan_id, 'node_id': node_id,
+                            'status': new_h_status, 'label': label,
+                            'message': f'[{node_id}] Вентилятор {label}: {new_h_status}',
+                        }) if _socketio_ref else None
+                    elif new_h_status == 'healthy' and prev_h_status in ('stopped', 'slowing', 'needs_calibration'):
+                        _socketio_ref.emit('fan:health:cleared', {
+                            'fan_id': fan_id, 'node_id': node_id,
+                        }) if _socketio_ref else None
+
+            state['nodes'][node_id]['status'] = 'online'
+            state['nodes'][node_id]['telemetry'] = telemetry
+            state['nodes'][node_id]['last_seen'] = datetime.utcnow().isoformat()
+        else:
+            # Node exists in DB but not in state — populate from DB
+            from server.node_registry import get_node
+            db_node = get_node(node_id)
+            if db_node:
+                state['nodes'][node_id] = {
+                    'node_id': node_id,
+                    'stable_id': db_node.get('stable_id', ''),
+                    'name': db_node.get('name', node_id),
+                    'status': 'online',
+                    'control_mode': db_node.get('control_mode', 'server'),
+                    'config': db_node.get('config') or {},
+                    'dsm_schemes': (db_node.get('config') or {}).get('dsm_schemes', []),
+                    'kernel_info': (db_node.get('config') or {}).get('kernel_info', {}),
+                    'agent_version': db_node.get('agent_version', ''),
+                    'auto_update': db_node.get('auto_update', 0),
+                    'pending_update': db_node.get('pending_update', 0),
+                    'update_started': None,
+                    'telemetry': telemetry,
+                    'last_seen': datetime.utcnow().isoformat(),
+                }
+                logger.info(f'[telemetry] Populated state for {node_id} from DB')
+
+    invalidate_state_cache()
+
+    if _socketio_ref:
+        _socketio_ref.emit('node:telemetry', {'node_id': node_id, 'telemetry': telemetry})
 
 # Grace period: skip conflict detection for 30s after server startup
 # to avoid false conflicts when agents reconnect during restart
@@ -86,13 +159,16 @@ def _strip_runtime(cfg):
 
 
 def _emit_to_node(socketio, event, data, node_id):
-    """Emit event to a specific agent by node_id via its SID."""
+    """Emit event to agent via Socket.IO AND queue for HTTP delivery."""
+    # Try Socket.IO push (for old agents or immediate delivery)
     sid = _node_to_sid.get(node_id)
     if sid:
         logger.info(f'[_emit] {event} → node={node_id} sid={sid[:8]}...')
         socketio.emit(event, data, room=sid)
-    else:
-        logger.warning(f'[_emit] No SID for node {node_id}, emit {event} skipped')
+
+    # Also queue for HTTP poll (for new agents or as fallback)
+    cmd_type = event.replace('server:', '')
+    queue_command(node_id, cmd_type, data)
 
 
 def _start_ping_loop(socketio):
