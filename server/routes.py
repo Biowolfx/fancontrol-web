@@ -1394,13 +1394,17 @@ def api_accept_discovered(node_id):
 
         node = add_node(agent_name, api_token=api_token, ip=agent_ip)
 
-        # Populate state['nodes'] so telemetry can flow immediately
+        # Register token → node_id mapping so handle_agent_connect finds it
+        from server.agent_handlers import _token_to_node_id
+        _token_to_node_id[api_token] = node['node_id']
+
+        # Populate state['nodes'] as 'pending' — will go 'online' on first telemetry
         from core.state import state, state_lock, invalidate_state_cache
         new_node = {
             'node_id': node['node_id'],
             'stable_id': node.get('stable_id', ''),
             'name': node['name'],
-            'status': 'online',
+            'status': 'pending',
             'control_mode': 'server',
             'config': {},
             'dsm_schemes': [],

@@ -296,7 +296,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             agent_ip = flask_request.remote_addr if flask_request else ''
             from server.node_registry import list_nodes
             for n in list_nodes():
-                if agent_ip and n.get('ip') == agent_ip and agent_ip != '127.0.0.1':
+                if agent_ip and n.get('ip') == agent_ip:
                     node_id = n['node_id']
                     if agent_sid:
                         _sid_to_node[agent_sid] = node_id
@@ -329,11 +329,41 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
             logger.warning(f'agent:telemetry DROPPED: no SID mapping for sid={agent_sid}')
             return
 
-        if not node_id or node_id not in state.get('nodes', {}):
-            logger.warning(f'agent:telemetry DROPPED: resolved={node_id} '
-                           f'nodes_keys={list(state.get("nodes", {}).keys())} '
-                           f'sid_map_keys={list(_sid_to_node.keys())}')
-            return
+        # If resolved node_id is stale (deleted from state), try IP fallback again
+        if node_id not in state.get('nodes', {}):
+            agent_ip = flask_request.remote_addr if flask_request else ''
+            from server.node_registry import list_nodes
+            found = False
+            for n in list_nodes():
+                if agent_ip and n.get('ip') == agent_ip:
+                    node_id = n['node_id']
+                    if agent_sid:
+                        _sid_to_node[agent_sid] = node_id
+                        _node_to_sid[node_id] = agent_sid
+                    if node_id not in state.get('nodes', {}):
+                        from core.state import invalidate_state_cache
+                        with state_lock:
+                            state['nodes'][node_id] = {
+                                'node_id': node_id,
+                                'stable_id': n.get('stable_id', ''),
+                                'name': n.get('name', node_id),
+                                'status': 'online',
+                                'control_mode': n.get('control_mode', 'server'),
+                                'config': n.get('config') or {},
+                                'dsm_schemes': (n.get('config') or {}).get('dsm_schemes', []),
+                                'kernel_info': (n.get('config') or {}).get('kernel_info', {}),
+                                'agent_version': n.get('agent_version', ''),
+                                'auto_update': n.get('auto_update', 0),
+                                'pending_update': n.get('pending_update', 0),
+                                'update_started': None,
+                            }
+                        invalidate_state_cache()
+                    logger.info(f'[telemetry] Stale SID resolved by IP: {agent_ip} → {node_id}')
+                    found = True
+                    break
+            if not found:
+                logger.warning(f'agent:telemetry DROPPED: stale node_id={node_id} not in state')
+                return
 
         update_node_status(node_id, 'online', telemetry)
 
