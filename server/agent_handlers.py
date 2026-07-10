@@ -21,6 +21,22 @@ logger = logging.getLogger('fancontrol')
 # Map agent SID → registry node_id, and reverse
 _sid_to_node: dict = {}
 _node_to_sid: dict = {}
+_socketio_ref = None  # Set by register_agent_handlers for forced disconnect
+
+
+def force_disconnect_node(node_id):
+    """Force-disconnect an agent's WebSocket connection so it reconnects fresh."""
+    sid = _node_to_sid.get(node_id)
+    if not sid:
+        return False
+    if _socketio_ref:
+        try:
+            _socketio_ref.server.disconnect(sid)
+            logger.info(f'[disconnect] Force-disconnected node {node_id} (SID {sid[:8]}...)')
+            return True
+        except Exception as e:
+            logger.warning(f'[disconnect] Failed to disconnect node {node_id}: {e}')
+    return False
 
 
 def cleanup_stale_sids():
@@ -101,6 +117,8 @@ def _start_ping_loop(socketio):
 
 def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     """Register Socket.IO event handlers for agent connections."""
+    global _socketio_ref
+    _socketio_ref = socketio
 
     _start_ping_loop(socketio)
 
@@ -267,8 +285,19 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                     f'temps={list(telemetry.get("temp_sensors", {}).keys())}')
 
         if not node_id:
-            # No fallback — if SID mapping fails, drop the telemetry
-            # Agent should reconnect to get proper SID mapping
+            # Fallback: try to resolve by agent_node_id from telemetry
+            from server.node_registry import list_nodes
+            for n in list_nodes():
+                if n.get('node_id') == agent_node_id:
+                    node_id = n['node_id']
+                    # Re-create SID mapping for this connection
+                    if agent_sid:
+                        _sid_to_node[agent_sid] = node_id
+                        _node_to_sid[node_id] = agent_sid
+                    logger.info(f'[telemetry] Resolved by node_id fallback: {agent_node_id} → {node_id}')
+                    break
+
+        if not node_id:
             logger.warning(f'agent:telemetry DROPPED: no SID mapping for sid={agent_sid}')
             return
 

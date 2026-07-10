@@ -1144,14 +1144,16 @@ def api_update_node(node_id):
 
 @routes.route('/api/nodes/<node_id>', methods=['DELETE'])
 def api_delete_node(node_id):
-    """Delete a node — clean up DB, state, SID mappings, and discovered cache."""
+    """Delete a node — clean up DB, state, SID mappings, discovery cache, and disconnect agent."""
     from server.node_registry import delete_node
     from core.state import state, state_lock, invalidate_state_cache
     if delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
-        # Clean up SID mappings so stale telemetry doesn't route to deleted node
-        from server.agent_handlers import _sid_to_node, _node_to_sid
+        # Clean up SID mappings
+        from server.agent_handlers import _sid_to_node, _node_to_sid, force_disconnect_node
+        # Force-disconnect agent WebSocket BEFORE cleaning SID
+        force_disconnect_node(node_id)
         sid = _node_to_sid.pop(node_id, None)
         if sid:
             _sid_to_node.pop(sid, None)

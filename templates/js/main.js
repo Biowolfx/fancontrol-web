@@ -9,7 +9,7 @@ import {
     settingsDefaults, settings, schedule, dashboard, cardDrag, cardResize, cardEdit,
     smart, groupDrag, timers, dsm, logging, update, conflict, debug, sparklineHistory,
 } from './store.js';
-import { escapeHtml, fanIcon, show, hide, toggle, formatTemp, getTempUnitSymbol, formatBytes, getUnitLabel, getTempColorClass, getSettings, saveSettings, showToast } from './utils.js';
+import { escapeHtml, fanIcon, show, hide, toggle, formatTemp, getTempUnitSymbol, formatBytes, getUnitLabel, getTempColorClass, getSettings, saveSettings, showToast, dismissToast } from './utils.js';
 import { loadLang, t, applyTranslations } from './i18n.js';
 import { healthIcon, buildSensorCheckboxList, setModeButtonStyles } from './render-helpers.js';
 import { registerSocketHandlers } from './socket-handlers.js';
@@ -5849,6 +5849,7 @@ window.removePickerGroup = removePickerGroup;
 window.updateSingleAgent = updateSingleAgent;
 window.acceptDiscoveredAgent = acceptDiscoveredAgent;
 window.dismissAgentForever = dismissAgentForever;
+window.dismissToast = dismissToast;
 window.retryAgentUpdate = retryAgentUpdate;
 window.skipAgentUpdate = skipAgentUpdate;
 window.requestAgentLogs = requestAgentLogs;

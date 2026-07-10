@@ -97,10 +97,12 @@ export function showToast(message, type = 'info', actions = [], persistent = fal
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    const toastId = 'toast-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    toast.id = toastId;
 
     let html = `<span>${escapeHtml(message)}</span>`;
     actions.forEach(action => {
-        html += `<button class="toast-btn ${action.secondary ? 'toast-btn-secondary' : ''}" onclick="${action.onclick}">${escapeHtml(action.label)}</button>`;
+        html += `<button class="toast-btn ${action.secondary ? 'toast-btn-secondary' : ''}" onclick="dismissToast('${toastId}'); ${action.onclick}">${escapeHtml(action.label)}</button>`;
     });
 
     toast.innerHTML = html;
@@ -108,9 +110,16 @@ export function showToast(message, type = 'info', actions = [], persistent = fal
 
     if (!persistent) {
         setTimeout(() => {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateX(100px)';
-            setTimeout(() => toast.remove(), 300);
+            dismissToast(toastId);
         }, 8000);
+    }
+}
+
+export function dismissToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (toast) {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100px)';
+        setTimeout(() => toast.remove(), 300);
     }
 }
