@@ -3386,19 +3386,22 @@ def init_nodes_table():
             ('agent_version', "ALTER TABLE nodes ADD COLUMN agent_version TEXT DEFAULT ''"),
             ('pending_update', "ALTER TABLE nodes ADD COLUMN pending_update INTEGER DEFAULT 0"),
             ('auto_update', "ALTER TABLE nodes ADD COLUMN auto_update INTEGER DEFAULT 0"),
-            ('stable_id', "ALTER TABLE nodes ADD COLUMN stable_id TEXT UNIQUE"),
+            # UNIQUE removed from ALTER TABLE — SQLite may not support it.
+            # Uniqueness enforced by add_node() IntegrityError handling.
+            ('stable_id', "ALTER TABLE nodes ADD COLUMN stable_id TEXT DEFAULT ''"),
         ]
         for col_name, sql in migrations:
             if col_name not in cols:
                 try:
                     conn.execute(sql)
+                    conn.commit()
                     logger.info(f'[init_nodes_table] Added column: {col_name}')
                 except Exception as e:
                     logger.warning(f'[init_nodes_table] Column {col_name} migration failed: {e}')
         
         # Generate stable_id for existing nodes that don't have one
         try:
-            for row in conn.execute('SELECT node_id FROM nodes WHERE stable_id IS NULL').fetchall():
+            for row in conn.execute("SELECT node_id FROM nodes WHERE stable_id IS NULL OR stable_id = ''").fetchall():
                 sid = uuid.uuid4().hex[:12]
                 conn.execute('UPDATE nodes SET stable_id = ? WHERE node_id = ?', (sid, row[0]))
                 logger.info(f'[init_nodes_table] Generated stable_id={sid} for node {row[0]}')
