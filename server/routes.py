@@ -1144,12 +1144,24 @@ def api_update_node(node_id):
 
 @routes.route('/api/nodes/<node_id>', methods=['DELETE'])
 def api_delete_node(node_id):
-    """Delete a node."""
+    """Delete a node — clean up DB, state, SID mappings, and discovered cache."""
     from server.node_registry import delete_node
     from core.state import state, state_lock, invalidate_state_cache
     if delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
+        # Clean up SID mappings so stale telemetry doesn't route to deleted node
+        from server.agent_handlers import _sid_to_node, _node_to_sid
+        sid = _node_to_sid.pop(node_id, None)
+        if sid:
+            _sid_to_node.pop(sid, None)
+        # Remove from SSDP discovered cache
+        from server.discovery import _discovered_nodes, _lock as disc_lock
+        with disc_lock:
+            to_remove = [k for k, v in _discovered_nodes.items()
+                         if v.get('node_id') == node_id]
+            for k in to_remove:
+                _discovered_nodes.pop(k, None)
         invalidate_state_cache()
         return jsonify({'status': 'deleted'})
     return jsonify({'error': 'Node not found'}), 404
