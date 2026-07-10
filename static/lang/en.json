@@ -354,6 +354,7 @@
   "toast.add": "Add",
   "toast.agent_add_error": "Failed to add agent",
   "toast.agent_added": "Agent added! Reconnecting...",
+  "toast.agent_already_registered": "Agent already registered",
   "toast.dismiss": "Don't remind",
   "toast.dismissed": "Won't remind again",
   "toast.new_agent": "New agent: ",

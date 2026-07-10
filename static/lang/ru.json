@@ -354,6 +354,7 @@
   "toast.add": "Добавить",
   "toast.agent_add_error": "Ошибка добавления агента",
   "toast.agent_added": "Агент добавлен! Переподключение...",
+  "toast.agent_already_registered": "Агент уже зарегистрирован",
   "toast.dismiss": "Не напоминать",
   "toast.dismissed": "Больше не напоминать",
   "toast.new_agent": "Новый агент: ",

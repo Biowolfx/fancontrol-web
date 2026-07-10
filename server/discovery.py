@@ -189,9 +189,13 @@ def _parse_and_notify(data: str, source_ip: str):
         if node_id in _discovered_nodes:
             return
 
-        from server.node_registry import get_node
+        from server.node_registry import get_node, list_nodes
+        # Skip already-registered agents — check by both node_id and IP
         if get_node(node_id):
             return
+        for n in list_nodes():
+            if n.get('ip') == source_ip:
+                return
 
         _discovered_nodes[node_id] = {
             'node_id': node_id,
@@ -312,7 +316,11 @@ def scan_subnet(port: int = 5059, timeout: float = 0.3, probe_timeout: int = 2) 
     """Scan local subnet for FanControl agents via TCP connect + HTTP probe.
 
     Returns list of dicts: {ip, name, node_id, api_token, ...}
+    Excludes already-registered agents.
     """
+    from server.node_registry import list_nodes
+    existing_ips = {n['ip'] for n in list_nodes() if n.get('ip')}
+
     ip, mask, prefix = _get_local_subnet()
     logger.info(f'Subnet scan: local IP={ip}, mask={mask}, /{prefix}')
 

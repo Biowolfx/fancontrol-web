@@ -1300,8 +1300,11 @@ def api_add_node_by_ip():
 def api_list_discovered():
     """List discovered but unregistered agents."""
     from server.discovery import _discovered_nodes, _lock
+    from server.node_registry import list_nodes
+    existing_ips = {n['ip'] for n in list_nodes() if n.get('ip')}
     with _lock:
-        return jsonify(list(_discovered_nodes.values()))
+        agents = [a for a in _discovered_nodes.values() if a.get('ip') not in existing_ips]
+        return jsonify(agents)
 
 
 @routes.route('/api/discovered/<node_id>/accept', methods=['POST'])
@@ -1313,16 +1316,31 @@ def api_accept_discovered(node_id):
     """
     try:
         from server.discovery import _discovered_nodes, _lock
-        from server.node_registry import add_node
+        from server.node_registry import add_node, list_nodes
         import urllib.request
 
         with _lock:
             agent = _discovered_nodes.get(node_id)
             if not agent:
+                # Check if agent is already registered (by IP)
+                agent_ip_check = None
+                for n in list_nodes():
+                    if n.get('ip'):
+                        agent_ip_check = n['ip']
+                        break
+                # Still return 404 if truly not found
                 return jsonify({'error': 'Agent not found'}), 404
 
             agent_ip = agent.get('ip', '')
             agent_name = agent.get('name', node_id)
+
+        # Check if agent with this IP is already registered
+        existing_ips = {n['ip']: n for n in list_nodes() if n.get('ip')}
+        if agent_ip in existing_ips:
+            existing = existing_ips[agent_ip]
+            with _lock:
+                _discovered_nodes.pop(node_id, None)
+            return jsonify({'message': 'Agent already registered', 'node_id': existing['node_id']}), 200
 
         # Fetch api_token from agent via unicast HTTP
         api_token = ''

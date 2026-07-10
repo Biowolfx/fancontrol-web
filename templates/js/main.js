@@ -5553,9 +5553,16 @@ async function scanForAgents() {
 async function acceptDiscoveredAgent(nodeId) {
     try {
         const resp = await fetch(`/api/discovered/${nodeId}/accept`, { method: 'POST' });
+        const data = await resp.json();
         if (resp.ok) {
-            showToast(t('toast.agent_added', 'Agent added! Reconnecting...'), 'success');
+            if (data.message === 'Agent already registered') {
+                showToast(t('toast.agent_already_registered', 'Agent already registered'), 'info');
+            } else {
+                showToast(t('toast.agent_added', 'Agent added! Reconnecting...'), 'success');
+            }
             loadNodes();
+        } else {
+            showToast(t('toast.agent_add_error', 'Failed to add agent') + ': ' + (data.error || ''), 'error');
         }
     } catch (e) {
         showToast(t('toast.agent_add_error', 'Failed to add agent'), 'error');
