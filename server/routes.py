@@ -316,9 +316,29 @@ def api_proxy_disk_smart(node_id, disk_id):
     """Proxy SMART request to a remote agent. Looks up by stable_id or node_id."""
     import logging
     logger = logging.getLogger('fancontrol')
-    from server.node_registry import get_node, get_node_by_stable_id
+    from server.node_registry import get_node, get_node_by_stable_id, list_nodes
+
     node = get_node_by_stable_id(node_id) or get_node(node_id)
+
+    # Fallback: iterate all nodes (handles stale stable_id from frontend after delete/re-add)
     if not node:
+        logger.warning(f'SMART proxy: node {node_id} not found by stable_id/node_id, scanning all nodes')
+        for n in list_nodes():
+            if n.get('stable_id') == node_id or n.get('node_id') == node_id:
+                node = n
+                break
+        # Last resort: find node by disk ownership from telemetry
+        if not node:
+            for n in list_nodes():
+                telemetry = n.get('telemetry') or {}
+                hdds = telemetry.get('hdd_sensors') or {}
+                if disk_id in hdds:
+                    node = n
+                    logger.info(f'SMART proxy: found node {n["node_id"]} by disk_id={disk_id}')
+                    break
+
+    if not node:
+        logger.warning(f'SMART proxy: node {node_id} not found')
         return jsonify({'error': 'Node not found'}), 404
     ip = node.get('ip') or ''
     if not ip:
