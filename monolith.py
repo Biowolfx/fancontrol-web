@@ -3378,23 +3378,33 @@ def init_nodes_table():
             )
         ''')
         cols = [r[1] for r in conn.execute('PRAGMA table_info(nodes)').fetchall()]
-        if 'ip' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN ip TEXT DEFAULT ''")
-        if 'port' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN port INTEGER DEFAULT 5059")
-        if 'agent_version' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN agent_version TEXT DEFAULT ''")
-        if 'pending_update' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN pending_update INTEGER DEFAULT 0")
-        if 'auto_update' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN auto_update INTEGER DEFAULT 0")
-        if 'stable_id' not in cols:
-            conn.execute("ALTER TABLE nodes ADD COLUMN stable_id TEXT UNIQUE")
-            # Generate stable_id for existing nodes
+        logger.info(f'[init_nodes_table] Existing columns: {cols}')
+        
+        migrations = [
+            ('ip', "ALTER TABLE nodes ADD COLUMN ip TEXT DEFAULT ''"),
+            ('port', "ALTER TABLE nodes ADD COLUMN port INTEGER DEFAULT 5059"),
+            ('agent_version', "ALTER TABLE nodes ADD COLUMN agent_version TEXT DEFAULT ''"),
+            ('pending_update', "ALTER TABLE nodes ADD COLUMN pending_update INTEGER DEFAULT 0"),
+            ('auto_update', "ALTER TABLE nodes ADD COLUMN auto_update INTEGER DEFAULT 0"),
+            ('stable_id', "ALTER TABLE nodes ADD COLUMN stable_id TEXT UNIQUE"),
+        ]
+        for col_name, sql in migrations:
+            if col_name not in cols:
+                try:
+                    conn.execute(sql)
+                    logger.info(f'[init_nodes_table] Added column: {col_name}')
+                except Exception as e:
+                    logger.warning(f'[init_nodes_table] Column {col_name} migration failed: {e}')
+        
+        # Generate stable_id for existing nodes that don't have one
+        try:
             for row in conn.execute('SELECT node_id FROM nodes WHERE stable_id IS NULL').fetchall():
                 sid = uuid.uuid4().hex[:12]
                 conn.execute('UPDATE nodes SET stable_id = ? WHERE node_id = ?', (sid, row[0]))
-                logger.info(f'[registry] Generated stable_id={sid} for existing node {row[0]}')
+                logger.info(f'[init_nodes_table] Generated stable_id={sid} for node {row[0]}')
+        except Exception as e:
+            logger.warning(f'[init_nodes_table] stable_id generation failed: {e}')
+        
         conn.commit()
 
 
