@@ -5130,6 +5130,14 @@ async function loadNodes() {
     try {
         const resp = await fetch('/api/nodes');
         store.nodesData = await resp.json();
+        // Remove picker cards for deleted nodes
+        const validSources = new Set(['local', ...store.nodesData.map(n => n.stable_id || n.node_id)]);
+        const cards = getPickerCards();
+        const cleaned = cards.filter(c => validSources.has(c.source || 'local'));
+        if (cleaned.length !== cards.length) {
+            setPickerCards(cleaned);
+            console.log(`[FanControl] Removed ${cards.length - cleaned.length} cards for deleted nodes`);
+        }
         buildServerTree();
         renderNodesOverview();
     } catch (e) {

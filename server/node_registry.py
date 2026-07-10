@@ -121,12 +121,21 @@ def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int
                 row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
                 return _row_to_dict(row)
             except sqlite3.IntegrityError as e:
-                if 'node_id' in str(e):
+                err_str = str(e).lower()
+                if 'node_id' in err_str:
                     # node_id collision — add suffix
                     node_id = f'{node_id}-{uuid.uuid4().hex[:4]}'
-                elif 'stable_id' in str(e):
+                elif 'stable_id' in err_str:
                     # stable_id collision — retry with new one
                     continue
+                elif 'api_token' in err_str:
+                    # api_token collision — return existing node
+                    existing = get_node_by_token(api_token)
+                    if existing:
+                        logger.info(f'add_node: api_token collision, returning existing node {existing["node_id"]}')
+                        return existing
+                    logger.error(f'add_node api_token collision but node not found')
+                    raise
                 else:
                     logger.error(f'add_node IntegrityError: {e}')
                     raise

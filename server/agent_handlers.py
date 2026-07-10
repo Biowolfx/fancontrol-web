@@ -142,17 +142,24 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         # Auto-register unknown agent — no manual setup needed
         if not node:
             from server.node_registry import add_node
-            node = add_node(node_name or agent_node_id or 'Agent', api_token=api_token,
-                            ip=agent_ip if agent_ip != '127.0.0.1' else '')
-            logger.info(f'Auto-registered new agent: {node_name} ({agent_ip}) token={api_token[:8]}...')
-            # Notify browser — agent is already connected via WebSocket
-            socketio.emit('node:discovered', {
-                'node_id': node['node_id'],
-                'name': node['name'],
-                'ip': agent_ip,
-                'auto_registered': True,
-                'already_connected': True,
-            })
+            try:
+                node = add_node(node_name or agent_node_id or 'Agent', api_token=api_token,
+                                ip=agent_ip if agent_ip != '127.0.0.1' else '')
+                logger.info(f'Auto-registered new agent: {node_name} ({agent_ip}) token={api_token[:8]}...')
+                # Notify browser — agent is already connected via WebSocket
+                socketio.emit('node:discovered', {
+                    'node_id': node['node_id'],
+                    'name': node['name'],
+                    'ip': agent_ip,
+                    'auto_registered': True,
+                    'already_connected': True,
+                })
+            except Exception as e:
+                logger.error(f'agent:connect add_node failed: {e}')
+                # Retry lookup — node may have been created by concurrent request
+                node = get_node_by_token(api_token)
+                if not node:
+                    return {'status': 'error', 'message': f'Registration failed: {e}'}
 
         node_id = node['node_id']
         # Update IP from WebSocket connection
@@ -285,16 +292,16 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                     f'temps={list(telemetry.get("temp_sensors", {}).keys())}')
 
         if not node_id:
-            # Fallback: try to resolve by agent_node_id from telemetry
+            # Fallback: try to resolve by agent IP from Socket.IO connection
+            agent_ip = flask_request.remote_addr if flask_request else ''
             from server.node_registry import list_nodes
             for n in list_nodes():
-                if n.get('node_id') == agent_node_id:
+                if agent_ip and n.get('ip') == agent_ip and agent_ip != '127.0.0.1':
                     node_id = n['node_id']
-                    # Re-create SID mapping for this connection
                     if agent_sid:
                         _sid_to_node[agent_sid] = node_id
                         _node_to_sid[node_id] = agent_sid
-                    logger.info(f'[telemetry] Resolved by node_id fallback: {agent_node_id} → {node_id}')
+                    logger.info(f'[telemetry] Resolved by IP fallback: {agent_ip} → {node_id}')
                     break
 
         if not node_id:
