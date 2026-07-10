@@ -105,11 +105,14 @@ def _start_heartbeat_checker(socketio):
                                 with state_lock:
                                     if 'nodes' not in state:
                                         state['nodes'] = {}
-                                    state['nodes'][nid] = {
-                                        'node_id': nid,
-                                        'name': node['name'],
-                                        'status': 'online',
-                                    }
+                                    if nid not in state['nodes']:
+                                        state['nodes'][nid] = {
+                                            'node_id': nid,
+                                            'name': node['name'],
+                                            'status': 'online',
+                                        }
+                                    else:
+                                        state['nodes'][nid]['status'] = 'online'
                                 invalidate_state_cache()
 
                                 socketio.emit('node:update', {

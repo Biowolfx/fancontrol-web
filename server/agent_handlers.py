@@ -519,5 +519,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         agent_sid = flask_request.sid if flask_request else None
         if agent_sid and agent_sid in _sid_to_node:
             nid = _sid_to_node.pop(agent_sid)
-            _node_to_sid.pop(nid, None)
-            logger.info(f'Agent disconnected: {nid} (SID {agent_sid} released)')
+            # Only clean _node_to_sid if IT points back to THIS SID
+            # (prevents old disconnect from corrupting a newer mapping)
+            if _node_to_sid.get(nid) == agent_sid:
+                _node_to_sid.pop(nid, None)
+            if on_disconnect:
+                on_disconnect(nid)
+            logger.info(f'Agent disconnected: {nid} (SID {agent_sid[:8]}...)')

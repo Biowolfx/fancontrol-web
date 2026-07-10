@@ -1394,9 +1394,30 @@ def api_accept_discovered(node_id):
 
         node = add_node(agent_name, api_token=api_token, ip=agent_ip)
 
+        # Populate state['nodes'] so telemetry can flow immediately
+        from core.state import state, state_lock, invalidate_state_cache
+        new_node = {
+            'node_id': node['node_id'],
+            'stable_id': node.get('stable_id', ''),
+            'name': node['name'],
+            'status': 'online',
+            'control_mode': 'server',
+            'config': {},
+            'dsm_schemes': [],
+            'kernel_info': {},
+            'agent_version': '',
+            'auto_update': 0,
+            'pending_update': 0,
+            'update_started': None,
+        }
+        with state_lock:
+            state['nodes'][node['node_id']] = new_node
+        invalidate_state_cache()
+
         with _lock:
             _discovered_nodes.pop(node_id, None)
 
+        logger.info(f'Accepted agent {node["name"]} ({agent_ip}) node_id={node["node_id"]}')
         return jsonify(node), 201
     except Exception as e:
         logger.error(f'api_accept_discovered error: {e}', exc_info=True)
