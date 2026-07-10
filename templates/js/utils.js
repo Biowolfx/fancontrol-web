@@ -91,7 +91,7 @@ export function saveSettings(partial) {
     return s;
 }
 
-export function showToast(message, type = 'info', actions = []) {
+export function showToast(message, type = 'info', actions = [], persistent = false) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
@@ -106,9 +106,11 @@ export function showToast(message, type = 'info', actions = []) {
     toast.innerHTML = html;
     container.appendChild(toast);
 
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 8000);
+    if (!persistent) {
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 8000);
+    }
 }

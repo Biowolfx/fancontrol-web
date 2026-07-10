@@ -201,7 +201,7 @@ export function registerSocketHandlers(socket, fns) {
             showToast(msg, 'warning', [
                 { label: t('toast.add', 'Add'), onclick: `acceptDiscoveredAgent('${data.node_id}')` },
                 { label: t('toast.dismiss', 'Don\'t remind'), onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
-            ]);
+            ], true);  // persistent = true
         }
     });
 
