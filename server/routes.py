@@ -1313,26 +1313,30 @@ def api_accept_discovered(node_id):
 
     Fetches the api_token from the agent's /api/agent/status endpoint
     over unicast HTTP (token is no longer broadcast via SSDP).
+
+    Accepts optional ?ip= query param for agents found via subnet scan
+    (not stored in SSDP _discovered_nodes).
     """
     try:
         from server.discovery import _discovered_nodes, _lock
         from server.node_registry import add_node, list_nodes
         import urllib.request
+        from flask import request as flask_request
+
+        agent_ip = ''
+        agent_name = node_id
 
         with _lock:
             agent = _discovered_nodes.get(node_id)
-            if not agent:
-                # Check if agent is already registered (by IP)
-                agent_ip_check = None
-                for n in list_nodes():
-                    if n.get('ip'):
-                        agent_ip_check = n['ip']
-                        break
-                # Still return 404 if truly not found
-                return jsonify({'error': 'Agent not found'}), 404
-
-            agent_ip = agent.get('ip', '')
-            agent_name = agent.get('name', node_id)
+            if agent:
+                agent_ip = agent.get('ip', '')
+                agent_name = agent.get('name', node_id)
+            else:
+                # Fallback: IP from query param (subnet scan) or already-registered check
+                agent_ip = flask_request.args.get('ip', '').strip()
+                if not agent_ip:
+                    # Check if already registered by any existing node
+                    return jsonify({'error': 'Agent not found — no IP provided'}), 404
 
         # Check if agent with this IP is already registered
         existing_ips = {n['ip']: n for n in list_nodes() if n.get('ip')}
@@ -1350,6 +1354,7 @@ def api_accept_discovered(node_id):
             import json
             status = json.loads(req.read())
             api_token = status.get('api_token', '')
+            agent_name = status.get('node_name', agent_name)
         except Exception as e:
             logger.warning(f'Could not fetch token from agent {agent_ip}: {e}')
             return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502

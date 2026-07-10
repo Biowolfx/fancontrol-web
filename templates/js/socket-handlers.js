@@ -5,7 +5,7 @@
 
 import { store, dashboard, update, conflict } from './store.js';
 import { t } from './i18n.js';
-import { getSettings, showToast } from './utils.js';
+import { getSettings, showToast, escapeHtml } from './utils.js';
 
 // These functions are defined in main.js and will be passed in
 // via the registerSocketHandlers() call at the bottom.
@@ -199,7 +199,7 @@ export function registerSocketHandlers(socket, fns) {
             if (dismissed.includes(data.node_id)) return;
             const msg = t('toast.new_agent', 'New agent: ') + data.name + ' (' + data.ip + ')';
             showToast(msg, 'warning', [
-                { label: t('toast.add', 'Add'), onclick: `acceptDiscoveredAgent('${data.node_id}')` },
+                { label: t('toast.add', 'Add'), onclick: `acceptDiscoveredAgent('${data.node_id}', '${escapeHtml(data.ip || '')}')` },
                 { label: t('toast.dismiss', 'Don\'t remind'), onclick: `dismissAgentForever('${data.node_id}')`, secondary: true },
             ], true);  // persistent = true
         }

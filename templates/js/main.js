@@ -5511,7 +5511,7 @@ async function scanForAgents() {
                 const btnLabel = agent.already_registered ? t('discovery.refresh', 'Refresh') : t('discovery.add', '+ Add');
                 const onclick = agent.already_registered
                     ? `loadNodes(); showToast(t('toast.node_refreshed', 'Node refreshed'), 'success')`
-                    : `acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')`;
+                    : `acceptDiscoveredAgent('${escapeHtml(agent.node_id)}', '${escapeHtml(agent.ip || '')}')`;
                 html += `
                     <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
                         <span class="text-white truncate">${label} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
@@ -5528,7 +5528,7 @@ async function scanForAgents() {
                     html += `
                         <div class="flex items-center justify-between bg-gray-800/50 rounded p-1.5 text-xs">
                             <span class="text-white truncate">${escapeHtml(agent.name || agent.node_id)} <span class="text-gray-500">${escapeHtml(agent.ip || '')}</span></span>
-                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}')" class="text-neon-cyan hover:text-cyan-300 px-1">${t('discovery.add', '+ Add')}</button>
+                            <button onclick="acceptDiscoveredAgent('${escapeHtml(agent.node_id)}', '${escapeHtml(agent.ip || '')}')" class="text-neon-cyan hover:text-cyan-300 px-1">${t('discovery.add', '+ Add')}</button>
                         </div>
                     `;
                 }
@@ -5550,9 +5550,10 @@ async function scanForAgents() {
     btn.textContent = '\uD83D\uDD0D';
 }
 
-async function acceptDiscoveredAgent(nodeId) {
+async function acceptDiscoveredAgent(nodeId, ip) {
     try {
-        const resp = await fetch(`/api/discovered/${nodeId}/accept`, { method: 'POST' });
+        const url = ip ? `/api/discovered/${nodeId}/accept?ip=${encodeURIComponent(ip)}` : `/api/discovered/${nodeId}/accept`;
+        const resp = await fetch(url, { method: 'POST' });
         const data = await resp.json();
         if (resp.ok) {
             if (data.message === 'Agent already registered') {
