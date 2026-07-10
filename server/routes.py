@@ -1144,21 +1144,18 @@ def api_update_node(node_id):
 
 @routes.route('/api/nodes/<node_id>', methods=['DELETE'])
 def api_delete_node(node_id):
-    """Delete a node — clean up DB, state, SID mappings, discovery cache, and disconnect agent."""
+    """Delete a node — clean up DB, state, discovery cache, and disconnect agent.
+    SID mapping cleanup is handled by handle_disconnect on the agent side."""
     from server.node_registry import delete_node, get_node
     from core.state import state, state_lock, invalidate_state_cache
-    # Get node IP before deletion for discovery cache cleanup
     existing_node = get_node(node_id)
     deleted_ip = existing_node.get('ip', '') if existing_node else ''
     if delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
-        # Force-disconnect agent WebSocket BEFORE cleaning SID
-        from server.agent_handlers import _sid_to_node, _node_to_sid, force_disconnect_node
+        # Force-disconnect agent WebSocket — handle_disconnect will clean SID mapping
+        from server.agent_handlers import force_disconnect_node
         force_disconnect_node(node_id)
-        sid = _node_to_sid.pop(node_id, None)
-        if sid:
-            _sid_to_node.pop(sid, None)
         # Remove from SSDP discovered cache by both node_id and IP
         from server.discovery import _discovered_nodes, _lock as disc_lock
         with disc_lock:
