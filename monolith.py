@@ -3405,27 +3405,34 @@ def add_node(name: str, api_token: Optional[str] = None, ip: str = '', port: int
     node_id = re.sub(r'[^a-z0-9\-]', '', name.lower().replace(' ', '-'))
     if not node_id:
         node_id = f'node-{uuid.uuid4().hex[:8]}'
-    stable_id = uuid.uuid4().hex[:12]
+    
     with _lock:
         conn = _get_conn()
-        try:
-            conn.execute(
-                'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
-                (node_id, stable_id, name, api_token, ip, port)
-            )
-            conn.commit()
-        except Exception as e:
-            logger.error(f'add_node failed: {e}')
-            # If node_id already exists, try with a suffix
-            node_id = f'{node_id}-{uuid.uuid4().hex[:4]}'
+        # Try up to 3 times with unique stable_id
+        for attempt in range(3):
             stable_id = uuid.uuid4().hex[:12]
-            conn.execute(
-                'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
-                (node_id, stable_id, name, api_token, ip, port)
-            )
-            conn.commit()
-        row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
-        return _row_to_dict(row)
+            try:
+                conn.execute(
+                    'INSERT INTO nodes (node_id, stable_id, name, api_token, ip, port) VALUES (?, ?, ?, ?, ?, ?)',
+                    (node_id, stable_id, name, api_token, ip, port)
+                )
+                conn.commit()
+                row = conn.execute('SELECT * FROM nodes WHERE node_id = ?', (node_id,)).fetchone()
+                return _row_to_dict(row)
+            except sqlite3.IntegrityError as e:
+                if 'node_id' in str(e):
+                    # node_id collision — add suffix
+                    node_id = f'{node_id}-{uuid.uuid4().hex[:4]}'
+                elif 'stable_id' in str(e):
+                    # stable_id collision — retry with new one
+                    continue
+                else:
+                    logger.error(f'add_node IntegrityError: {e}')
+                    raise
+            except Exception as e:
+                logger.error(f'add_node failed: {e}')
+                raise
+        raise Exception('Failed to add node after 3 attempts')
 
 
 def get_node(node_id: str) -> Optional[Dict]:
