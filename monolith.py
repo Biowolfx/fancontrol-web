@@ -5771,12 +5771,16 @@ def api_list_nodes():
 @routes.route('/api/nodes', methods=['POST'])
 def api_add_node():
     """Add a new node."""
-    data = request.get_json(silent=True) or {}
-    name = data.get('name', '').strip()
-    if not name:
-        return jsonify({'error': 'Name required'}), 400
-    node = add_node(name)
-    return jsonify(node), 201
+    try:
+        data = request.get_json(silent=True) or {}
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Name required'}), 400
+        node = add_node(name)
+        return jsonify(node), 201
+    except Exception as e:
+        logger.error(f'api_add_node error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @routes.route('/api/nodes/<node_id>')
@@ -5988,34 +5992,38 @@ def api_accept_discovered(node_id):
     Fetches the api_token from the agent's /api/agent/status endpoint
     over unicast HTTP (token is no longer broadcast via SSDP).
     """
-    import urllib.request
-
-    with _lock:
-        agent = _discovered_nodes.get(node_id)
-        if not agent:
-            return jsonify({'error': 'Agent not found'}), 404
-
-        agent_ip = agent.get('ip', '')
-        agent_name = agent.get('name', node_id)
-
-    # Fetch api_token from agent via unicast HTTP
-    api_token = ''
     try:
-        url = f'http://{agent_ip}:5059/api/agent/status'
-        req = urllib.request.urlopen(url, timeout=5)
-        import json
-        status = json.loads(req.read())
-        api_token = status.get('api_token', '')
+        import urllib.request
+
+        with _lock:
+            agent = _discovered_nodes.get(node_id)
+            if not agent:
+                return jsonify({'error': 'Agent not found'}), 404
+
+            agent_ip = agent.get('ip', '')
+            agent_name = agent.get('name', node_id)
+
+        # Fetch api_token from agent via unicast HTTP
+        api_token = ''
+        try:
+            url = f'http://{agent_ip}:5059/api/agent/status'
+            req = urllib.request.urlopen(url, timeout=5)
+            import json
+            status = json.loads(req.read())
+            api_token = status.get('api_token', '')
+        except Exception as e:
+            logger.warning(f'Could not fetch token from agent {agent_ip}: {e}')
+            return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502
+
+        node = add_node(agent_name, api_token=api_token, ip=agent_ip)
+
+        with _lock:
+            _discovered_nodes.pop(node_id, None)
+
+        return jsonify(node), 201
     except Exception as e:
-        logger.warning(f'Could not fetch token from agent {agent_ip}: {e}')
-        return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502
-
-    node = add_node(agent_name, api_token=api_token, ip=agent_ip)
-
-    with _lock:
-        _discovered_nodes.pop(node_id, None)
-
-    return jsonify(node), 201
+        logger.error(f'api_accept_discovered error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 # ============================================================================
