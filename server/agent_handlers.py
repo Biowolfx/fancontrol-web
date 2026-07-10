@@ -301,6 +301,27 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
                     if agent_sid:
                         _sid_to_node[agent_sid] = node_id
                         _node_to_sid[node_id] = agent_sid
+                    # Populate state if missing (node added via scan but handle_agent_connect not called)
+                    if node_id not in state.get('nodes', {}):
+                        from core.state import invalidate_state_cache
+                        new_node = {
+                            'node_id': node_id,
+                            'stable_id': n.get('stable_id', ''),
+                            'name': n.get('name', node_id),
+                            'status': 'online',
+                            'control_mode': n.get('control_mode', 'server'),
+                            'config': n.get('config') or {},
+                            'dsm_schemes': (n.get('config') or {}).get('dsm_schemes', []),
+                            'kernel_info': (n.get('config') or {}).get('kernel_info', {}),
+                            'agent_version': n.get('agent_version', ''),
+                            'auto_update': n.get('auto_update', 0),
+                            'pending_update': n.get('pending_update', 0),
+                            'update_started': None,
+                        }
+                        with state_lock:
+                            state['nodes'][node_id] = new_node
+                        invalidate_state_cache()
+                        logger.info(f'[telemetry] Populated state for node {node_id} from DB')
                     logger.info(f'[telemetry] Resolved by IP fallback: {agent_ip} → {node_id}')
                     break
 
