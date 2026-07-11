@@ -159,6 +159,13 @@ def init_hardware():
             refresh()
             load_config()
 
+            # Initialize Telegram if configured
+            if state.get('telegram_bot_token'):
+                from core.telegram import configure, is_configured
+                configure(state.get('telegram_bot_token', ''), state.get('telegram_chat_id', ''))
+                if is_configured():
+                    logger.info('Telegram notifications initialized')
+
             # Apply saved log level
             saved_level = state.get('log_level', 'INFO')
             if saved_level and saved_level != 'INFO':
