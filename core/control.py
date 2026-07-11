@@ -511,8 +511,8 @@ def check_fan_health(socketio=None):
                         'message': f'Вентилятор {label} остановлен!',
                     })
                 if tg_fan:
-                    from core.telegram import send_message
-                    send_message(f'⛔ <b>Вентилятор остановлен!</b>\n{label} ({fan_id})')
+                    from core.telegram import send_message, _escape_html
+                    send_message(f'⛔ <b>Вентилятор остановлен!</b>\n{_escape_html(label)} ({_escape_html(fan_id)})')
                 logger.warning(f'Fan STOPPED: {label} ({fan_id})')
             elif new_s == 'slowing':
                 if socketio:
@@ -522,8 +522,8 @@ def check_fan_health(socketio=None):
                         'message': f'Вентилятор {label} замедляется (износ подшипника)',
                     })
                 if tg_fan:
-                    from core.telegram import send_message
-                    send_message(f'⚠️ <b>Вентилятор замедляется</b>\n{label} — износ подшипника')
+                    from core.telegram import send_message, _escape_html
+                    send_message(f'⚠️ <b>Вентилятор замедляется</b>\n{_escape_html(label)} — износ подшипника')
                 logger.warning(f'Fan SLOWING: {label} ({fan_id})')
             elif new_s == 'needs_calibration':
                 if socketio:
@@ -533,16 +533,16 @@ def check_fan_health(socketio=None):
                         'message': f'Вентилятор {label} требует калибровки',
                     })
                 if tg_fan:
-                    from core.telegram import send_message
-                    send_message(f'🔧 <b>Требуется калибровка</b>\n{label}')
+                    from core.telegram import send_message, _escape_html
+                    send_message(f'🔧 <b>Требуется калибровка</b>\n{_escape_html(label)}')
             elif new_s == 'healthy' and old_s in ('stopped', 'slowing', 'needs_calibration'):
                 if socketio:
                     socketio.emit('fan:health:cleared', {
                         'fan_id': fan_id, 'node_id': 'local',
                     })
                 if tg_fan:
-                    from core.telegram import send_message
-                    send_message(f'✅ <b>Вентилятор восстановлен</b>\n{label}')
+                    from core.telegram import send_message, _escape_html
+                    send_message(f'✅ <b>Вентилятор восстановлен</b>\n{_escape_html(label)}')
                 logger.info(f'Fan recovered: {label} ({fan_id}) → healthy')
 
 
