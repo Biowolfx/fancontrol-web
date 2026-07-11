@@ -1,6 +1,5 @@
 """Agent communication — Socket.IO handlers + HTTP command queue."""
 
-import json
 import logging
 import threading
 import time
@@ -126,9 +125,7 @@ def _process_agent_data(node_id, telemetry):
         _socketio_ref.emit('node:telemetry', {'node_id': node_id, 'telemetry': telemetry})
 
 # Grace period: skip conflict detection for 30s after server startup
-# to avoid false conflicts when agents reconnect during restart
-import time as _time
-_startup_time = _time.monotonic()
+_startup_time = time.monotonic()
 _GRACE_PERIOD = 30
 
 # Conflict comparison: only meaningful keys, strip runtime fields
@@ -495,7 +492,7 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         server_config = node.get('config', {}) if node else {}
 
         # Skip conflict detection during grace period after server startup
-        if _time.monotonic() - _startup_time < _GRACE_PERIOD:
+        if time.monotonic() - _startup_time < _GRACE_PERIOD:
             logger.debug(f'Grace period active, skipping conflict check for {node_id}')
             return
 
@@ -571,15 +568,6 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         logger.info(f'Agent mode changed: {node_id} -> {mode}')
 
     @socketio.on('agent:pong')
-    def handle_agent_pong(data):
-        """Agent responds to ping — update last_seen."""
-        from flask import request as flask_request
-        agent_sid = flask_request.sid if flask_request else None
-        node_id = _sid_to_node.get(agent_sid) if agent_sid else None
-        if not node_id:
-            node_id = data.get('node_id', '')
-        update_node_status(node_id, 'online')
-
     @socketio.on('server:dsm:apply')
     def handle_server_dsm_apply(data):
         """Forward DSM scheme apply from UI to a remote agent."""

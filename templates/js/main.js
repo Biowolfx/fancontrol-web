@@ -6,11 +6,11 @@
 import {
     store, i18n, CHART_UPDATE_INTERVAL, RELOAD_DELAY, SCHEDULE_CELL_SIZE, SPARKLINE_MAX,
     BTN_ACTIVE, BTN_INACTIVE,
-    settingsDefaults, settings, schedule, dashboard, cardDrag, cardResize, cardEdit,
+    schedule, dashboard, cardDrag, cardResize, cardEdit,
     smart, groupDrag, timers, dsm, logging, update, conflict, debug, sparklineHistory,
 } from './store.js';
-import { escapeHtml, fanIcon, show, hide, toggle, formatTemp, getTempUnitSymbol, formatBytes, getUnitLabel, getTempColorClass, getSettings, saveSettings, showToast, dismissToast } from './utils.js';
-import { loadLang, t, applyTranslations } from './i18n.js';
+import { escapeHtml, fanIcon, toggle, formatTemp, formatBytes, getUnitLabel, getTempColorClass, getSettings, saveSettings, showToast, dismissToast } from './utils.js';
+import { loadLang, t } from './i18n.js';
 import { healthIcon, buildSensorCheckboxList, setModeButtonStyles } from './render-helpers.js';
 import { registerSocketHandlers } from './socket-handlers.js';
 import { updateChart } from './charts.js';
@@ -1136,48 +1136,6 @@ function onCardResizeEnd(e) {
     updateCanvasMinHeight();
 }
 
-function getGridCell(canvas, x, y) {
-    const rect = canvas.getBoundingClientRect();
-    const cs = getComputedStyle(canvas);
-    const padL = parseFloat(cs.paddingLeft) || 16;
-    const padT = parseFloat(cs.paddingTop) || 16;
-    const padR = parseFloat(cs.paddingRight) || 16;
-    const cols = getCanvasCols();
-    const gap = 8;
-    const contentW = rect.width - padL - padR;
-    const colW = (contentW - (cols - 1) * gap) / cols;
-    const rowStep = 100 + gap;
-    const offset = x - rect.left - padL;
-    const col = Math.max(1, Math.min(cols, Math.floor(offset / (colW + gap)) + 1));
-    const row = Math.max(1, Math.floor((y - rect.top - padT) / rowStep) + 1);
-    return { col, row };
-}
-
-function findNextPosition(savedCards, colSpan) {
-    const cols = getCanvasCols();
-    const occupied = new Set();
-    for (const c of savedCards) {
-        const cs = c.col || 1;
-        const rs = c.row || 1;
-        const sp = c.colSpan || 3;
-        const sr = c.rowSpan || 1;
-        for (let r = rs; r < rs + sr; r++) {
-            for (let c2 = cs; c2 < cs + sp; c2++) {
-                occupied.add(`${c2},${r}`);
-            }
-        }
-    }
-    for (let row = 1; row <= 50; row++) {
-        for (let col = 1; col <= cols - colSpan + 1; col++) {
-            let fits = true;
-            for (let c2 = col; c2 < col + colSpan && fits; c2++) {
-                if (occupied.has(`${c2},${row}`)) fits = false;
-            }
-            if (fits) return { col, row };
-        }
-    }
-    return { col: 1, row: 1 };
-}
 
 function _computeGridCache() {
     const canvas = document.getElementById('dashboard-canvas');
@@ -1564,15 +1522,6 @@ function getDragAfterElement(container, x, y) {
     const isAfter = x > box.left + box.width / 2 || y > box.top + box.height / 2;
     return isAfter ? closest.nextElementSibling : closest;
 }
-function saveCardOrder() {
-    const canvas = document.getElementById('dashboard-canvas');
-    if (!canvas) return;
-    const ordered = [...canvas.querySelectorAll('[data-card-id]')].map(el => el.dataset.cardId);
-    const saved = getPickerCards();
-    const orderedCards = ordered.map(id => saved.find(c => c.id === id)).filter(Boolean);
-    setPickerCards(orderedCards);
-}
-
 function removePickerCard(cardId) {
     const el = document.querySelector(`[data-card-id="${cardId}"]`);
     if (el) el.remove();

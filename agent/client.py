@@ -301,20 +301,6 @@ def _command_poll_loop():
 # Socket.IO — kept for backward compatibility and initial handshake
 # ============================================================================
 
-def _telemetry_loop():
-    """Send telemetry via Socket.IO (fallback)."""
-    while True:
-        time.sleep(TELEMETRY_INTERVAL)
-        if _sio and state['server_connected']:
-            try:
-                telemetry = get_telemetry()
-                _sio.emit('agent:telemetry', {
-                    'node_id': NODE_ID,
-                    'telemetry': telemetry,
-                })
-            except Exception as e:
-                logger.error(f'Socket.IO telemetry failed: {e}')
-
 
 def _update_check_loop():
     """Poll server for updates via HTTP."""

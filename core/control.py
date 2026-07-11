@@ -6,16 +6,15 @@ import threading
 import time
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 
 from core.state import state, state_lock, get_state
 from core.hardware import (
-    CALIBRATION_STEPS, CALIBRATION_SETTLE_TIME,
     executor,
     read_disk_temp, calculate_disk_health,
     set_pwm, refresh,
 )
-from core.config import DATA_DIR, DB_FILE
+from core.config import DB_FILE
 
 logger = logging.getLogger('fancontrol')
 

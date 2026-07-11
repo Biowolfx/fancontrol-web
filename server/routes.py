@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import signal
 import sqlite3
 import subprocess
 import threading
@@ -18,8 +17,8 @@ from werkzeug.exceptions import BadRequest
 
 from core.state import state, state_lock, get_state, CONFIG_VERSION, invalidate_state_cache
 from core.config import cfg
-from core.config import save_config, load_config, DATA_DIR, CONFIG_PATH
-from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, refresh, read_disk_smart
+from core.config import save_config, DATA_DIR
+from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, read_disk_smart
 from core.calibration import test_fans
 from core.control import get_db_connection
 
@@ -342,10 +341,8 @@ def api_proxy_disk_smart(node_id, disk_id):
         return jsonify({'error': 'Node not found'}), 404
     ip = node.get('ip') or ''
     if not ip:
-        # Try to get IP from the agent's last known connection
         logger.warning(f'SMART proxy: node {node_id} has no IP stored')
         return jsonify({'error': f'Node IP unknown for {node_id}'}), 400
-        return jsonify({'error': 'Node IP unknown'}), 400
     port = node.get('port', 5059)
     try:
         import urllib.request, json
