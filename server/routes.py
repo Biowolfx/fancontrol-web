@@ -1144,8 +1144,7 @@ def api_update_node(node_id):
 
 @routes.route('/api/nodes/<node_id>', methods=['DELETE'])
 def api_delete_node(node_id):
-    """Delete a node — clean up DB, state, discovery cache, and disconnect agent.
-    SID mapping cleanup is handled by handle_disconnect on the agent side."""
+    """Delete a node — clean up DB, state, discovery cache, and disconnect agent."""
     from server.node_registry import delete_node, get_node
     from core.state import state, state_lock, invalidate_state_cache
     existing_node = get_node(node_id)
@@ -1153,9 +1152,11 @@ def api_delete_node(node_id):
     if delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
-        # Force-disconnect agent WebSocket — handle_disconnect will clean SID mapping
-        from server.agent_handlers import force_disconnect_node
-        force_disconnect_node(node_id)
+        # Clean up any SID mapping (for backward compat with Socket.IO agents)
+        from server.agent_handlers import _sid_to_node, _node_to_sid
+        sid = _node_to_sid.pop(node_id, None)
+        if sid:
+            _sid_to_node.pop(sid, None)
         # Remove from SSDP discovered cache by both node_id and IP
         from server.discovery import _discovered_nodes, _lock as disc_lock
         with disc_lock:
@@ -1393,10 +1394,6 @@ def api_accept_discovered(node_id):
             return jsonify({'error': f'Could not reach agent at {agent_ip}'}), 502
 
         node = add_node(agent_name, api_token=api_token, ip=agent_ip)
-
-        # Register token → node_id mapping so handle_agent_connect finds it
-        from server.agent_handlers import _token_to_node_id
-        _token_to_node_id[api_token] = node['node_id']
 
         # Populate state['nodes'] as 'pending' — will go 'online' on first telemetry
         from core.state import state, state_lock, invalidate_state_cache
