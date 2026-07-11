@@ -215,12 +215,24 @@ export function registerSocketHandlers(socket, fns) {
     socket.on('fan:health', (data) => {
         const fanId = data.fan_id;
         const status = data.status;
-        const card = document.getElementById(`fan-card-${fanId}`);
-        if (!card) return;
         const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
-        healthClasses.forEach(c => card.classList.remove(c));
-        card.classList.add(`fan-alert-${status}`);
-        _fns.startCardPulse(card, status);
+
+        // Find ALL cards for this fan — both fan-card-* and picker cards
+        const fanSpan = document.querySelector(`[data-fan-id="${fanId}"]`);
+        const cards = [];
+        if (fanSpan) {
+            const pickerCard = fanSpan.closest('[data-card-id]');
+            if (pickerCard) cards.push(pickerCard);
+        }
+        const fanCard = document.getElementById(`fan-card-${fanId}`);
+        if (fanCard) cards.push(fanCard);
+
+        for (const card of cards) {
+            healthClasses.forEach(c => card.classList.remove(c));
+            card.classList.add(`fan-alert-${status}`);
+            card.setAttribute('data-fan-health', status);
+            _fns.startCardPulse(card, status);
+        }
         if (data.message) {
             showToast(data.message, status === 'stopped' ? 'error' : 'warning');
         }
@@ -228,10 +240,21 @@ export function registerSocketHandlers(socket, fns) {
 
     socket.on('fan:health:cleared', (data) => {
         const fanId = data.fan_id;
-        const card = document.getElementById(`fan-card-${fanId}`);
-        if (!card) return;
         const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
-        healthClasses.forEach(c => card.classList.remove(c));
-        _fns.stopCardPulse(card);
+
+        const fanSpan = document.querySelector(`[data-fan-id="${fanId}"]`);
+        const cards = [];
+        if (fanSpan) {
+            const pickerCard = fanSpan.closest('[data-card-id]');
+            if (pickerCard) cards.push(pickerCard);
+        }
+        const fanCard = document.getElementById(`fan-card-${fanId}`);
+        if (fanCard) cards.push(fanCard);
+
+        for (const card of cards) {
+            healthClasses.forEach(c => card.classList.remove(c));
+            card.setAttribute('data-fan-health', 'healthy');
+            _fns.stopCardPulse(card);
+        }
     });
 }

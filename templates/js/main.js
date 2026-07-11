@@ -254,30 +254,41 @@ function buildFanList(fans) {
 function updateFanHealthClasses(fans) {
     const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
     for (const [fanId, fan] of Object.entries(fans)) {
-        const card = document.getElementById(`fan-card-${fanId}`);
-        if (!card) continue;
         const healthStatus = fan.health?.status || 'healthy';
-        const hasAny = healthClasses.some(c => card.classList.contains(c));
 
-        if (healthStatus !== 'healthy' && !hasAny) {
-            console.log(`[fan-health] STARTING pulse for ${fanId}: ${healthStatus}`);
-            card.classList.remove('transition-all', 'duration-200');
-            healthClasses.forEach(c => card.classList.remove(c));
-            card.classList.add(`fan-alert-${healthStatus}`);
-            startCardPulse(card, healthStatus);
-        } else if (healthStatus === 'healthy' && hasAny) {
-            console.log(`[fan-health] STOPPING pulse for ${fanId}`);
-            healthClasses.forEach(c => card.classList.remove(c));
-            card.classList.add('transition-all', 'duration-200');
-            stopCardPulse(card);
+        // Find all cards for this fan — both fan-card-* and picker cards
+        const fanSpan = document.querySelector(`[data-fan-id="${fanId}"]`);
+        const cards = [];
+        if (fanSpan) {
+            const pickerCard = fanSpan.closest('[data-card-id]');
+            if (pickerCard) cards.push(pickerCard);
         }
+        const fanCard = document.getElementById(`fan-card-${fanId}`);
+        if (fanCard) cards.push(fanCard);
 
-        // Update status badge
-        const badge = card.querySelector('.text-xs.px-1\\.5');
-        if (badge) {
-            const ds = fan.health?.status || fan.status;
-            badge.textContent = t('status.' + ds, ds);
-            badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(ds)}`;
+        for (const card of cards) {
+            const hasAny = healthClasses.some(c => card.classList.contains(c));
+
+            if (healthStatus !== 'healthy' && !hasAny) {
+                card.classList.remove('transition-all', 'duration-200');
+                healthClasses.forEach(c => card.classList.remove(c));
+                card.classList.add(`fan-alert-${healthStatus}`);
+                card.setAttribute('data-fan-health', healthStatus);
+                startCardPulse(card, healthStatus);
+            } else if (healthStatus === 'healthy' && hasAny) {
+                healthClasses.forEach(c => card.classList.remove(c));
+                card.classList.add('transition-all', 'duration-200');
+                card.setAttribute('data-fan-health', 'healthy');
+                stopCardPulse(card);
+            }
+
+            // Update status badge
+            const badge = card.querySelector('.text-xs.px-1\\.5');
+            if (badge) {
+                const ds = fan.health?.status || fan.status;
+                badge.textContent = t('status.' + ds, ds);
+                badge.className = `text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(ds)}`;
+            }
         }
     }
 }
@@ -788,13 +799,26 @@ function renderPickerCard(card) {
     let icon = '📊';
     let colorClass = 'text-neon-cyan';
     let valueHtml = '';
+    let fanData = null;
 
     if (type === 'fan') {
-        const fanData = getFanData(source, sourceId);
+        fanData = getFanData(source, sourceId);
         const fanStatus = fanData?.status || 'unknown';
+        const healthStatus = fanData?.health?.status || 'healthy';
         const rpm = fanData?.rpm || 0;
-        const dotColor = fanStatus === 'running' ? 'green' : (fanStatus === 'failsafe' || fanStatus === 'critical') ? 'red' : 'yellow';
-        const fanColor = fanStatus === 'running' ? '#22d3ee' : (fanStatus === 'failsafe' || fanStatus === 'critical') ? '#ef4444' : '#facc15';
+
+        // Health-based colors override operational status
+        let dotColor, fanColor;
+        if (healthStatus === 'stopped') {
+            dotColor = 'red'; fanColor = '#ef4444';
+        } else if (healthStatus === 'slowing' || healthStatus === 'needs_calibration') {
+            dotColor = 'yellow'; fanColor = '#facc15';
+        } else if (fanStatus === 'running') {
+            dotColor = 'green'; fanColor = '#22d3ee';
+        } else {
+            dotColor = 'yellow'; fanColor = '#facc15';
+        }
+
         const animDuration = rpm > 0 ? Math.max(0.2, 2 - (rpm / 1500)) : 0;
         const animStyle = rpm > 0 ? `animation: fan-spin ${animDuration}s linear infinite` : '';
         icon = `<svg class="w-8 h-8 inline-block" data-fan-anim-id="${sourceId}" data-fan-source="${source}" viewBox="0 0 100 100" style="${animStyle}">
@@ -864,8 +888,12 @@ function renderPickerCard(card) {
 
     const el = document.createElement('div');
     const gradientClass = `card-gradient-${type}`;
-    el.className = `border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow,background-image] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${gradientClass}`;
+    // Add health alert class and start pulse for fan cards
+    const healthAlertClass = (type === 'fan' && fanData?.health?.status && fanData.health.status !== 'healthy')
+        ? `fan-alert-${fanData.health.status}` : '';
+    el.className = `border border-cyber-accent rounded-xl p-4 transition-[border-color,box-shadow,background-image] duration-200 hover:border-neon-cyan/50 hover:shadow-neon-cyan/10 hover:shadow-lg cursor-grab active:cursor-grabbing ${gradientClass} ${healthAlertClass}`;
     el.setAttribute('data-card-id', id);
+    el.setAttribute('data-fan-health', type === 'fan' ? (fanData?.health?.status || 'healthy') : '');
     el.innerHTML = `
         <div class="card-content overflow-hidden h-full flex flex-col">
             <div class="flex items-center justify-between mb-1">
@@ -898,6 +926,11 @@ function renderPickerCard(card) {
     el.style.minWidth = '0';
 
     canvas.appendChild(el);
+
+    // Start pulse for fan cards with health alerts
+    if (type === 'fan' && healthAlertClass) {
+        startCardPulse(el, fanData.health.status);
+    }
 
     const resizeHandle = el.querySelector('.card-resize-handle');
     if (resizeHandle) {
