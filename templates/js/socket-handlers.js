@@ -211,4 +211,27 @@ export function registerSocketHandlers(socket, fns) {
             _fns.buildServerTree();
         }
     });
+
+    socket.on('fan:health', (data) => {
+        const fanId = data.fan_id;
+        const status = data.status;
+        const card = document.getElementById(`fan-card-${fanId}`);
+        if (!card) return;
+        const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
+        healthClasses.forEach(c => card.classList.remove(c));
+        card.classList.add(`fan-alert-${status}`);
+        _fns.startCardPulse(card, status);
+        if (data.message) {
+            showToast(data.message, status === 'stopped' ? 'error' : 'warning');
+        }
+    });
+
+    socket.on('fan:health:cleared', (data) => {
+        const fanId = data.fan_id;
+        const card = document.getElementById(`fan-card-${fanId}`);
+        if (!card) return;
+        const healthClasses = ['fan-alert-stopped', 'fan-alert-slowing', 'fan-alert-needs-calibration'];
+        healthClasses.forEach(c => card.classList.remove(c));
+        _fns.stopCardPulse(card);
+    });
 }

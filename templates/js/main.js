@@ -48,6 +48,8 @@ registerSocketHandlers(socket, {
     showConflictModal,
     showManualModeWarning,
     loadNodes,
+    startCardPulse,
+    stopCardPulse,
 });
 
 function showServerUnavailable() {
