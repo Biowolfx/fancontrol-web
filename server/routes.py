@@ -1624,6 +1624,34 @@ def api_agent_ack():
         return jsonify({'error': str(e)}), 500
 
 
+@routes.route('/api/agent/control_mode', methods=['POST'])
+def api_agent_control_mode():
+    """Agent reports control mode change via HTTP."""
+    try:
+        data = request.get_json(silent=True) or {}
+        api_token = data.get('api_token', '')
+        mode = data.get('mode', '')
+
+        if not api_token or not mode:
+            return jsonify({'error': 'Missing api_token or mode'}), 400
+
+        from server.node_registry import get_node_by_token, update_node_control_mode
+        node = get_node_by_token(api_token)
+        if not node:
+            return jsonify({'error': 'Unknown agent'}), 401
+
+        node_id = node['node_id']
+        update_node_control_mode(node_id, mode)
+        with state_lock:
+            if node_id in state.get('nodes', {}):
+                state['nodes'][node_id]['control_mode'] = mode
+        logger.info(f'[HTTP] Agent {node_id} mode changed to {mode}')
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        logger.error(f'api_agent_control_mode error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================================
 # Diagnostic endpoints
 # ============================================================================
