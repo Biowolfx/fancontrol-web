@@ -245,6 +245,7 @@ def _telemetry_http_loop():
                 'api_token': API_TOKEN,
                 'node_id': state.get('node_id'),
                 'telemetry': telemetry,
+                'version': CONFIG_VERSION,
             })
             if result:
                 # Mark as connected (server responded)
@@ -283,7 +284,7 @@ def _command_poll_loop():
     while True:
         time.sleep(15)
         try:
-            result = _http_get(f'/api/agent/poll?api_token={API_TOKEN}')
+            result = _http_get(f'/api/agent/poll?api_token={API_TOKEN}&version={CONFIG_VERSION}')
             if result:
                 commands = result.get('commands', [])
                 if commands:

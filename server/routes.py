@@ -1463,6 +1463,13 @@ def api_agent_telemetry_http():
         # Update state
         _process_agent_data(node_id, telemetry)
 
+        # Update agent version if provided
+        agent_version = data.get('version', '')
+        if agent_version and agent_version != node.get('agent_version', ''):
+            from server.node_registry import update_node_version
+            update_node_version(node_id, agent_version)
+            logger.info(f'[HTTP] Agent {node_id} version updated: {node.get("agent_version", "?")} → {agent_version}')
+
         # Drain command queue
         commands = drain_commands(node_id)
         return jsonify({'status': 'ok', 'commands': commands})
@@ -1479,7 +1486,7 @@ def api_agent_poll_http():
         if not api_token:
             return jsonify({'error': 'Missing api_token'}), 400
 
-        from server.node_registry import get_node_by_token
+        from server.node_registry import get_node_by_token, update_node_version
         from server.agent_handlers import drain_commands
 
         node = get_node_by_token(api_token)
@@ -1488,7 +1495,10 @@ def api_agent_poll_http():
 
         node_id = node['node_id']
 
-        # Update last_seen
+        # Update last_seen and version if provided
+        agent_version = request.args.get('version', '')
+        if agent_version and agent_version != node.get('agent_version', ''):
+            update_node_version(node_id, agent_version)
         from server.node_registry import update_node_status
         update_node_status(node_id, 'online')
 
