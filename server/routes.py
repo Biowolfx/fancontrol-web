@@ -1590,6 +1590,26 @@ def api_agent_logs_http():
         return jsonify({'error': str(e)}), 500
 
 
+@routes.route('/api/agent/ack', methods=['POST'])
+def api_agent_ack():
+    """Agent acknowledges command delivery."""
+    try:
+        data = request.get_json(silent=True) or {}
+        api_token = data.get('api_token', '')
+        command_id = data.get('command_id', '')
+        status = data.get('status', 'delivered')
+
+        if not api_token or not command_id:
+            return jsonify({'error': 'Missing api_token or command_id'}), 400
+
+        from server.agent_handlers import ack_command
+        ack_command(command_id, status)
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        logger.error(f'api_agent_ack error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================================
 # Diagnostic endpoints
 # ============================================================================

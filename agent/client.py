@@ -1,8 +1,9 @@
-"""Agent client — HTTP-first communication with server.
+"""Agent client — pure HTTP communication with server.
 
-Primary channel: HTTP POST /api/agent/telemetry (every 5s, with api_token).
-Commands returned in response body. Fallback: HTTP GET /api/agent/poll.
-Socket.IO kept as secondary channel for backward compatibility.
+Channel: HTTP POST /api/agent/telemetry (every 5s, with api_token).
+Commands returned in response body with command_id for delivery confirmation.
+Fallback: HTTP GET /api/agent/poll.
+No Socket.IO dependency.
 """
 
 import json as _json
@@ -13,9 +14,6 @@ import threading
 import time
 import urllib.request
 import urllib.error
-from typing import Optional
-
-import socketio
 
 from core.state import state, state_lock, invalidate_state_cache, CONFIG_VERSION
 from core.config import cfg
@@ -47,8 +45,7 @@ try:
 except Exception:
     state['kernel_info'] = {}
 
-_sio: Optional[socketio.Client] = None
-_telemetry_thread: Optional[threading.Thread] = None
+_telemetry_thread = None
 
 
 # ============================================================================
@@ -56,7 +53,7 @@ _telemetry_thread: Optional[threading.Thread] = None
 # ============================================================================
 
 def _process_command(cmd):
-    """Process a command received from server (via HTTP response or Socket.IO)."""
+    """Process a command received from server via HTTP piggyback or poll."""
     cmd_type = cmd.get('type', '')
     data = cmd.get('data', {})
 
@@ -116,7 +113,7 @@ def _handle_dsm_apply(data):
     entries = data.get('entries', [])
     logger.info(f'[cmd] Apply DSM scheme: {scheme_type}, {len(entries)} entries')
     try:
-        from core.dsm import update_scheme_entry
+        from core.dsm_fan import update_scheme_entry
         for entry in entries:
             update_scheme_entry(
                 scheme_type=scheme_type,
@@ -132,13 +129,6 @@ def _handle_dsm_apply(data):
 def _handle_update(data):
     """Handle server-pushed update command."""
     logger.info('[cmd] Server requests update')
-    # Emit progress via Socket.IO if connected
-    if _sio:
-        _sio.emit('agent:update_result', {
-            'node_id': state.get('node_id'),
-            'status': 'pulling',
-        })
-    # Also report via HTTP
     _report_update_status('pulling')
 
     repo_dir = '/repo'
@@ -168,7 +158,7 @@ def _handle_update(data):
             return
 
         _report_update_status('synced', CONFIG_VERSION)
-        logger.info(f'[update] Synced to latest, restarting...')
+        logger.info('[update] Synced to latest, restarting...')
         time.sleep(1)
         threading.Timer(1.0, os._exit, args=[0]).start()
     except Exception as e:
@@ -188,12 +178,11 @@ def _handle_request_logs(data):
     except Exception as e:
         log_lines = [f'Error reading logs: {e}']
 
-    result = {'node_id': state.get('node_id'), 'lines': log_lines}
-    if _sio:
-        _sio.emit('agent:logs', result)
-
-    # Also report via HTTP
-    _http_post('/api/agent/logs', result)
+    _http_post('/api/agent/logs', {
+        'api_token': API_TOKEN,
+        'node_id': state.get('node_id'),
+        'lines': log_lines,
+    })
 
 
 def _report_update_status(status, version='', message=''):
@@ -242,7 +231,7 @@ def _http_get(path, timeout=5):
 # ============================================================================
 
 def _telemetry_http_loop():
-    """Send telemetry via HTTP POST, receive commands in response."""
+    """Send telemetry via HTTP POST, receive and process commands in response."""
     logger.info('[http-telemetry] Started')
     while True:
         time.sleep(TELEMETRY_INTERVAL)
@@ -266,8 +255,16 @@ def _telemetry_http_loop():
                 # Process piggybacked commands
                 for cmd in result.get('commands', []):
                     _process_command(cmd)
+                    # Ack command delivery
+                    cmd_id = cmd.get('id')
+                    if cmd_id:
+                        _http_post('/api/agent/ack', {
+                            'api_token': API_TOKEN,
+                            'command_id': cmd_id,
+                            'status': 'delivered',
+                        })
             else:
-                # Server didn't respond — might be offline
+                # Server didn't respond
                 if state.get('server_connected'):
                     state['server_connected'] = False
                     invalidate_state_cache()
@@ -293,14 +290,59 @@ def _command_poll_loop():
                     logger.info(f'[http-poll] Received {len(commands)} commands')
                 for cmd in commands:
                     _process_command(cmd)
+                    cmd_id = cmd.get('id')
+                    if cmd_id:
+                        _http_post('/api/agent/ack', {
+                            'api_token': API_TOKEN,
+                            'command_id': cmd_id,
+                            'status': 'delivered',
+                        })
         except Exception:
             pass
 
 
 # ============================================================================
-# Socket.IO — kept for backward compatibility and initial handshake
+# Client startup
 # ============================================================================
 
+def start_client():
+    """Start agent communication — HTTP telemetry + HTTP command poll."""
+    logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
+
+    from agent.announcer import start_announcer, _handle_msearch
+    start_announcer(NODE_ID, NODE_NAME)
+
+    responder_thread = threading.Thread(
+        target=_handle_msearch,
+        args=(NODE_ID, NODE_NAME),
+        daemon=True
+    )
+    responder_thread.start()
+    logger.info('[agent] M-SEARCH responder started')
+
+    if not SERVER_URL:
+        logger.info('No SERVER_URL set — running standalone')
+        return
+
+    # Start HTTP telemetry loop (primary channel)
+    _telemetry_thread = threading.Thread(target=_telemetry_http_loop, daemon=True)
+    _telemetry_thread.start()
+    logger.info('[agent] HTTP telemetry loop started')
+
+    # Start HTTP command poll loop (fallback)
+    poll_thread = threading.Thread(target=_command_poll_loop, daemon=True)
+    poll_thread.start()
+    logger.info('[agent] HTTP command poll loop started')
+
+    # Start update check loop
+    update_thread = threading.Thread(target=_update_check_loop, daemon=True)
+    update_thread.start()
+    logger.info('[agent] Update check loop started')
+
+
+# ============================================================================
+# Update check loop
+# ============================================================================
 
 def _update_check_loop():
     """Poll server for updates via HTTP."""
@@ -365,63 +407,3 @@ def _update_check_loop():
 
         except Exception as e:
             logger.warning(f'[update-check] Poll failed: {e}')
-
-
-# ============================================================================
-# Client startup
-# ============================================================================
-
-def start_client():
-    """Start agent communication — HTTP telemetry + Socket.IO handshake."""
-    global _sio, _telemetry_thread
-
-    logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
-
-    from agent.announcer import start_announcer, _handle_msearch
-    start_announcer(NODE_ID, NODE_NAME)
-
-    responder_thread = threading.Thread(
-        target=_handle_msearch,
-        args=(NODE_ID, NODE_NAME),
-        daemon=True
-    )
-    responder_thread.start()
-    logger.info('[agent] M-SEARCH responder started')
-
-    if not SERVER_URL:
-        logger.info('No SERVER_URL set — running standalone')
-        return
-
-    # Start HTTP telemetry loop (primary channel — no Socket.IO needed)
-    _telemetry_thread = threading.Thread(target=_telemetry_http_loop, daemon=True)
-    _telemetry_thread.start()
-    logger.info('[agent] HTTP telemetry loop started')
-
-    # Start HTTP command poll loop (fallback)
-    poll_thread = threading.Thread(target=_command_poll_loop, daemon=True)
-    poll_thread.start()
-    logger.info('[agent] HTTP command poll loop started')
-
-    # Start update check loop
-    update_thread = threading.Thread(target=_update_check_loop, daemon=True)
-    update_thread.start()
-    logger.info('[agent] Update check loop started')
-
-    # Socket.IO — kept for initial handshake + backward compatibility
-    _sio = socketio.Client(
-        reconnection=True,
-        reconnection_attempts=0,
-        reconnection_delay=1,
-        reconnection_delay_max=30,
-    )
-
-    from agent.handlers import make_handlers
-    handlers = make_handlers(_sio)
-    for event, handler in handlers.items():
-        _sio.on(event, handler)
-    logger.info(f'[agent] Registered Socket.IO handlers: {list(handlers.keys())}')
-
-    try:
-        _sio.connect(SERVER_URL)
-    except Exception as e:
-        logger.warning(f'Socket.IO connect failed (HTTP telemetry continues): {e}')

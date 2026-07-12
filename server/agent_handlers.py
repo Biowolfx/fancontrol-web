@@ -24,25 +24,60 @@ _sid_to_node: dict = {}
 _node_to_sid: dict = {}
 _socketio_ref = None  # Set by register_agent_handlers
 
-# HTTP command queue — replaces Socket.IO push for agent communication
+# HTTP command queue with delivery confirmation
 _cmd_queue = defaultdict(list)
 _cmd_lock = threading.Lock()
+_cmd_counter = 0
+_cmd_delivery = {}  # cmd_id → {node_id, type, status, time}
 
 
 def queue_command(node_id, command_type, payload=None):
     """Queue a command for delivery to agent via HTTP poll."""
+    global _cmd_counter
     with _cmd_lock:
-        _cmd_queue[node_id].append({
+        _cmd_counter += 1
+        cmd_id = f'cmd-{_cmd_counter}'
+        cmd = {
+            'id': cmd_id,
             'type': command_type,
             'data': payload or {},
-        })
-    logger.info(f'[cmd-queue] Queued {command_type} for {node_id}')
+        }
+        _cmd_queue[node_id].append(cmd)
+        _cmd_delivery[cmd_id] = {
+            'node_id': node_id,
+            'type': command_type,
+            'status': 'pending',
+            'time': time.time(),
+        }
+    logger.info(f'[cmd-queue] Queued {command_type} ({cmd_id}) for {node_id}')
 
 
 def drain_commands(node_id):
-    """Return and clear all pending commands for a node."""
+    """Return all pending commands for a node (mark as sent)."""
     with _cmd_lock:
-        return _cmd_queue.pop(node_id, [])
+        cmds = _cmd_queue.pop(node_id, [])
+        for cmd in cmds:
+            cmd_id = cmd.get('id')
+            if cmd_id and cmd_id in _cmd_delivery:
+                _cmd_delivery[cmd_id]['status'] = 'sent'
+        return cmds
+
+
+def ack_command(cmd_id, status='delivered'):
+    """Mark a command as delivered/failed by the agent."""
+    with _cmd_lock:
+        if cmd_id in _cmd_delivery:
+            _cmd_delivery[cmd_id]['status'] = status
+            _cmd_delivery[cmd_id]['delivered_at'] = time.time()
+            logger.info(f'[cmd-queue] Command {cmd_id} acknowledged: {status}')
+        else:
+            logger.warning(f'[cmd-queue] Unknown command {cmd_id} acknowledged')
+
+
+def get_pending_commands(node_id):
+    """Get pending (not yet delivered) commands for a node."""
+    with _cmd_lock:
+        return [c for c in _cmd_queue.get(node_id, [])]
 
 
 def cleanup_stale_sids():

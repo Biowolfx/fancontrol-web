@@ -1,6 +1,8 @@
 """Agent-specific routes — mode switch, status, config revert."""
 
 import os
+import json as _json
+import urllib.request
 from flask import Blueprint, jsonify, request
 
 from core.state import state, state_lock, get_state, invalidate_state_cache
@@ -36,12 +38,24 @@ def set_control_mode():
         state['control_mode'] = mode
         invalidate_state_cache()
 
-    from agent.client import _sio
-    if _sio and state.get('server_connected'):
-        _sio.emit('agent:control_mode_changed', {
-            'node_id': state.get('node_id'),
-            'mode': mode,
-        })
+    # Notify server via HTTP
+    server_url = state.get('server_url', '')
+    if server_url and state.get('server_connected'):
+        http_url = server_url.replace('ws://', 'http://').replace('wss://', 'https://')
+        try:
+            payload = _json.dumps({
+                'api_token': state.get('api_token', ''),
+                'node_id': state.get('node_id'),
+                'mode': mode,
+            }).encode()
+            req = urllib.request.Request(
+                f'{http_url}/api/agent/control_mode',
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass  # Best effort — mode is saved locally regardless
 
     save_config()
     return jsonify({'mode': mode, 'previous': old_mode})
