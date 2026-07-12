@@ -465,29 +465,24 @@ def check_fan_health(socketio=None):
                     new_status = 'healthy'
 
             if new_status != 'stopped' and rpm > 0 and pwm > 0:
-                if max_rpm > 0:
-                    # Use calibration curve for accurate expected RPM
-                    min_pwm_val = cal.get('min_pwm', 0)
-                    max_pwm_val = cal.get('max_pwm', 255)
-                    min_rpm_val = cal.get('min_rpm', 0)
-                    lam = cal.get('lambda', 1.0)
-                    inverted = cal.get('inverted', False)
-
-                    # Convert percentage (0-100) to raw PWM (0-255)
-                    raw_pwm = pwm * max_pwm_val / 100
-
-                    if max_pwm_val > min_pwm_val:
-                        span = max_pwm_val - min_pwm_val
-                        if inverted:
-                            # Higher PWM = lower RPM
-                            normalized = max(0.0, min(1.0, (max_pwm_val - raw_pwm) / span))
-                        else:
-                            # Higher PWM = higher RPM
-                            normalized = max(0.0, min(1.0, (raw_pwm - min_pwm_val) / span))
-                        normalized = normalized ** lam
-                        expected_rpm = min_rpm_val + (max_rpm - min_rpm_val) * normalized
-                    else:
-                        expected_rpm = max_rpm * (pwm / 100)
+                curve = fan.get('curve', [])
+                if max_rpm > 0 and len(curve) >= 2:
+                    # Interpolate expected RPM from calibration curve
+                    expected_rpm = None
+                    for i in range(len(curve) - 1):
+                        a, b = curve[i], curve[i + 1]
+                        if min(a['pct'], b['pct']) <= pwm <= max(a['pct'], b['pct']):
+                            if a['pct'] == b['pct']:
+                                expected_rpm = a.get('rpm', max_rpm)
+                            else:
+                                ratio = (pwm - a['pct']) / (b['pct'] - a['pct'])
+                                expected_rpm = a.get('rpm', 0) + (b.get('rpm', 0) - a.get('rpm', 0)) * ratio
+                            break
+                    if expected_rpm is None:
+                        expected_rpm = curve[-1].get('rpm', max_rpm) if curve else max_rpm
+                elif max_rpm > 0:
+                    # Fallback: linear (no curve data)
+                    expected_rpm = max_rpm * (pwm / 100)
                 else:
                     if old_status in ('healthy', 'slowing'):
                         if health.get('rpm_baseline', 0) == 0:
