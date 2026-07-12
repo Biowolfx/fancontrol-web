@@ -258,6 +258,7 @@
   "inspector.back": "← Back to Dashboard",
   "calibration.starting": "Starting...",
   "calibration.determining": "Calibrating: determining PWM/RPM curves...",
+  "calibration.points": "Calibration points:",
   "schedule.no_sensor_warning": "No sensors assigned",
   "node.settings": "Node Settings",
   "node.name": "Name",

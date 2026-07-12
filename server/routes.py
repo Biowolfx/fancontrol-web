@@ -18,7 +18,7 @@ from werkzeug.exceptions import BadRequest
 from core.state import state, state_lock, get_state, CONFIG_VERSION, invalidate_state_cache
 from core.config import cfg
 from core.config import save_config, DATA_DIR
-from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, read_disk_smart
+from core.hardware import discover_fans_and_sensors, discover_disks, set_pwm, read_disk_smart, get_calibration_steps, CALIBRATION_MIN_POINTS, CALIBRATION_MAX_POINTS
 from core.calibration import test_fans
 from core.control import get_db_connection
 
@@ -370,22 +370,25 @@ def api_initialize():
         if state.get('testing'):
             return jsonify({'status': 'error', 'message': 'Calibration already running'}), 409
         
+        data = request.get_json(silent=True) or {}
+        num_points = max(CALIBRATION_MIN_POINTS, min(CALIBRATION_MAX_POINTS, int(data.get('num_points', 11))))
+        
         with state_lock:
             state['testing'] = True
             state['test_progress'] = {
                 'status': 'Starting calibration...',
                 'step': 0,
-                'total': PWM_CURVE_POINTS,
+                'total': num_points,
                 'current': ''
             }
         
         from app import socketio
         threading.Thread(
             target=test_fans,
-            kwargs={'socketio': socketio, 'save_config_fn': save_config},
+            kwargs={'socketio': socketio, 'save_config_fn': save_config, 'num_points': num_points},
             daemon=True
         ).start()
-        return jsonify({'status': 'ok'})
+        return jsonify({'status': 'ok', 'num_points': num_points})
         
     except Exception as e:
         logger.error(f'Initialization error: {e}', exc_info=True)
@@ -521,6 +524,7 @@ def api_test_start():
     try:
         data = request.get_json(silent=True) or {}
         fan_key = data.get('fan')
+        num_points = max(CALIBRATION_MIN_POINTS, min(CALIBRATION_MAX_POINTS, int(data.get('num_points', 11))))
         
         if state.get('testing'):
             return jsonify({'status': 'error', 'message': 'Test already running'}), 409
@@ -530,7 +534,7 @@ def api_test_start():
             state['test_progress'] = {
                 'status': 'Starting test...',
                 'step': 0,
-                'total': PWM_CURVE_POINTS,
+                'total': num_points,
                 'current': ''
             }
         
@@ -538,7 +542,7 @@ def api_test_start():
         threading.Thread(
             target=test_fans,
             args=(fan_key,),
-            kwargs={'socketio': socketio, 'save_config_fn': save_config},
+            kwargs={'socketio': socketio, 'save_config_fn': save_config, 'num_points': num_points},
             daemon=True
         ).start()
         return jsonify({'status': 'ok'})

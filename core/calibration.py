@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from core.state import state, state_lock, get_state
-from core.hardware import set_pwm, CALIBRATION_STEPS, CALIBRATION_SETTLE_TIME, executor
+from core.hardware import set_pwm, CALIBRATION_STEPS, CALIBRATION_SETTLE_TIME, CALIBRATION_MIN_POINTS, CALIBRATION_MAX_POINTS, get_calibration_steps, executor
 
 logger = logging.getLogger('fancontrol')
 
@@ -89,10 +89,11 @@ def _detect_dead_zones(raw: List[Dict], max_rpm: int) -> tuple:
     return min_pwm, max_pwm
 
 
-def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None):
+def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None, num_points: int = 11):
     """
     Calibrate fans by testing PWM/RPM curve.
     Uses parallel testing for efficiency.
+    num_points: number of calibration points (10-30, default 11).
     socketio: needed for emit during calibration.
     save_config_fn: callable to persist config on success.
     """
@@ -132,7 +133,7 @@ def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None)
     if socketio:
         socketio.emit('test_progress', state['test_progress'])
 
-    pwm_steps = CALIBRATION_STEPS
+    pwm_steps = get_calibration_steps(num_points)
     raw_data = {k: [] for k in writable_fans}
 
     try:
@@ -252,6 +253,7 @@ def test_fans(fan_key: Optional[str] = None, socketio=None, save_config_fn=None)
                     'min_pwm': existing_cal.get('min_pwm', detected_min_pwm),
                     'max_pwm': existing_cal.get('max_pwm', detected_max_pwm),
                     'lambda': existing_cal.get('lambda', 1.0),
+                    'calibration_points': num_points,
                 }
             })
 

@@ -258,6 +258,7 @@
   "inspector.back": "← Назад к панели мониторинга",
   "calibration.starting": "Запуск...",
   "calibration.determining": "Калибровка: определение кривых PWM/RPM...",
+  "calibration.points": "Точки калибровки:",
   "schedule.no_sensor_warning": "Датчики не назначены",
   "node.settings": "Настройки узла",
   "node.name": "Имя",

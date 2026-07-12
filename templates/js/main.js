@@ -3550,12 +3550,18 @@ function runCalibration() {
     document.getElementById('calibrate-loader')?.classList.remove('hidden');
     store.wizardStep = 'calibrating';
     
+    const numPoints = parseInt(document.getElementById('calibration-points')?.value || '11');
+    
     document.getElementById('calibration-modal')?.classList.remove('hidden');
     const _el1 = document.getElementById('calibration-status'); if (_el1) _el1.textContent = t('calibration.starting', 'Starting...');
     const _el2 = document.getElementById('calibration-progress-bar'); if (_el2) _el2.style.width = '0%';
-    const _el3 = document.getElementById('calibration-step'); if (_el3) _el3.textContent = t('calibration.step_label', 'Step 0/11').replace('${current}', '0').replace('${total}', '11');
+    const _el3 = document.getElementById('calibration-step'); if (_el3) _el3.textContent = t('calibration.step_label', 'Step 0/${total}').replace('${current}', '0').replace('${total}', numPoints);
     
-    fetch('/api/initialize', { method: 'POST' })
+    fetch('/api/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ num_points: numPoints })
+    })
         .then(r => r.json())
         .then(data => {
             console.log('[FanControl] Calibration initiated:', data);
@@ -3617,12 +3623,18 @@ function saveFanCalibration(fanId, calibration) {
 function startCalibration() {
     if (!confirm(t('calibration.confirm', 'Recalibrate all fans? This takes 1-2 minutes.'))) return;
     
+    const numPoints = parseInt(document.getElementById('calibration-points-settings')?.value || '11');
+    
     document.getElementById('calibration-modal')?.classList.remove('hidden');
     const _el7 = document.getElementById('calibration-status'); if (_el7) _el7.textContent = t('calibration.starting', 'Starting...');
     const _el8 = document.getElementById('calibration-progress-bar'); if (_el8) _el8.style.width = '0%';
-    const _el9 = document.getElementById('calibration-step'); if (_el9) _el9.textContent = t('calibration.step_label', 'Step 0/21').replace('${current}', '0').replace('${total}', '21');
+    const _el9 = document.getElementById('calibration-step'); if (_el9) _el9.textContent = t('calibration.step_label', 'Step 0/${total}').replace('${current}', '0').replace('${total}', numPoints);
     
-    fetch('/api/initialize', { method: 'POST' })
+    fetch('/api/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ num_points: numPoints })
+    })
         .catch(err => console.error('Calibration error:', err));
 }
 

@@ -331,6 +331,13 @@
                     <!-- HWMon action (calibration) -->
                     <div id="hwmon-action" class="hidden">
                         <p id="calibrate-hint" class="text-gray-400 mb-4" data-i18n="setup.calibrate_hint">To complete setup, fans must be calibrated. This takes about 1-2 minutes.</p>
+                        <div class="flex items-center gap-3 mb-4">
+                            <label class="text-gray-400 text-sm" data-i18n="calibration.points">Calibration points:</label>
+                            <input id="calibration-points" type="range" min="10" max="30" value="11" step="1"
+                                   class="w-32 accent-neon-cyan" oninput="document.getElementById('calibration-points-val').textContent = this.value; document.getElementById('calibration-time-est').textContent = this.value * 5">
+                            <span id="calibration-points-val" class="text-neon-cyan text-sm font-mono">11</span>
+                            <span class="text-gray-500 text-xs">(~<span id="calibration-time-est">55</span>s)</span>
+                        </div>
                         <button id="calibrate-btn" onclick="runCalibration()"
                                 class="bg-neon-cyan hover:bg-cyan-600 text-black font-bold py-3 px-8 rounded-lg 
                                        transition-all duration-300 hover:shadow-neon-cyan disabled:opacity-50 disabled:cursor-not-allowed">

@@ -28,6 +28,14 @@ CALIBRATION_STEPS = [
     0, 25, 51, 76, 102, 127, 153, 178, 204, 229, 255
 ]
 CALIBRATION_SETTLE_TIME = 5
+CALIBRATION_MIN_POINTS = 10
+CALIBRATION_MAX_POINTS = 30
+
+
+def get_calibration_steps(num_points=11):
+    """Generate calibration PWM steps. Min 10, max 30 points, evenly spaced."""
+    num_points = max(CALIBRATION_MIN_POINTS, min(CALIBRATION_MAX_POINTS, num_points))
+    return [round(i * 255 / (num_points - 1)) for i in range(num_points)]
 
 
 def generate_stable_id(path: str) -> str:
