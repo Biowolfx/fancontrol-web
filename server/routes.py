@@ -1468,6 +1468,10 @@ def api_agent_telemetry_http():
         if agent_version and agent_version != node.get('agent_version', ''):
             from server.node_registry import update_node_version
             update_node_version(node_id, agent_version)
+            # Also update in-memory state so /api/health shows correct version
+            with state_lock:
+                if node_id in state.get('nodes', {}):
+                    state['nodes'][node_id]['agent_version'] = agent_version
             logger.info(f'[HTTP] Agent {node_id} version updated: {node.get("agent_version", "?")} → {agent_version}')
 
         # Drain command queue

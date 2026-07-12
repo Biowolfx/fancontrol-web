@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.13.10"
+CONFIG_VERSION = "3.13.11"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
