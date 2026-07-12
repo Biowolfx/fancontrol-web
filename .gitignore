@@ -11,8 +11,5 @@ __pycache__/
 data/
 *.db
 *.log
-.mimocode/node_modules/
-.mimocode/package*.json
-.mimocode/.cron-lock
-.mimocode/plans/
+.mimocode/
 .pytest_cache/
