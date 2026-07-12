@@ -12,4 +12,6 @@ data/
 *.db
 *.log
 .mimocode/
+monolith.py
+_update_monolith.py
 .pytest_cache/
