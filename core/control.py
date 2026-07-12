@@ -466,7 +466,28 @@ def check_fan_health(socketio=None):
 
             if new_status != 'stopped' and rpm > 0 and pwm > 0:
                 if max_rpm > 0:
-                    expected_rpm = max_rpm * (pwm / 100)
+                    # Use calibration curve for accurate expected RPM
+                    min_pwm_val = cal.get('min_pwm', 0)
+                    max_pwm_val = cal.get('max_pwm', 255)
+                    min_rpm_val = cal.get('min_rpm', 0)
+                    lam = cal.get('lambda', 1.0)
+                    inverted = cal.get('inverted', False)
+
+                    # Convert percentage (0-100) to raw PWM (0-255)
+                    raw_pwm = pwm * max_pwm_val / 100
+
+                    if max_pwm_val > min_pwm_val:
+                        span = max_pwm_val - min_pwm_val
+                        if inverted:
+                            # Higher PWM = lower RPM
+                            normalized = max(0.0, min(1.0, (max_pwm_val - raw_pwm) / span))
+                        else:
+                            # Higher PWM = higher RPM
+                            normalized = max(0.0, min(1.0, (raw_pwm - min_pwm_val) / span))
+                        normalized = normalized ** lam
+                        expected_rpm = min_rpm_val + (max_rpm - min_rpm_val) * normalized
+                    else:
+                        expected_rpm = max_rpm * (pwm / 100)
                 else:
                     if old_status in ('healthy', 'slowing'):
                         if health.get('rpm_baseline', 0) == 0:
@@ -475,7 +496,7 @@ def check_fan_health(socketio=None):
                             health['rpm_baseline'] = 0.9 * health['rpm_baseline'] + 0.1 * rpm
                     expected_rpm = health.get('rpm_baseline', 0)
 
-                if expected_rpm > 0 and rpm < expected_rpm * 0.5:
+                if expected_rpm > 0 and rpm < expected_rpm * 0.8:
                     if health.get('slowing_since') is None:
                         health['slowing_since'] = now
                     if now - health['slowing_since'] >= 15:
