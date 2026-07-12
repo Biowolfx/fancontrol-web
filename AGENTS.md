@@ -33,11 +33,11 @@ docker compose up --build
 - `server/discovery.py` — SSDP discovery + TCP subnet scan
 
 ### Agent side
-- `agent/client.py` — HTTP telemetry loop (primary), HTTP command poll (fallback), Socket.IO handshake
-- `agent/handlers.py` — Socket.IO event handlers (backward compat) + command processor
+- `agent/client.py` — HTTP telemetry loop (primary), HTTP command poll (fallback), update check
 - `agent/telemetry.py` — `get_telemetry()`, `get_local_config()`
 - `agent/config.py` — Agent identity init, token management
 - `agent/announcer.py` — SSDP broadcast + M-SEARCH responder
+- `agent/routes.py` — Agent local web API (status, mode, SMART)
 
 ### Frontend (no build step)
 - `templates/index.html` — Single HTML + CSS + Jinja2 templates
