@@ -15,3 +15,5 @@ data/
 monolith.py
 _update_monolith.py
 .pytest_cache/
+.playwright-mcp/
+fc-dashboard.png

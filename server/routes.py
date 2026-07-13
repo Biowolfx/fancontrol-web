@@ -363,6 +363,78 @@ def api_proxy_disk_smart(node_id, disk_id):
         return jsonify({'error': str(e)}), 502
 
 
+# ============================================================================
+# SMART MONITORING
+# ============================================================================
+
+@routes.route('/api/smart/monitor', methods=['POST'])
+def api_smart_monitor_toggle():
+    """Enable/disable SMART monitoring for a disk."""
+    from core.smart_monitor import enable_monitoring, disable_monitoring
+    data = request.get_json(silent=True) or {}
+    disk_id = data.get('disk_id', '')
+    enable = data.get('enable', False)
+
+    if not disk_id:
+        return jsonify({'error': 'disk_id required'}), 400
+
+    if enable:
+        enable_monitoring(disk_id)
+    else:
+        disable_monitoring(disk_id)
+
+    # Persist to dashboard config
+    with state_lock:
+        dash = state.get('dashboard', {})
+        monitored = set(dash.get('monitoredDisks', []))
+        if enable:
+            monitored.add(disk_id)
+        else:
+            monitored.discard(disk_id)
+        dash['monitoredDisks'] = list(monitored)
+
+    return jsonify({'ok': True, 'disk_id': disk_id, 'monitoring': enable})
+
+
+@routes.route('/api/smart/monitor', methods=['GET'])
+def api_smart_monitor_list():
+    """List monitored disks."""
+    from core.smart_monitor import get_monitored_disks, get_monitoring_start_date
+    from core.config import DB_FILE
+    monitored = get_monitored_disks()
+    result = []
+    for disk_id in monitored:
+        start_date = get_monitoring_start_date(str(DB_FILE), disk_id)
+        result.append({'disk_id': disk_id, 'start_date': start_date})
+    return jsonify({'monitored': result})
+
+
+@routes.route('/api/smart/history/<disk_id>')
+def api_smart_history(disk_id):
+    """Get SMART history for a disk attribute."""
+    from core.smart_monitor import get_smart_history
+    from core.config import DB_FILE
+    attr_key = request.args.get('attr', '')
+    from_ts = request.args.get('from')
+    to_ts = request.args.get('to')
+    limit = min(5000, int(request.args.get('limit', 2000)))
+
+    if not attr_key:
+        return jsonify({'error': 'attr parameter required'}), 400
+
+    data = get_smart_history(str(DB_FILE), disk_id, attr_key, from_ts, to_ts, limit)
+    return jsonify({'history': data, 'count': len(data)})
+
+
+@routes.route('/api/smart/history/<disk_id>/start')
+def api_smart_start_date(disk_id):
+    """Get monitoring start date for a disk."""
+    from core.smart_monitor import get_monitoring_start_date
+    from core.config import DB_FILE
+    start_date = get_monitoring_start_date(str(DB_FILE), disk_id)
+    return jsonify({'start_date': start_date})
+
+
 @routes.route('/api/initialize', methods=['POST'])
 def api_initialize():
     """Start fan calibration"""

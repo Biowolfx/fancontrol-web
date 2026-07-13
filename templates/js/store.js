@@ -159,6 +159,7 @@ export const smart = {
     attributes: [],
     attrType: 'sata',
     cache: {},
+    historyCache: {},  // Key: "diskId:attrKey" -> [{value, ts}]
     fetchGeneration: 0,
 };
 

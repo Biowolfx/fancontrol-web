@@ -879,6 +879,8 @@ function renderPickerCard(card) {
         ? `<button onclick="event.stopPropagation(); showCardConfig('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Configure">⚙</button>`
         : type === 'disk'
         ? `<button onclick="event.stopPropagation(); showSmartModal('${id}')" class="text-gray-600 hover:text-neon-purple text-xs transition-colors" title="SMART">⚙</button>`
+            + `<button onclick="event.stopPropagation(); showSmartHistory('${id}')" class="text-gray-600 hover:text-neon-green text-xs transition-colors" title="History">📈</button>`
+            + `<button onclick="event.stopPropagation(); showCardConfig('${id}')" class="text-gray-600 hover:text-neon-cyan text-xs transition-colors" title="Config">🔧</button>`
         : '';
     const lockIcon = card.lockSize ? '🔒' : '🔓';
     const lockClass = card.lockSize ? 'text-neon-cyan' : 'text-gray-600';
@@ -1578,7 +1580,13 @@ function showCardConfig(cardId) {
     cardEdit.configuringCardId = cardId;
     const saved = getPickerCards();
     const card = saved.find(c => c.id === cardId);
-    if (!card || card.type !== 'fan') return;
+    if (!card) return;
+
+    if (card.type === 'disk') {
+        showDiskCardConfig(card);
+        return;
+    }
+    if (card.type !== 'fan') return;
 
     const modal = document.getElementById('card-config-modal');
     const container = document.getElementById('card-config-options');
@@ -1612,6 +1620,216 @@ function hideCardConfig() {
     const modal = document.getElementById('card-config-modal');
     if (modal) modal.classList.add('hidden');
     cardEdit.configuringCardId = null;
+}
+
+function showDiskCardConfig(card) {
+    const modal = document.getElementById('card-config-modal');
+    const container = document.getElementById('card-config-options');
+    const isMonitored = card.monitoring === true;
+
+    container.innerHTML = `
+        <label class="flex items-center gap-3 p-2 rounded hover:bg-cyber-accent cursor-pointer">
+            <input type="checkbox" id="disk-monitoring-toggle" ${isMonitored ? 'checked' : ''}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan"
+                   onchange="toggleDiskMonitoring('${card.id}', this.checked)">
+            <span class="text-sm text-gray-300">${t('smart.monitoring', 'Мониторинг SMART')}</span>
+        </label>
+        <div class="text-[10px] text-gray-500 ml-8 mt-1">${t('smart.monitoring.desc', 'Запись значений каждые 5 минут')}</div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+window.toggleDiskMonitoring = async function(cardId, enabled) {
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    card.monitoring = enabled;
+    setPickerCards(saved);
+    saveDashboardToServer();
+
+    try {
+        await fetch('/api/smart/monitor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ disk_id: card.sourceId, enable: enabled })
+        });
+        showToast(enabled
+            ? t('smart.monitoring.on', 'Мониторинг включён')
+            : t('smart.monitoring.off', 'Мониторинг выключен'));
+    } catch (e) {
+        console.error('Failed to toggle monitoring:', e);
+    }
+};
+
+// ============================================================================
+// SMART HISTORY
+// ============================================================================
+
+let smartHistory = { cardId: null, diskId: null, source: null, attrKey: null, range: '1d', chart: null };
+
+window.showSmartHistory = function(cardId) {
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === cardId);
+    if (!card) return;
+
+    smartHistory.cardId = cardId;
+    smartHistory.diskId = card.sourceId;
+    smartHistory.source = card.source || 'local';
+    smartHistory.attrKey = null;
+    smartHistory.range = '1d';
+
+    document.getElementById('smart-history-title').textContent =
+        `SMART — ${card.label || card.sourceId}`;
+
+    // Populate attribute selector
+    const select = document.getElementById('smart-history-attr');
+    const attrs = card.smartAttributes || [];
+    const cachedSmart = smart.cache?.[`${card.source || 'local'}:${card.sourceId}`];
+
+    let optionsHtml = '';
+    for (const key of attrs) {
+        let label = key;
+        if (cachedSmart) {
+            if (cachedSmart.attr_type === 'sata' && cachedSmart.attributes) {
+                const attr = cachedSmart.attributes.find(a => String(a.id) === key);
+                if (attr) label = attr.description || attr.name || key;
+            } else if (cachedSmart.attributes?.[key]) {
+                label = cachedSmart.attributes[key].description || key;
+            }
+        }
+        optionsHtml += `<option value="${key}">${label}</option>`;
+    }
+    select.innerHTML = optionsHtml;
+    smartHistory.attrKey = attrs[0] || null;
+
+    // Highlight active range button
+    updateRangeButtons('1d');
+
+    document.getElementById('smart-history-modal').classList.remove('hidden');
+
+    // Load start date and chart
+    loadSmartHistoryStartDate();
+    loadSmartHistoryData();
+};
+
+window.hideSmartHistory = function() {
+    document.getElementById('smart-history-modal').classList.add('hidden');
+    if (smartHistory.chart) {
+        smartHistory.chart.destroy();
+        smartHistory.chart = null;
+    }
+};
+
+window.setSmartHistoryRange = function(range) {
+    smartHistory.range = range;
+    updateRangeButtons(range);
+    loadSmartHistoryData();
+};
+
+function updateRangeButtons(active) {
+    document.querySelectorAll('#smart-history-range-btns .range-btn').forEach(btn => {
+        if (btn.dataset.range === active) {
+            btn.className = 'range-btn px-2 py-0.5 text-[10px] rounded bg-neon-cyan text-black font-semibold';
+        } else {
+            btn.className = 'range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white';
+        }
+    });
+}
+
+window.loadSmartHistoryData = async function() {
+    const select = document.getElementById('smart-history-attr');
+    smartHistory.attrKey = select?.value;
+    if (!smartHistory.attrKey || !smartHistory.diskId) return;
+
+    const now = new Date();
+    let fromTs = null;
+    switch (smartHistory.range) {
+        case '1m':  fromTs = new Date(now - 60 * 1000); break;
+        case '10m': fromTs = new Date(now - 10 * 60 * 1000); break;
+        case '30m': fromTs = new Date(now - 30 * 60 * 1000); break;
+        case '1h':  fromTs = new Date(now - 60 * 60 * 1000); break;
+        case '1d':  fromTs = new Date(now - 24 * 60 * 60 * 1000); break;
+        case '1w':  fromTs = new Date(now - 7 * 24 * 60 * 60 * 1000); break;
+        case '1M':  fromTs = new Date(now - 30 * 24 * 60 * 60 * 1000); break;
+        case 'all': fromTs = null; break;
+    }
+
+    const params = new URLSearchParams({ attr: smartHistory.attrKey });
+    if (fromTs) params.set('from', fromTs.toISOString());
+
+    try {
+        const resp = await fetch(`/api/smart/history/${smartHistory.diskId}?${params}`);
+        const data = await resp.json();
+        renderSmartHistoryChart(data.history || []);
+    } catch (e) {
+        console.error('Failed to load SMART history:', e);
+    }
+};
+
+function loadSmartHistoryStartDate() {
+    fetch(`/api/smart/history/${smartHistory.diskId}/start`)
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('smart-history-start-date');
+            if (data.start_date) {
+                const d = new Date(data.start_date);
+                el.textContent = `${t('smart.history.started', 'Мониторинг с')}: ${d.toLocaleDateString('ru-RU')} ${d.toLocaleTimeString('ru-RU')}`;
+                el.classList.remove('hidden');
+            } else {
+                el.textContent = t('smart.history.not_started', 'Мониторинг не запущен');
+                el.classList.add('hidden');
+            }
+        })
+        .catch(() => {});
+}
+
+function renderSmartHistoryChart(history) {
+    const chartEl = document.getElementById('smart-history-chart');
+    const emptyEl = document.getElementById('smart-history-empty');
+
+    if (!history.length) {
+        chartEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    emptyEl.classList.add('hidden');
+
+    const chartData = history.map(p => ({ x: new Date(p.ts).getTime(), y: p.value }));
+
+    if (smartHistory.chart) {
+        smartHistory.chart.destroy();
+    }
+
+    smartHistory.chart = new ApexCharts(chartEl, {
+        chart: {
+            type: 'line',
+            height: 250,
+            background: 'transparent',
+            foreColor: '#9ca3af',
+            toolbar: { show: false },
+            animations: { enabled: true, easing: 'easeinout', speed: 500 }
+        },
+        theme: { mode: 'dark' },
+        stroke: { curve: 'smooth', width: 2 },
+        series: [{ name: smartHistory.attrKey, data: chartData }],
+        xaxis: {
+            type: 'datetime',
+            labels: { style: { colors: '#6b7280', fontSize: '10px' } },
+            axisBorder: { color: '#374151' }
+        },
+        yaxis: {
+            labels: { style: { colors: '#6b7280', fontSize: '10px' } }
+        },
+        grid: { borderColor: '#1f2937' },
+        colors: ['#30d158'],
+        tooltip: {
+            theme: 'dark',
+            x: { format: 'dd MMM HH:mm' }
+        }
+    });
+    smartHistory.chart.render();
 }
 
 async function fetchDiskSmart(diskId, forceRefresh = false, source = 'local', nodeId = null) {
@@ -2046,9 +2264,9 @@ function updateDiskCardDetails(card, detailsEl) {
                             displayValue = formatBytes(attr.value * (attr.unit_divisor || 1), unit) + ' ' + getUnitLabel(unit);
                         }
                     }
-                    html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
+                    html += `<div class="text-xs mt-1 flex items-center" title="${escapeHtml(attr.tooltip)}" data-spark-attr="${attrKey}">
                         <span class="${color}">${escapeHtml(attr.description)}:</span>
-                        <span class="text-neon-green font-mono">${displayValue}</span>
+                        <span class="text-neon-green font-mono ml-1">${displayValue}</span>
                     </div>`;
                 }
             }
@@ -2078,15 +2296,79 @@ function updateDiskCardDetails(card, detailsEl) {
                         suffix = t('smart.unit.months_short', ' мес');
                     }
                 }
-                html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
+                html += `<div class="text-xs mt-1 flex items-center" title="${escapeHtml(attr.tooltip)}" data-spark-attr="${attrKey}">
                     <span class="${color}">${escapeHtml(attr.description)}:</span>
-                    <span class="text-neon-green font-mono">${displayValue}${suffix}</span>
+                    <span class="text-neon-green font-mono ml-1">${displayValue}${suffix}</span>
                 </div>`;
             }
         }
     }
 
     if (html) detailsEl.innerHTML = html;
+
+    // Load sparklines for monitored disks
+    if (card.monitoring) {
+        prefetchSmartSparklines(card);
+    }
+}
+
+function prefetchSmartSparklines(card) {
+    const cacheKey = `${card.source || 'local'}:${card.sourceId}`;
+    for (const attrKey of (card.smartAttributes || [])) {
+        const sparkKey = `${cacheKey}:${attrKey}`;
+        if (smart.historyCache[sparkKey]) continue;
+
+        const now = new Date();
+        const from = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+        fetch(`/api/smart/history/${card.sourceId}?attr=${attrKey}&from=${from}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.history?.length) {
+                    smart.historyCache[sparkKey] = data.history;
+                    renderSmartCardSparklines(card);
+                }
+            })
+            .catch(() => {});
+    }
+}
+
+function renderSmartCardSparklines(card) {
+    const cardEl = document.querySelector(`[data-card-id="${card.id}"]`);
+    if (!cardEl) return;
+    const detailsEl = cardEl.querySelector('.card-details');
+    if (!detailsEl) return;
+
+    // Add sparkline SVGs after each attribute row
+    const rows = detailsEl.querySelectorAll('[data-spark-attr]');
+    rows.forEach(row => {
+        const attrKey = row.dataset.sparkAttr;
+        const cacheKey = `${card.source || 'local'}:${card.sourceId}`;
+        const sparkKey = `${cacheKey}:${attrKey}`;
+        const history = smart.historyCache[sparkKey];
+        if (!history || history.length < 2) return;
+
+        let existing = row.querySelector('.smart-sparkline');
+        if (existing) return;
+
+        const values = history.map(h => h.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const w = 60, h = 16;
+
+        const points = values.map((v, i) => {
+            const x = (i / (values.length - 1)) * w;
+            const y = h - ((v - min) / range) * (h - 2) - 1;
+            return `${x},${y}`;
+        }).join(' ');
+
+        const color = min < max ? '#30d158' : '#6b7280';
+        const svg = `<svg width="${w}" height="${h}" class="smart-sparkline ml-1 shrink-0 opacity-50">
+            <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+
+        row.appendChild(document.createRange().createContextualFragment(svg));
+    });
 }
 
 function pushSparkline(key, value) {

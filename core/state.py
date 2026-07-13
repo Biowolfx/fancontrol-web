@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.13.17"
+CONFIG_VERSION = "3.14.0"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -39,6 +39,7 @@ state: Dict[str, Any] = {
     'server_name': 'FanControl Server',
     'nodes': {},  # Runtime state for connected agents
     'dashboard': {'groups': [], 'cards': [], 'hiddenSensors': []},
+    'smart_monitored_disks': set(),  # disk_ids with SMART monitoring enabled
 }
 
 STATE_CACHE_TTL = 2.0

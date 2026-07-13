@@ -397,5 +397,13 @@
   "settings.telegram_enable": "Включить уведомления",
   "settings.telegram_token_hint": "От @BotFather в Telegram",
   "settings.telegram_chat_hint": "Узнать: @userinfobot или @getmyid_bot",
-  "settings.telegram_test": "Отправить тест"
+  "settings.telegram_test": "Отправить тест",
+  "smart.monitoring": "Мониторинг SMART",
+  "smart.monitoring.desc": "Запись значений каждые 5 минут",
+  "smart.monitoring.on": "Мониторинг включён",
+  "smart.monitoring.off": "Мониторинг выключен",
+  "smart.history.started": "Мониторинг с",
+  "smart.history.not_started": "Мониторинг не запущен",
+  "smart.history.no_data": "Нет данных мониторинга. Включите мониторинг на карточке диска.",
+  "smart.history.close": "Закрыть"
 }

@@ -166,6 +166,15 @@ def init_hardware():
                 if is_configured():
                     logger.info('Telegram notifications initialized')
 
+            # Initialize SMART monitoring
+            from core.smart_monitor import init_smart_monitor, start_smart_monitor, enable_monitoring
+            init_smart_monitor(str(DATA_DIR / 'fancontrol.db'))
+            # Restore monitored disks from dashboard config
+            monitored = state.get('dashboard', {}).get('monitoredDisks', [])
+            for disk_id in monitored:
+                enable_monitoring(disk_id)
+            start_smart_monitor(str(DATA_DIR / 'fancontrol.db'))
+
             # Apply saved log level
             saved_level = state.get('log_level', 'INFO')
             if saved_level and saved_level != 'INFO':

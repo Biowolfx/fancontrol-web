@@ -1308,6 +1308,40 @@
         </div>
     </div>
 
+    <!-- SMART History Modal -->
+    <div id="smart-history-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+        <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-bold text-white" id="smart-history-title">SMART History</h3>
+                <button onclick="hideSmartHistory()" class="text-gray-400 hover:text-white text-lg">&times;</button>
+            </div>
+            <div id="smart-history-start-date" class="text-xs text-gray-500 mb-2"></div>
+            <div class="flex items-center gap-2 mb-3">
+                <select id="smart-history-attr" onchange="loadSmartHistoryData()"
+                    class="bg-cyber-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-300">
+                </select>
+                <div class="flex gap-1" id="smart-history-range-btns">
+                    <button onclick="setSmartHistoryRange('1m')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1m">1м</button>
+                    <button onclick="setSmartHistoryRange('10m')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="10m">10м</button>
+                    <button onclick="setSmartHistoryRange('30m')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="30m">30м</button>
+                    <button onclick="setSmartHistoryRange('1h')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1h">1ч</button>
+                    <button onclick="setSmartHistoryRange('1d')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1d">1д</button>
+                    <button onclick="setSmartHistoryRange('1w')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1w">1нед</button>
+                    <button onclick="setSmartHistoryRange('1M')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1M">1мес</button>
+                    <button onclick="setSmartHistoryRange('all')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="all">Всё</button>
+                </div>
+            </div>
+            <div id="smart-history-chart" class="flex-1 min-h-[250px]"></div>
+            <div id="smart-history-empty" class="hidden text-center text-gray-500 py-8">
+                <div class="text-2xl mb-2">📈</div>
+                <div class="text-sm" data-i18n="smart.history.no_data">Нет данных мониторинга. Включите мониторинг на карточке диска.</div>
+            </div>
+            <div class="mt-3 pt-3 border-t border-gray-700">
+                <button onclick="hideSmartHistory()" class="w-full py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white transition-all text-sm" data-i18n="smart.history.close">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Group Creator Modal -->
     <div id="group-creator-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
         <div class="bg-cyber-card border border-cyber-accent rounded-xl p-6 max-w-sm w-full mx-4">
