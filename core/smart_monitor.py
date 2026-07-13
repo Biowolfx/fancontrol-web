@@ -120,7 +120,7 @@ def _monitor_tick(db_path: str):
         did = card.get('sourceId')
         if did not in monitored:
             continue
-        attr_keys = card.get('smartAttributes', [])
+        attr_keys = card.get('smartMonitored', [])
         if attr_keys:
             disk_attr_map[did] = attr_keys
 

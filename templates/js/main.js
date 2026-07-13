@@ -1930,10 +1930,23 @@ function renderSmartAttributes() {
     const card = saved.find(c => c.id === smart.modalCardId);
     const selectedIds = card?.smartAttributes || [];
 
+    const headerHtml = `<div class="flex items-center gap-2 px-2 py-1 text-[10px] text-gray-500 border-b border-gray-700/50 mb-1">
+        <span class="w-4 text-center" title="${t('smart.card_attr', 'На карточку')}">📊</span>
+        <span class="w-4 text-center" title="${t('smart.monitor_attr', 'Мониторинг')}">📈</span>
+        <span class="flex-1">${t('smart.param', 'Параметр')}</span>
+        <span class="w-20 text-right">${t('smart.value', 'Значение')}</span>
+    </div>`;
+
     if (smart.attrType === 'nvme') {
-        renderNvmeAttributes(container, selectedIds);
+        container.innerHTML = headerHtml;
+        const tmp = document.createElement('div');
+        renderNvmeAttributes(tmp, selectedIds);
+        container.appendChild(tmp.firstChild);
     } else {
-        renderSataAttributes(container, selectedIds);
+        container.innerHTML = headerHtml;
+        const tmp = document.createElement('div');
+        renderSataAttributes(tmp, selectedIds);
+        container.appendChild(tmp.firstChild);
     }
 }
 
@@ -1946,6 +1959,7 @@ function renderSataAttributes(container, selectedIds) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === smart.modalCardId);
     const smartUnits = card?.smartUnits || {};
+    const monitoredIds = card?.smartMonitored || [];
 
     container.innerHTML = smart.attributes.map(attr => {
         // Unified color: threshold breach (status) overrides static importance (criticality)
@@ -1957,6 +1971,7 @@ function renderSataAttributes(container, selectedIds) {
         const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
                          attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(String(attr.id)) ? 'checked' : '';
+        const monitorChecked = monitoredIds.includes(String(attr.id)) ? 'checked' : '';
 
         let unitHtml = '';
         if (attr.unit === 'bytes') {
@@ -1998,10 +2013,15 @@ function renderSataAttributes(container, selectedIds) {
         }
 
         return `
-        <div class="flex items-center gap-3 p-2 rounded ${statusBg} hover:bg-white/5 transition-colors group"
+        <div class="flex items-center gap-2 p-2 rounded ${statusBg} hover:bg-white/5 transition-colors group"
              title="${escapeHtml(attr.tooltip)}">
             <input type="checkbox" data-smart-id="${attr.id}" ${checked}
-                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0">
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0"
+                   onchange="onSmartCardCheckChange(${attr.id}, this.checked)">
+            <input type="checkbox" data-monitor-id="${attr.id}" ${monitorChecked} ${!checked ? 'disabled' : ''}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-purple focus:ring-neon-purple shrink-0"
+                   title="${t('smart.monitor_attr', 'Мониторинг')}"
+                   onchange="onSmartMonitorCheckChange(${attr.id}, this.checked)">
             <div class="flex-1 min-w-0">
                 <div class="flex items-center">
                     <span class="text-xs text-gray-500 w-8">${attr.id}</span>
@@ -2034,6 +2054,20 @@ function onSmartUnitChange(attrId, unit) {
     renderSmartAttributes();
 }
 
+window.onSmartCardCheckChange = function(attrId, checked) {
+    // When card checkbox is unchecked, also uncheck and disable monitor checkbox
+    const monitorCb = document.querySelector(`[data-monitor-id="${attrId}"]`) ||
+                      document.querySelector(`[data-monitor-key="${attrId}"]`);
+    if (monitorCb) {
+        if (!checked) { monitorCb.checked = false; }
+        monitorCb.disabled = !checked;
+    }
+};
+
+window.onSmartMonitorCheckChange = function(attrId, checked) {
+    // No extra logic needed, saveSmartSelection handles it
+};
+
 function renderNvmeAttributes(container, selectedIds) {
     const attrs = smart.attributes;
     if (!Object.keys(attrs).length) {
@@ -2044,6 +2078,7 @@ function renderNvmeAttributes(container, selectedIds) {
     const saved = getPickerCards();
     const card = saved.find(c => c.id === smart.modalCardId);
     const smartUnits = card?.smartUnits || {};
+    const monitoredIds = card?.smartMonitored || [];
 
     container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
         const severity = (attr.status === 'critical' || attr.status === 'warning') ? attr.status : (attr.criticality || 'info');
@@ -2052,6 +2087,7 @@ function renderNvmeAttributes(container, selectedIds) {
         const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
                          attr.criticality === 'important' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 ml-1">${t('smart.important', 'IMPORTANT')}</span>` : '';
         const checked = selectedIds.includes(key) ? 'checked' : '';
+        const monitorChecked = monitoredIds.includes(key) ? 'checked' : '';
 
         let unitHtml = '';
         let displayValue = attr.value;
@@ -2095,10 +2131,15 @@ function renderNvmeAttributes(container, selectedIds) {
         else if (attr.unit === 'hours' && (smartUnits[key] || 'raw') === 'months') suffix = t('smart.unit.months_short', ' мес');
 
         return `
-        <div class="flex items-center gap-3 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
+        <div class="flex items-center gap-2 p-2 rounded bg-green-500/5 hover:bg-white/5 transition-colors"
              title="${escapeHtml(attr.tooltip)}">
             <input type="checkbox" data-smart-key="${key}" ${checked}
-                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0">
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-cyan focus:ring-neon-cyan shrink-0"
+                   onchange="onSmartCardCheckChange('${key}', this.checked)">
+            <input type="checkbox" data-monitor-key="${key}" ${monitorChecked} ${!checked ? 'disabled' : ''}
+                   class="rounded border-gray-600 bg-cyber-bg text-neon-purple focus:ring-neon-purple shrink-0"
+                   title="${t('smart.monitor_attr', 'Мониторинг')}"
+                   onchange="onSmartMonitorCheckChange('${key}', this.checked)">
             <div class="flex-1 min-w-0">
                 <div class="flex items-center">
                     <span class="text-sm text-gray-200 truncate">${escapeHtml(attr.description)}</span>
@@ -2121,11 +2162,17 @@ function saveSmartSelection() {
     const card = saved.find(c => c.id === smart.modalCardId);
     if (!card) return;
 
-    const checkboxes = document.querySelectorAll('#smart-attributes-container input[type="checkbox"]');
     const selected = [];
-    checkboxes.forEach(cb => {
+    document.querySelectorAll('#smart-attributes-container input[data-smart-id], #smart-attributes-container input[data-smart-key]').forEach(cb => {
         if (cb.checked) {
             selected.push(cb.dataset.smartId || cb.dataset.smartKey);
+        }
+    });
+
+    const monitored = [];
+    document.querySelectorAll('#smart-attributes-container input[data-monitor-id], #smart-attributes-container input[data-monitor-key]').forEach(cb => {
+        if (cb.checked) {
+            monitored.push(cb.dataset.monitorId || cb.dataset.monitorKey);
         }
     });
 
@@ -2137,6 +2184,7 @@ function saveSmartSelection() {
     });
 
     card.smartAttributes = selected;
+    card.smartMonitored = monitored;
     card.smartUnits = units;
     setPickerCards(saved);
     updateCardDetails(smart.modalCardId);

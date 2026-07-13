@@ -405,5 +405,9 @@
   "smart.history.started": "Monitoring since",
   "smart.history.not_started": "Monitoring not started",
   "smart.history.no_data": "No monitoring data. Enable monitoring on the disk card.",
-  "smart.history.close": "Close"
+  "smart.history.close": "Close",
+  "smart.card_attr": "Card",
+  "smart.monitor_attr": "Monitor",
+  "smart.param": "Parameter",
+  "smart.value": "Value"
 }

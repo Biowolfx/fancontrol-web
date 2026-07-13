@@ -405,5 +405,9 @@
   "smart.history.started": "Мониторинг с",
   "smart.history.not_started": "Мониторинг не запущен",
   "smart.history.no_data": "Нет данных мониторинга. Включите мониторинг на карточке диска.",
-  "smart.history.close": "Закрыть"
+  "smart.history.close": "Закрыть",
+  "smart.card_attr": "Карточка",
+  "smart.monitor_attr": "Мониторинг",
+  "smart.param": "Параметр",
+  "smart.value": "Значение"
 }
