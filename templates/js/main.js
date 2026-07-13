@@ -1938,15 +1938,11 @@ function renderSmartAttributes() {
     </div>`;
 
     if (smart.attrType === 'nvme') {
-        container.innerHTML = headerHtml;
-        const tmp = document.createElement('div');
-        renderNvmeAttributes(tmp, selectedIds);
-        container.appendChild(tmp.firstChild);
+        renderNvmeAttributes(container, selectedIds);
+        container.insertAdjacentHTML('afterbegin', headerHtml);
     } else {
-        container.innerHTML = headerHtml;
-        const tmp = document.createElement('div');
-        renderSataAttributes(tmp, selectedIds);
-        container.appendChild(tmp.firstChild);
+        renderSataAttributes(container, selectedIds);
+        container.insertAdjacentHTML('afterbegin', headerHtml);
     }
 }
 
