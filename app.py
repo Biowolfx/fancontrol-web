@@ -169,10 +169,11 @@ def init_hardware():
             # Initialize SMART monitoring
             from core.smart_monitor import init_smart_monitor, start_smart_monitor, enable_monitoring
             init_smart_monitor(str(DATA_DIR / 'fancontrol.db'))
-            # Restore monitored disks from dashboard config
-            monitored = state.get('dashboard', {}).get('monitoredDisks', [])
-            for disk_id in monitored:
-                enable_monitoring(disk_id)
+            # Restore monitored disks from card configs (monitoring: true)
+            dashboard_cards = state.get('dashboard', {}).get('cards', [])
+            for card in dashboard_cards:
+                if card.get('type') == 'disk' and card.get('monitoring'):
+                    enable_monitoring(card['sourceId'])
             start_smart_monitor(str(DATA_DIR / 'fancontrol.db'))
 
             # Apply saved log level

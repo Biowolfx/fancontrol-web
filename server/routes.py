@@ -383,16 +383,6 @@ def api_smart_monitor_toggle():
     else:
         disable_monitoring(disk_id)
 
-    # Persist to dashboard config
-    with state_lock:
-        dash = state.get('dashboard', {})
-        monitored = set(dash.get('monitoredDisks', []))
-        if enable:
-            monitored.add(disk_id)
-        else:
-            monitored.discard(disk_id)
-        dash['monitoredDisks'] = list(monitored)
-
     return jsonify({'ok': True, 'disk_id': disk_id, 'monitoring': enable})
 
 
