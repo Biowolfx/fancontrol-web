@@ -1727,8 +1727,8 @@ function renderSataAttributes(container, selectedIds) {
     const smartUnits = card?.smartUnits || {};
 
     container.innerHTML = smart.attributes.map(attr => {
-        // Unified color: use status (SATA) or criticality (NVMe fallback)
-        const severity = attr.status || attr.criticality || 'ok';
+        // Unified color: threshold breach (status) overrides static importance (criticality)
+        const severity = (attr.status === 'critical' || attr.status === 'warning') ? attr.status : (attr.criticality || 'info');
         const statusColor = severity === 'critical' ? 'text-red-400' :
                            severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
         const statusBg = severity === 'critical' ? 'bg-red-500/10' :
@@ -1825,7 +1825,7 @@ function renderNvmeAttributes(container, selectedIds) {
     const smartUnits = card?.smartUnits || {};
 
     container.innerHTML = Object.entries(attrs).map(([key, attr]) => {
-        const severity = attr.status || attr.criticality || 'info';
+        const severity = (attr.status === 'critical' || attr.status === 'warning') ? attr.status : (attr.criticality || 'info');
         const statusColor = severity === 'critical' ? 'text-red-400' :
                            severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
         const critBadge = attr.criticality === 'critical' ? `<span class="text-[10px] px-1 py-0.5 rounded bg-red-500/20 text-red-300 ml-1">${t('smart.critical', 'CRITICAL')}</span>` :
@@ -2024,7 +2024,7 @@ function updateDiskCardDetails(card, detailsEl) {
             if (cachedSmart?.attributes) {
                 const attr = cachedSmart.attributes.find(a => a.id === attrId);
                 if (attr) {
-                    const severity = attr.status || attr.criticality || 'ok';
+                    const severity = (attr.status === 'critical' || attr.status === 'warning') ? attr.status : (attr.criticality || 'info');
                     const color = severity === 'critical' ? 'text-red-400' :
                                  severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
                     let displayValue = attr.raw;
@@ -2056,7 +2056,7 @@ function updateDiskCardDetails(card, detailsEl) {
             const cachedSmart = smart.cache?.[`${card.source || 'local'}:${card.sourceId}`];
             if (cachedSmart?.attributes?.[attrKey]) {
                 const attr = cachedSmart.attributes[attrKey];
-                const severity = attr.status || attr.criticality || 'info';
+                const severity = (attr.status === 'critical' || attr.status === 'warning') ? attr.status : (attr.criticality || 'info');
                 const color = severity === 'critical' ? 'text-red-400' :
                              severity === 'warning' || severity === 'important' ? 'text-yellow-400' : 'text-neon-green';
                 let displayValue = attr.value;
