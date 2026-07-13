@@ -1625,7 +1625,10 @@ function hideCardConfig() {
 function showDiskCardConfig(card) {
     const modal = document.getElementById('card-config-modal');
     const container = document.getElementById('card-config-options');
+    const titleEl = modal.querySelector('h3');
     const isMonitored = card.monitoring === true;
+
+    if (titleEl) titleEl.textContent = t('smart.monitoring', 'Мониторинг SMART');
 
     container.innerHTML = `
         <label class="flex items-center gap-3 p-2 rounded hover:bg-cyber-accent cursor-pointer">
