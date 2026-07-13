@@ -1861,6 +1861,12 @@ function showSmartModal(cardId) {
     const card = saved.find(c => c.id === cardId);
     if (!card) return;
 
+    // Backward compat: if monitoring is on but smartMonitored not set, migrate from smartAttributes
+    if (card.monitoring && !card.smartMonitored?.length && card.smartAttributes?.length) {
+        card.smartMonitored = [...card.smartAttributes];
+        setPickerCards(saved);
+    }
+
     smart.modalCardId = cardId;
     smart.modalDiskId = card.sourceId;
     smart.modalSource = card.source || 'local';
