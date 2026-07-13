@@ -2047,8 +2047,8 @@ function updateDiskCardDetails(card, detailsEl) {
                         }
                     }
                     html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
-                        <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
-                        <span class="${color} font-mono">${displayValue}</span>
+                        <span class="${color}">${escapeHtml(attr.description)}:</span>
+                        <span class="text-neon-green font-mono">${displayValue}</span>
                     </div>`;
                 }
             }
@@ -2079,8 +2079,8 @@ function updateDiskCardDetails(card, detailsEl) {
                     }
                 }
                 html += `<div class="text-xs mt-1" title="${escapeHtml(attr.tooltip)}">
-                    <span class="text-gray-500">${escapeHtml(attr.description)}:</span>
-                    <span class="${color} font-mono">${displayValue}${suffix}</span>
+                    <span class="${color}">${escapeHtml(attr.description)}:</span>
+                    <span class="text-neon-green font-mono">${displayValue}${suffix}</span>
                 </div>`;
             }
         }
