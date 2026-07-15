@@ -1,4 +1,4 @@
-"""Agent communication — Socket.IO handlers + HTTP command queue."""
+"""Agent communication — HTTP command queue + backward-compatible Socket.IO handlers (legacy)."""
 
 import logging
 import threading
@@ -205,32 +205,10 @@ def _emit_to_node(socketio, event, data, node_id):
     queue_command(node_id, cmd_type, data)
 
 
-def _start_ping_loop(socketio):
-    """Ping all online agents every 30 seconds."""
-    def _ping_loop():
-        while True:
-            time.sleep(30)
-            try:
-                from server.node_registry import list_nodes
-                nodes = list_nodes()
-                for node in nodes:
-                    nid = node['node_id']
-                    sid = _node_to_sid.get(nid)
-                    if sid and node['status'] == 'online':
-                        socketio.emit('server:ping', {'node_id': nid}, room=sid)
-            except Exception as e:
-                logger.error(f'Ping loop error: {e}')
-
-    thread = threading.Thread(target=_ping_loop, daemon=True)
-    thread.start()
-
-
 def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     """Register Socket.IO event handlers for agent connections."""
     global _socketio_ref
     _socketio_ref = socketio
-
-    _start_ping_loop(socketio)
 
     @socketio.on('agent:connect')
     def handle_agent_connect(data):
@@ -609,6 +587,10 @@ def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
         logger.info(f'Agent mode changed: {node_id} -> {mode}')
 
     @socketio.on('agent:pong')
+    def handle_agent_pong(data):
+        """Legacy agent pong — no-op for HTTP-only agents."""
+        pass
+
     @socketio.on('server:dsm:apply')
     def handle_server_dsm_apply(data):
         """Forward DSM scheme apply from UI to a remote agent."""

@@ -128,14 +128,13 @@ def _monitor_tick(db_path: str):
             continue
         attr_keys = card.get('smartMonitored') or card.get('smartAttributes', [])
         if attr_keys:
-            map_key = did
-            if map_key not in disk_attr_map:
-                disk_attr_map[map_key] = []
+            if did not in disk_attr_map:
+                disk_attr_map[did] = []
             # Merge attr_keys (union) to avoid overwrite
-            existing = set(disk_attr_map[map_key])
+            existing = set(disk_attr_map[did])
             for k in attr_keys:
                 if k not in existing:
-                    disk_attr_map[map_key].append(k)
+                    disk_attr_map[did].append(k)
                     existing.add(k)
 
     if not disk_attr_map:
