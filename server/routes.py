@@ -771,8 +771,8 @@ def api_update_apply():
 
 @routes.route('/api/update/agents', methods=['POST'])
 def api_update_agents():
-    """Send update command to all online agents via WebSocket."""
-    from server.agent_handlers import _emit_to_node, _node_to_sid
+    """Send update command to all online agents via HTTP command queue."""
+    from server.agent_handlers import _emit_to_node
     from app import socketio
     from core.state import CONFIG_VERSION
 
@@ -784,19 +784,15 @@ def api_update_agents():
     with state_lock:
         nodes = dict(state.get('nodes', {}))
 
-    logger.info(f'[AGENTS-UPDATE] state[nodes] has {len(nodes)} entries, '
-                f'_node_to_sid has {len(_node_to_sid)} entries')
+    logger.info(f'[AGENTS-UPDATE] state[nodes] has {len(nodes)} entries')
 
     updated = []
     skipped = []
-    no_sid = []
     already_ok = []
     for nid, node in nodes.items():
         status = node.get('status', '?')
-        has_sid = nid in _node_to_sid
         agent_ver = node.get('agent_version', '')
-        logger.info(f'[AGENTS-UPDATE] node={nid} status={status} has_sid={has_sid} '
-                    f'version={agent_ver}')
+        logger.info(f'[AGENTS-UPDATE] node={nid} status={status} version={agent_ver}')
         if node_ids and nid not in node_ids:
             continue
         if status != 'online':
@@ -813,18 +809,13 @@ def api_update_agents():
             already_ok.append(nid)
             logger.info(f'[AGENTS-UPDATE] Agent {nid} already at {CONFIG_VERSION} — skipped')
             continue
-        # Set pending_update — agent polling will pick it up even if WebSocket fails
+        # Set pending_update — agent polling will pick it up
         import time as _time
         with state_lock:
             state['nodes'].get(nid, {})['pending_update'] = True
             state['nodes'].get(nid, {})['update_started'] = _time.time()
         from server.node_registry import update_node_flags
         update_node_flags(nid, pending_update=True)
-        if not has_sid:
-            no_sid.append(nid)
-            logger.warning(f'[AGENTS-UPDATE] Agent {nid} has no SID — update via polling fallback')
-            updated.append(nid)
-            continue
         _emit_to_node(socketio, 'server:update', {}, nid)
         updated.append(nid)
         logger.info(f'[AGENTS-UPDATE] Sent update to {nid} ({node.get("name")})')
@@ -849,13 +840,25 @@ def api_update_agents():
 
 @routes.route('/api/nodes/<node_id>/request-logs', methods=['POST'])
 def api_request_agent_logs(node_id):
-    """Request log lines from a remote agent via WebSocket."""
-    from server.agent_handlers import _emit_to_node, _node_to_sid
+    """Request log lines from a remote agent via HTTP command queue."""
+    from server.agent_handlers import _emit_to_node
     from app import socketio
+    from datetime import datetime, timedelta
 
     if node_id not in state.get('nodes', {}):
         return jsonify({'error': 'Node not found'}), 404
-    if node_id not in _node_to_sid:
+
+    # Check if agent was seen recently
+    node = state['nodes'].get(node_id, {})
+    last_seen = node.get('last_seen', '')
+    if last_seen:
+        try:
+            dt = datetime.fromisoformat(last_seen)
+            if (datetime.utcnow() - dt) > timedelta(seconds=60):
+                return jsonify({'error': 'Agent not connected'}), 503
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Agent not connected'}), 503
+    else:
         return jsonify({'error': 'Agent not connected'}), 503
 
     lines = (request.get_json(silent=True) or {}).get('lines', 100)
@@ -1216,10 +1219,6 @@ def api_delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
         # Clean up any SID mapping (for backward compat with Socket.IO agents)
-        from server.agent_handlers import _sid_to_node, _node_to_sid
-        sid = _node_to_sid.pop(node_id, None)
-        if sid:
-            _sid_to_node.pop(sid, None)
         # Remove from SSDP discovered cache by both node_id and IP
         from server.discovery import _discovered_nodes, _lock as disc_lock
         with disc_lock:
@@ -1744,21 +1743,30 @@ def api_agent_control_mode():
 def api_health():
     """Quick health check — server version, agent versions, pending agents."""
     from core.state import CONFIG_VERSION
-    from server.agent_handlers import _node_to_sid
+    from datetime import datetime, timedelta
 
     with state_lock:
         nodes = dict(state.get('nodes', {}))
 
+    now = datetime.utcnow()
     agents = []
     pending_agents = []
     for nid, node in nodes.items():
+        last_seen = node.get('last_seen', '')
+        connected = False
+        if last_seen:
+            try:
+                dt = datetime.fromisoformat(last_seen)
+                connected = (now - dt) < timedelta(seconds=30)
+            except (ValueError, TypeError):
+                pass
         info = {
             'node_id': nid,
             'version': node.get('agent_version', '?'),
             'status': node.get('status', '?'),
             'pending': bool(node.get('pending_update', 0)),
             'auto_update': bool(node.get('auto_update', 0)),
-            'connected': nid in _node_to_sid,
+            'connected': connected,
         }
         agents.append(info)
         if info['pending']:
@@ -1776,7 +1784,6 @@ def api_health():
 def api_debug():
     """Detailed diagnostic info — versions, state, config, recent logs."""
     from core.state import CONFIG_VERSION
-    from server.agent_handlers import _node_to_sid, _sid_to_node
 
     with state_lock:
         nodes = dict(state.get('nodes', {}))
@@ -1791,7 +1798,6 @@ def api_debug():
             'pending_update': bool(node.get('pending_update', 0)),
             'auto_update': bool(node.get('auto_update', 0)),
             'control_mode': node.get('control_mode', '?'),
-            'sid': _node_to_sid.get(nid, None),
             'last_seen': node.get('last_seen', '?'),
             'ip': node.get('ip', '?'),
         }
@@ -1826,7 +1832,6 @@ def api_debug():
             'uptime': _get_uptime(),
         },
         'agents': agents,
-        'sid_map': {nid: sid[:8] + '...' for nid, sid in _node_to_sid.items()},
         'pending_in_db': pending_db,
         'state_keys': list(state.keys()),
     })
