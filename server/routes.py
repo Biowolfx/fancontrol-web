@@ -1594,6 +1594,17 @@ def api_agent_telemetry_http():
             with state_lock:
                 if node_id in state.get('nodes', {}):
                     state['nodes'][node_id]['agent_version'] = agent_version
+                    # Clear update timer — agent is now on latest version
+                    state['nodes'][node_id]['update_started'] = None
+            # Notify browsers immediately so sidebar updates
+            try:
+                from app import socketio as _sio
+                _sio.emit('update', {
+                    'nodes': dict(state.get('nodes', {})),
+                    'config_version': CONFIG_VERSION,
+                }) if _sio else None
+            except Exception:
+                pass
             logger.info(f'[HTTP] Agent {node_id} version updated: {node.get("agent_version", "?")} → {agent_version}')
 
         # Drain command queue
