@@ -409,5 +409,9 @@
   "smart.card_attr": "Карточка",
   "smart.monitor_attr": "Мониторинг",
   "smart.param": "Параметр",
-  "smart.value": "Значение"
+  "smart.value": "Значение",
+  "settings.auto_register": "Авто-регистрация агентов",
+  "settings.auto_register_hint": "Автоматически регистрировать новых агентов при первом подключении",
+  "settings.auto_register_on": "Авто-регистрация включена",
+  "settings.auto_register_off": "Авто-регистрация отключена"
 }

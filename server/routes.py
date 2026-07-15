@@ -239,6 +239,28 @@ def api_update_server_name():
         return jsonify({'error': str(e)}), 500
 
 
+@routes.route('/api/settings', methods=['GET', 'POST'])
+def api_settings():
+    """Get or update server settings (auto_register_agents, etc)."""
+    try:
+        if request.method == 'GET':
+            return jsonify({
+                'auto_register_agents': state.get('auto_register_agents', True),
+            })
+        data = request.get_json(silent=True) or {}
+        if 'auto_register_agents' in data:
+            val = bool(data['auto_register_agents'])
+            with state_lock:
+                state['auto_register_agents'] = val
+            from core.config import save_config
+            save_config()
+            logger.info(f'Settings updated: auto_register_agents={val}')
+        return jsonify({'ok': True})
+    except Exception as e:
+        logger.error(f'Settings error: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 @routes.route('/api/discover', methods=['POST'])
 def api_discover():
     """Scan hardware for fans, sensors, and disks"""
@@ -1216,7 +1238,10 @@ def api_delete_node(node_id):
     if delete_node(node_id):
         with state_lock:
             state.get('nodes', {}).pop(node_id, None)
-        # Clean up any SID mapping (for backward compat with Socket.IO agents)
+            # Remove dashboard cards belonging to this agent
+            dashboard = state.get('dashboard', {})
+            cards = dashboard.get('cards', [])
+            dashboard['cards'] = [c for c in cards if c.get('source') != node_id]
         # Remove from SSDP discovered cache by both node_id and IP
         from server.discovery import _discovered_nodes, _lock as disc_lock
         with disc_lock:
@@ -1225,6 +1250,9 @@ def api_delete_node(node_id):
             for k in to_remove:
                 _discovered_nodes.pop(k, None)
         invalidate_state_cache()
+        # Persist dashboard changes
+        from core.config import save_config
+        save_config()
         return jsonify({'status': 'deleted'})
     return jsonify({'error': 'Node not found'}), 404
 
@@ -1510,6 +1538,18 @@ def api_agent_telemetry_http():
 
         node = get_node_by_token(api_token)
         if not node:
+            # Check if auto-registration is enabled
+            if not state.get('auto_register_agents', True):
+                # Notify browser to show discovery toast
+                from app import socketio as _sio
+                agent_ip = request.remote_addr or ''
+                _sio.emit('node:discovered', {
+                    'node_id': agent_node_id,
+                    'ip': agent_ip if agent_ip != '127.0.0.1' else '',
+                    'name': agent_node_id,
+                    'auto_registered': False,
+                }) if _sio else None
+                return jsonify({'error': 'Agent not registered. Use discovery to add.'}), 403
             # Auto-register unknown agent
             from server.node_registry import add_node
             try:

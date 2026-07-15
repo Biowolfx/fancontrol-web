@@ -4681,6 +4681,17 @@ function updateSettingsUI() {
     // Apply compact mode to body
     document.body.classList.toggle('compact-mode', s.compactMode);
     
+    // Auto-register toggle
+    const arBtn = document.getElementById('auto-register-toggle');
+    if (arBtn) {
+        const arEnabled = store.state?.auto_register_agents !== false;
+        arBtn.className = arEnabled
+            ? `w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${BTN_ACTIVE}`
+            : `w-full py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${BTN_INACTIVE}`;
+        arBtn.querySelector('span')?.remove();
+        arBtn.textContent = arEnabled ? t('settings.on', 'On') : t('settings.off', 'Off');
+    }
+    
     // Auto-update interval buttons
     [0, 21600000, 43200000, 86400000].forEach(v => {
         const btn = document.getElementById(`autoupd-btn-${v}`);
@@ -4765,6 +4776,25 @@ function toggleCompactMode() {
     const s = getSettings();
     saveSettings({ compactMode: !s.compactMode });
     updateSettingsUI();
+}
+
+async function toggleAutoRegister() {
+    const current = store.state?.auto_register_agents !== false;
+    const newVal = !current;
+    try {
+        await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auto_register_agents: newVal })
+        });
+        store.state.auto_register_agents = newVal;
+        updateSettingsUI();
+        showToast(newVal
+            ? t('settings.auto_register_on', 'Auto-registration enabled')
+            : t('settings.auto_register_off', 'Auto-registration disabled'));
+    } catch (e) {
+        console.error('Failed to toggle auto-register:', e);
+    }
 }
 
 function setAutoUpdateInterval(ms) {
@@ -6151,6 +6181,7 @@ window.switchLanguage = switchLanguage;
 window.setTempUnit = setTempUnit;
 window.setRefreshInterval = setRefreshInterval;
 window.toggleCompactMode = toggleCompactMode;
+window.toggleAutoRegister = toggleAutoRegister;
 window.checkForUpdates = checkForUpdates;
 window.applyServerConfig = applyServerConfig;
 window.keepAgentConfig = keepAgentConfig;

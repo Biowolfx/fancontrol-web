@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.14.3"
+CONFIG_VERSION = "3.14.4"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -40,6 +40,7 @@ state: Dict[str, Any] = {
     'nodes': {},  # Runtime state for connected agents
     'dashboard': {'groups': [], 'cards': [], 'hiddenSensors': []},
     'smart_monitored_disks': set(),  # runtime-only; persisted via card.monitoring in config.json
+    'auto_register_agents': True,  # auto-register unknown agents on first telemetry
 }
 
 STATE_CACHE_TTL = 2.0

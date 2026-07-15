@@ -409,5 +409,9 @@
   "smart.card_attr": "Card",
   "smart.monitor_attr": "Monitor",
   "smart.param": "Parameter",
-  "smart.value": "Value"
+  "smart.value": "Value",
+  "settings.auto_register": "Agent Auto-Registration",
+  "settings.auto_register_hint": "Automatically register new agents on first connection",
+  "settings.auto_register_on": "Auto-registration enabled",
+  "settings.auto_register_off": "Auto-registration disabled"
 }

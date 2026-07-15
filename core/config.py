@@ -232,6 +232,7 @@ def load_config():
                     'updates': True, 'temperature': True,
                 })
                 state['dashboard'] = cfg.get('dashboard', {'groups': [], 'cards': []})
+                state['auto_register_agents'] = cfg.get('auto_register_agents', True)
 
             logger.info('Configuration loaded successfully')
 
