@@ -2527,6 +2527,15 @@ async function loadPickerCards() {
     }
 
     const cards = getPickerCards();
+    const validCardIds = new Set(cards.map(c => c.id));
+
+    // Remove DOM elements for cards that no longer exist
+    canvas.querySelectorAll('[data-card-id]').forEach(el => {
+        if (!validCardIds.has(el.dataset.cardId)) {
+            el.remove();
+        }
+    });
+
     if (!cards.length && !groups.length) return;
 
     let positionsChanged = false;
