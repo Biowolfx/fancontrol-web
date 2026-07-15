@@ -1529,6 +1529,12 @@ def api_agent_telemetry_http():
         # Update state
         _process_agent_data(node_id, telemetry)
 
+        # Update IP from HTTP request source
+        agent_ip = request.remote_addr or ''
+        if agent_ip and agent_ip != '127.0.0.1':
+            from server.node_registry import update_node
+            update_node(node_id, ip=agent_ip)
+
         # Update agent version if provided
         agent_version = data.get('version', '')
         if agent_version and agent_version != node.get('agent_version', ''):
@@ -1571,6 +1577,12 @@ def api_agent_poll_http():
             update_node_version(node_id, agent_version)
         from server.node_registry import update_node_status
         update_node_status(node_id, 'online')
+
+        # Update IP from request source
+        agent_ip = request.remote_addr or ''
+        if agent_ip and agent_ip != '127.0.0.1':
+            from server.node_registry import update_node
+            update_node(node_id, ip=agent_ip)
 
         commands = drain_commands(node_id)
         return jsonify({'commands': commands})
