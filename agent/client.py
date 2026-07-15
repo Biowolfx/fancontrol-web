@@ -39,6 +39,10 @@ state['node_name'] = NODE_NAME
 state['api_token'] = API_TOKEN
 state['agent_config_snapshot'] = None
 
+# Re-discover disks with node_id namespace for unique sourceIds
+from core.hardware import discover_disks
+state['hdd_sensors'] = discover_disks(namespace=NODE_ID)
+
 try:
     from core.kernel_detect import get_kernel_info
     state['kernel_info'] = get_kernel_info()

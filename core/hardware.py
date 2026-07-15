@@ -38,9 +38,15 @@ def get_calibration_steps(num_points=11):
     return [round(i * 255 / (num_points - 1)) for i in range(num_points)]
 
 
-def generate_stable_id(path: str) -> str:
-    """Generate stable, safe ID from hardware path using SHA256 hash"""
-    hash_obj = hashlib.sha256(path.encode())
+def generate_stable_id(path: str, namespace: str = '') -> str:
+    """Generate stable, safe ID from hardware path using SHA256 hash.
+    
+    Args:
+        path: hardware path (e.g. /dev/sata1)
+        namespace: optional prefix for uniqueness across nodes (e.g. node_id)
+    """
+    key = f'{namespace}:{path}' if namespace else path
+    hash_obj = hashlib.sha256(key.encode())
     return f"dev-{hash_obj.hexdigest()[:12]}"
 
 
@@ -90,7 +96,7 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                         current_rpm = 0
                     
                     fan_path_str = f'{hw_path.name}/{pwm_file.name}'
-                    fan_id = generate_stable_id(fan_path_str)
+                    fan_id = generate_stable_id(fan_path_str, namespace=state.get('node_id', ''))
                     
                     fans[fan_id] = {
                         'id': fan_id,
@@ -148,7 +154,7 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                         temp_value = 0
                     
                     temp_path_str = f'{hw_path.name}/{temp_name}'
-                    temp_id = generate_stable_id(temp_path_str)
+                    temp_id = generate_stable_id(temp_path_str, namespace=state.get('node_id', ''))
                     
                     temps[temp_id] = {
                         'id': temp_id,
@@ -174,7 +180,7 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
             logger.info('  No hwmon fans found, trying DSM scemd.xml...')
             dsm_info = get_dsm_fan_info()
             if dsm_info:
-                fan_id = generate_stable_id('dsm-fan-0')
+                fan_id = generate_stable_id('dsm-fan-0', namespace=state.get('node_id', ''))
                 fans[fan_id] = {
                     'id': fan_id,
                     'label': f'DSM Fan ({dsm_info.get("hw_version", "unknown")})',
@@ -807,10 +813,12 @@ def _read_sysfs_temp(dev_name: str) -> Optional[float]:
     return None
 
 
-def discover_disks() -> Dict[str, Dict]:
+def discover_disks(namespace: str = '') -> Dict[str, Dict]:
     """
     Discover physical disks in the system.
     Returns cached data if polling is already in progress.
+    Args:
+        namespace: optional prefix for unique sourceIds across multi-node setups (e.g. node_id)
     """
     logger.info('=' * 50)
     logger.info('DISK DISCOVERY')
@@ -872,7 +880,7 @@ def discover_disks() -> Dict[str, Dict]:
                 result = future.result(timeout=10)
                 temp, standby = result if result else (None, False)
                 
-                disk_id = generate_stable_id(f'/dev/{dev}')
+                disk_id = generate_stable_id(f'/dev/{dev}', namespace=state.get('node_id', ''))
                 
                 if dev.startswith('sata'):
                     disk_label = f'SATA {dev.replace("sata", "")}'
