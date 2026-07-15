@@ -282,4 +282,27 @@ export function registerSocketHandlers(socket, fns) {
             _fns.stopCardPulse(card);
         }
     });
+
+    // Handle agent update progress
+    socket.on('agent:update_result', (data) => {
+        const { node_id, status, version, message } = data;
+        if (!node_id || !update.agentStates[node_id]) return;
+
+        switch (status) {
+            case 'pulling':
+                update.agentStates[node_id] = { status: 'pulling', version: version || '' };
+                break;
+            case 'synced':
+                update.agentStates[node_id] = { status: 'synced', version: version || '' };
+                break;
+            case 'error':
+                update.agentStates[node_id] = { status: 'error', message: message || 'Unknown error' };
+                break;
+            case 'version_mismatch':
+                update.agentStates[node_id] = { status: 'version_mismatch' };
+                break;
+        }
+        _fns.renderUpdateAgentProgress();
+        _fns.checkAgentsDone();
+    });
 }
