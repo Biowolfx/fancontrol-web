@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.14.14"
+CONFIG_VERSION = "3.14.15"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -53,9 +53,10 @@ _init_complete = threading.Event()
 def _build_state_snapshot() -> Dict[str, Any]:
     """Build a fresh state snapshot (caller must hold state_lock).
     
-    Uses shallow copy for dicts — fan/sensor/disk dicts are flat
-    except for the nested 'health' dict in fans, which is copied separately.
+    Uses copy.deepcopy for nodes (which contain nested telemetry/config dicts)
+    and shallow copy for flat structures.
     """
+    import copy
     fans_snap = {}
     for k, v in state['fans'].items():
         fan_copy = v.copy()
@@ -78,11 +79,11 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'config_version': CONFIG_VERSION,
         'language': state.get('language', 'en'),
         'server_name': state.get('server_name', 'FanControl Server'),
-        'nodes': {k: v.copy() for k, v in state.get('nodes', {}).items()},
+        'nodes': {k: copy.copy(v) for k, v in state.get('nodes', {}).items()},
         'agent_mode': state.get('server_url') is not None,
         'api_token': state.get('api_token', ''),
         'auto_register_agents': state.get('auto_register_agents', True),
-        'dashboard': state.get('dashboard', {'groups': [], 'cards': [], 'hiddenSensors': []}),
+        'dashboard': copy.copy(state.get('dashboard', {'groups': [], 'cards': [], 'hiddenSensors': []})),
     }
 
 

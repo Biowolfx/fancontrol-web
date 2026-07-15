@@ -1,143 +1,108 @@
-"""Socket.IO event handlers for FanControl Web."""
+"""Server Socket.IO event handlers — browser communication + SSDP discovery."""
 
 import logging
 import threading
 import time
 from datetime import datetime
 
-from core.state import get_state, _init_complete
+from core.state import state, state_lock, get_state, invalidate_state_cache, _init_complete
 
 logger = logging.getLogger('fancontrol')
 
+# Periodic heartbeat: check agent liveness and probe offline agents
+# Runs every 30s (was 10s). HTTP-only agents — no WebSocket tracking needed.
+HEARTBEAT_INTERVAL = 30
+PROBE_INTERVAL = 120  # seconds between probes to offline agents
+
 
 def _start_heartbeat_checker(socketio):
-    """Background thread that checks agent heartbeats and probes offline agents."""
-    # Track which nodes connected via WebSocket (have real telemetry)
-    _ws_connected = set()
+    """Background thread that checks agent liveness via last_seen timestamps."""
+    _last_probe = {}  # nid → timestamp of last probe attempt
 
     def _check_loop():
-        nonlocal _ws_connected
         while True:
-            time.sleep(10)
+            time.sleep(HEARTBEAT_INTERVAL)
             try:
-                from server.node_registry import update_node_status, update_node
                 from core.state import state, state_lock, invalidate_state_cache
 
-                # Read from in-memory state instead of SQLite every 10s
                 with state_lock:
-                    nodes_snapshot = {k: v.copy() for k, v in state.get('nodes', {}).items()}
+                    nodes_snapshot = {k: dict(v) for k, v in state.get('nodes', {}).items()}
 
                 now = datetime.utcnow()
 
                 for nid, node in nodes_snapshot.items():
+                    status = node.get('status', 'offline')
+                    ip = node.get('ip', '')
+                    last_seen_str = node.get('last_seen', '')
 
-                    if node['status'] == 'online' and node.get('last_seen'):
-                        try:
-                            last_seen = datetime.fromisoformat(node['last_seen'])
-                            age = (now - last_seen).total_seconds()
-                            if nid in _ws_connected:
-                                # WS-connected: offline after 15s no telemetry
-                                if age > 15:
-                                    update_node_status(nid, 'offline')
-                                    _ws_connected.discard(nid)
-                                    with state_lock:
-                                        if 'nodes' in state and nid in state['nodes']:
-                                            state['nodes'][nid]['status'] = 'offline'
-                                    invalidate_state_cache()
-                                    socketio.emit('node:update', {
-                                        'node_id': nid,
-                                        'status': 'offline',
-                                        'name': node['name'],
-                                    })
-                                    # Telegram notification
-                                    tg_enabled = state.get('telegram_enabled', False)
-                                    tg_events = state.get('telegram_events', {})
-                                    if tg_enabled and tg_events.get('agent_status', True):
-                                        from core.telegram import send_message
-                                        send_message(f'🔴 <b>Агент отключён</b>\n{node["name"]} ({nid})')
-                                    logger.info(f'Agent {node["name"]} marked offline (no telemetry)')
-                            elif node.get('ip') and age > 60:
-                                # Probe-only: re-probe every 60s, mark offline if unreachable
-                                from server.discovery import probe_agent
-                                info = probe_agent(node['ip'], timeout=2)
-                                if not info:
-                                    update_node_status(nid, 'offline')
-                                    with state_lock:
-                                        if 'nodes' in state and nid in state['nodes']:
-                                            state['nodes'][nid]['status'] = 'offline'
-                                    invalidate_state_cache()
-                                    socketio.emit('node:update', {
-                                        'node_id': nid,
-                                        'status': 'offline',
-                                        'name': node['name'],
-                                    })
-                                    # Telegram notification
-                                    tg_enabled = state.get('telegram_enabled', False)
-                                    tg_events = state.get('telegram_events', {})
-                                    if tg_enabled and tg_events.get('agent_status', True):
-                                        from core.telegram import send_message
-                                        send_message(f'🔴 <b>Агент отключён</b>\n{node["name"]} ({node["ip"]})')
-                                    logger.info(f'Agent {node["name"]} ({node["ip"]}) marked offline (probe failed)')
+                    if not last_seen_str:
+                        continue
+
+                    try:
+                        last_seen = datetime.fromisoformat(last_seen_str)
+                        age = (now - last_seen).total_seconds()
+                    except (ValueError, TypeError):
+                        continue
+
+                    if status == 'online' and age > 60:
+                        # Agent hasn't sent telemetry in 60s — mark offline
+                        _mark_offline(socketio, nid, node, 'No telemetry for 60s')
+
+                    elif status == 'offline' and ip:
+                        # Probe offline agents periodically
+                        last_probe = _last_probe.get(nid, 0)
+                        if (time.time() - last_probe) < PROBE_INTERVAL:
+                            continue
+                        _last_probe[nid] = time.time()
+
+                        from server.discovery import probe_agent
+                        info = probe_agent(ip, timeout=2)
+                        if info:
+                            from server.node_registry import update_node_status, update_node
+                            update_node_status(nid, 'online')
+                            update_node(nid, ip=ip)
+                            with state_lock:
+                                if nid not in state.get('nodes', {}):
+                                    state.setdefault('nodes', {})[nid] = {
+                                        'node_id': nid, 'name': node['name'],
+                                        'ip': ip, 'port': node.get('port', 5059),
+                                        'status': 'online',
+                                    }
                                 else:
-                                    # Still reachable — refresh last_seen
-                                    update_node_status(nid, 'online')
-                        except (ValueError, TypeError):
-                            pass
-
-                    elif node['status'] == 'offline' and node.get('ip'):
-                        should_probe = True
-                        if node.get('last_seen'):
-                            try:
-                                last = datetime.fromisoformat(node['last_seen'])
-                                if (now - last).total_seconds() < 30:
-                                    should_probe = False
-                            except (ValueError, TypeError):
-                                pass
-
-                        if should_probe:
-                            from server.discovery import probe_agent
-                            info = probe_agent(node['ip'], timeout=2)
-                            if info:
-                                update_node_status(nid, 'online')
-                                update_node(nid, ip=node['ip'])
-                                with state_lock:
-                                    if 'nodes' not in state:
-                                        state['nodes'] = {}
-                                    if nid not in state['nodes']:
-                                        state['nodes'][nid] = {
-                                            'node_id': nid,
-                                            'name': node['name'],
-                                            'ip': node.get('ip', ''),
-                                            'port': node.get('port', 5059),
-                                            'status': 'online',
-                                        }
-                                    else:
-                                        state['nodes'][nid]['status'] = 'online'
-                                invalidate_state_cache()
-
-                                socketio.emit('node:update', {
-                                    'node_id': nid,
-                                    'status': 'online',
-                                    'name': node['name'],
-                                    'ip': node['ip'],
-                                })
-
-                                logger.info(f'Agent {node["name"]} ({node["ip"]}) came online via HTTP probe')
+                                    state['nodes'][nid]['status'] = 'online'
+                            invalidate_state_cache()
+                            socketio.emit('node:update', {
+                                'node_id': nid, 'status': 'online',
+                                'name': node['name'], 'ip': ip,
+                            })
+                            logger.info(f'Agent {node["name"]} ({ip}) came online via probe')
             except Exception as e:
-                logger.error(f'Heartbeat check error: {e}')
-
-    def on_ws_connect(node_id):
-        """Called when agent connects via WebSocket."""
-        _ws_connected.add(node_id)
-
-    def on_ws_disconnect(node_id):
-        """Called when agent disconnects from WebSocket."""
-        _ws_connected.discard(node_id)
+                logger.error(f'Heartbeat check error: {e}', exc_info=True)
 
     thread = threading.Thread(target=_check_loop, daemon=True)
     thread.start()
 
-    return on_ws_connect, on_ws_disconnect
+
+def _mark_offline(socketio, nid, node, reason):
+    """Mark a node as offline and notify browsers + Telegram."""
+    try:
+        from server.node_registry import update_node_status
+        update_node_status(nid, 'offline')
+        with state_lock:
+            if nid in state.get('nodes', {}):
+                state['nodes'][nid]['status'] = 'offline'
+        invalidate_state_cache()
+        socketio.emit('node:update', {
+            'node_id': nid, 'status': 'offline', 'name': node['name'],
+        })
+        tg_enabled = state.get('telegram_enabled', False)
+        tg_events = state.get('telegram_events', {})
+        if tg_enabled and tg_events.get('agent_status', True):
+            from core.telegram import send_message
+            send_message(f'🔴 <b>Агент отключён</b>\n{node["name"]} ({nid})')
+        logger.info(f'Agent {node["name"]} marked offline: {reason}')
+    except Exception as e:
+        logger.error(f'Error marking {nid} offline: {e}')
 
 
 def register_handlers(socketio):
@@ -163,9 +128,7 @@ def register_handlers(socketio):
 
     @socketio.on('connect')
     def handle_socket_connect():
-        """Send initial state on client connection.
-        Wait for init_hardware() to complete so the client always
-        receives the correct 'initialized' flag (avoids wizard flash)."""
+        """Send initial state on client connection."""
         _init_complete.wait(timeout=15)
         socketio.emit('update', get_state())
 
@@ -174,10 +137,10 @@ def register_handlers(socketio):
         """Handle state request from client"""
         socketio.emit('update', get_state())
 
-    _on_ws_connect, _on_ws_disconnect = _start_heartbeat_checker(socketio)
+    _start_heartbeat_checker(socketio)
 
     from server.agent_handlers import register_agent_handlers
-    register_agent_handlers(socketio, on_connect=_on_ws_connect, on_disconnect=_on_ws_disconnect)
+    register_agent_handlers(socketio)
 
 
 def _restart_ssdp_announcer():
@@ -190,4 +153,3 @@ def _restart_ssdp_announcer():
             name = state.get('server_name', 'FanControl Server')
             port = state.get('port', 5059)
         start_announcer(name, port)
-        logger.info(f'SSDP announcer restarted with name: {name}')

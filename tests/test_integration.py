@@ -51,7 +51,7 @@ def test_server_routes_import():
 
 
 def test_agent_client_import():
-    from agent.client import start_client, _telemetry_loop
+    from agent.client import start_client, _telemetry_http_loop
     assert callable(start_client)
 
 

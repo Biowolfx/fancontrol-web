@@ -60,41 +60,45 @@ def _process_command(cmd):
     """Process a command received from server via HTTP piggyback or poll."""
     cmd_type = cmd.get('type', '')
     data = cmd.get('data', {})
+    cmd_id = cmd.get('id', '?')
 
-    if cmd_type == 'config_push':
-        from agent.telemetry import apply_server_config
-        from agent.config import save_local_config
-        apply_server_config(data.get('config', {}))
-        save_local_config()
-        logger.info('[cmd] Applied server config push')
+    try:
+        if cmd_type == 'config_push':
+            from agent.telemetry import apply_server_config
+            from agent.config import save_local_config
+            apply_server_config(data.get('config', {}))
+            save_local_config()
+            logger.info(f'[cmd:{cmd_id}] Applied server config push')
 
-    elif cmd_type == 'set_control_mode':
-        mode = data.get('mode', 'server')
-        state['control_mode'] = mode
-        invalidate_state_cache()
-        logger.info(f'[cmd] Control mode set to: {mode}')
+        elif cmd_type == 'set_control_mode':
+            mode = data.get('mode', 'server')
+            state['control_mode'] = mode
+            invalidate_state_cache()
+            logger.info(f'[cmd:{cmd_id}] Control mode set to: {mode}')
 
-    elif cmd_type == 'command':
-        _handle_fan_command(data)
+        elif cmd_type == 'command':
+            _handle_fan_command(data)
 
-    elif cmd_type == 'dsm_apply':
-        _handle_dsm_apply(data)
+        elif cmd_type == 'dsm_apply':
+            _handle_dsm_apply(data)
 
-    elif cmd_type == 'update':
-        _handle_update(data)
+        elif cmd_type == 'update':
+            _handle_update(data)
 
-    elif cmd_type == 'request_logs':
-        _handle_request_logs(data)
+        elif cmd_type == 'request_logs':
+            _handle_request_logs(data)
 
-    elif cmd_type == 'node_id_push':
-        new_id = data.get('node_id')
-        if new_id and new_id != state.get('node_id'):
-            logger.info(f'[cmd] Received node_id push: {state.get("node_id")} → {new_id}')
-            state['node_id'] = new_id
-            from agent.config import persist_node_id
-            persist_node_id(new_id, state.get('api_token', ''))
-    else:
-        logger.warning(f'[cmd] Unknown command type: {cmd_type}')
+        elif cmd_type == 'node_id_push':
+            new_id = data.get('node_id')
+            if new_id and new_id != state.get('node_id'):
+                logger.info(f'[cmd:{cmd_id}] Received node_id push: {state.get("node_id")} → {new_id}')
+                state['node_id'] = new_id
+                from agent.config import persist_node_id
+                persist_node_id(new_id, state.get('api_token', ''))
+        else:
+            logger.warning(f'[cmd:{cmd_id}] Unknown command type: {cmd_type}')
+    except Exception as e:
+        logger.error(f'[cmd:{cmd_id}] Command {cmd_type} failed: {e}', exc_info=True)
 
 
 def _handle_fan_command(data):
@@ -310,8 +314,20 @@ def _command_poll_loop():
 # Client startup
 # ============================================================================
 
+_client_started = False
+
+
 def start_client():
-    """Start agent communication — HTTP telemetry + HTTP command poll."""
+    """Start agent communication — HTTP telemetry + HTTP command poll.
+    
+    Safe to call multiple times — second call is a no-op.
+    """
+    global _client_started
+    if _client_started:
+        logger.warning('[start_client] Already started — skipping duplicate call')
+        return
+    _client_started = True
+
     logger.info(f'[start_client] SERVER_URL={SERVER_URL}, NODE_ID={NODE_ID}')
 
     from agent.announcer import start_announcer, _handle_msearch
