@@ -1256,7 +1256,11 @@ def api_delete_node(node_id):
         # Notify browsers to refresh dashboard (cards were removed)
         try:
             from app import socketio
-            socketio.emit('update', get_state())
+            socketio.emit('update', {
+                'nodes': dict(state.get('nodes', {})),
+                'dashboard': state.get('dashboard', {}),
+                'config_version': CONFIG_VERSION,
+            })
         except Exception:
             pass
         return jsonify({'status': 'deleted'})
