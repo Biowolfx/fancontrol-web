@@ -112,17 +112,31 @@ def _monitor_tick(db_path: str):
         dashboard = state.get('dashboard', {})
 
     # Build map: disk_id -> list of attr_keys to monitor
+    # Key by source:sourceId to avoid agent cards overwriting server cards
     cards = dashboard.get('cards', [])
     disk_attr_map: Dict[str, List[str]] = {}
+    disk_source_map: Dict[str, str] = {}  # disk_id -> source
     for card in cards:
         if card.get('type') != 'disk':
             continue
         did = card.get('sourceId')
+        source = card.get('source', 'local')
         if did not in monitored:
+            continue
+        # Only monitor local disks (read_disk_smart runs on this server)
+        if source != 'local':
             continue
         attr_keys = card.get('smartMonitored') or card.get('smartAttributes', [])
         if attr_keys:
-            disk_attr_map[did] = attr_keys
+            map_key = did
+            if map_key not in disk_attr_map:
+                disk_attr_map[map_key] = []
+            # Merge attr_keys (union) to avoid overwrite
+            existing = set(disk_attr_map[map_key])
+            for k in attr_keys:
+                if k not in existing:
+                    disk_attr_map[map_key].append(k)
+                    existing.add(k)
 
     if not disk_attr_map:
         return
