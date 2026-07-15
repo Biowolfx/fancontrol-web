@@ -825,16 +825,14 @@ def api_update_agents():
     if already_ok:
         logger.info(f'[AGENTS-UPDATE] {len(already_ok)} agent(s) already up to date')
 
-    logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, '
-                f'no_sid={no_sid}, already_ok={already_ok}')
+    logger.info(f'[AGENTS-UPDATE] Result: updated={updated}, skipped={skipped}, already_ok={already_ok}')
     return jsonify({
         'status': 'ok',
         'updated': updated,
         'skipped': skipped,
-        'no_sid': no_sid,
         'already_ok': already_ok,
         'message': f'Update sent to {len(updated)} agent(s), {len(skipped)} offline, '
-                   f'{len(no_sid)} no SID, {len(already_ok)} already up to date'
+                   f'{len(already_ok)} already up to date'
     })
 
 

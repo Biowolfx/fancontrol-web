@@ -8,13 +8,8 @@ from datetime import datetime
 
 from core.state import state, state_lock, invalidate_state_cache
 from server.node_registry import (
-    get_node_by_token,
     update_node_status,
-    update_node_config,
-    update_node_control_mode,
-    update_node_version,
     get_node,
-    save_agent_snapshot,
 )
 
 logger = logging.getLogger('fancontrol')
@@ -111,10 +106,6 @@ def _emit_to_node(socketio, event, data, node_id):
     queue_command(node_id, cmd_type, data)
 
 
-# Grace period: skip conflict detection for 30s after server startup
-_startup_time = time.monotonic()
-_GRACE_PERIOD = 30
-
 
 def _process_agent_data(node_id, telemetry):
     """Process telemetry data for a node — update state, DB, broadcast to browsers.
@@ -181,14 +172,19 @@ def _process_agent_data(node_id, telemetry):
                 return
 
     invalidate_state_cache()
-    _socketio_ref.emit('update', {'nodes': dict(state['nodes'])}) if _socketio_ref else None
+    from core.state import CONFIG_VERSION
+    _socketio_ref.emit('update', {
+        'nodes': dict(state['nodes']),
+        'config_version': CONFIG_VERSION,
+    }) if _socketio_ref else None
 
 
 def register_agent_handlers(socketio, on_connect=None, on_disconnect=None):
     """Register the socketio ref for browser broadcasts.
-    
+
     No Socket.IO agent handlers — all agent communication is HTTP.
     Socket.IO is used only for browser→server real-time updates.
+    on_connect/on_disconnect kept for API compat but unused.
     """
     global _socketio_ref
     _socketio_ref = socketio
