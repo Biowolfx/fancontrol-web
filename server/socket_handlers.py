@@ -109,6 +109,8 @@ def _start_heartbeat_checker(socketio):
                                         state['nodes'][nid] = {
                                             'node_id': nid,
                                             'name': node['name'],
+                                            'ip': node.get('ip', ''),
+                                            'port': node.get('port', 5059),
                                             'status': 'online',
                                         }
                                     else:
