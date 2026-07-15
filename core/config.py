@@ -152,6 +152,7 @@ def _do_save_config():
             'fan_health': True, 'agent_status': True,
             'updates': True, 'temperature': True,
         })
+        existing['auto_register_agents'] = state.get('auto_register_agents', True)
 
         fans_data = {}
         with state_lock:

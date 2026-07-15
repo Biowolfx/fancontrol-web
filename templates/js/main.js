@@ -48,6 +48,7 @@ registerSocketHandlers(socket, {
     showConflictModal,
     showManualModeWarning,
     loadNodes,
+    loadPickerCards,
     startCardPulse,
     stopCardPulse,
 });

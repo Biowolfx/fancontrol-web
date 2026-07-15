@@ -35,6 +35,10 @@ export function registerSocketHandlers(socket, fns) {
         if (data != null && typeof data === 'object') Object.assign(store.state, data);
         // Sync node data from server state
         if (data.nodes) {
+            const serverNids = new Set(Object.keys(data.nodes));
+            // Remove nodes that no longer exist on server
+            store.nodesData = store.nodesData.filter(n => serverNids.has(n.node_id));
+            // Add/update nodes from server
             const nodeEntries = Object.entries(data.nodes);
             for (const [nid, ndata] of nodeEntries) {
                 const idx = store.nodesData.findIndex(n => n.node_id === nid);
@@ -45,6 +49,12 @@ export function registerSocketHandlers(socket, fns) {
                 }
             }
             _fns.buildServerTree();
+        }
+        // Update dashboard cards if server sent them
+        if (data.dashboard && data.dashboard.cards) {
+            dashboard.cards = data.dashboard.cards;
+            dashboard.groups = data.dashboard.groups || [];
+            _fns.loadPickerCards();
         }
         if (data.test_progress && data.testing) {
             _fns.updateCalibrationModal(data.test_progress);
