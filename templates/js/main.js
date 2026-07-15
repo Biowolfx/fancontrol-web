@@ -4634,7 +4634,11 @@ function toggleSettings() {
         overlay.classList.remove('hidden');
         panel.classList.remove('hidden');
         updateLangButtons();
-        updateSettingsUI();
+        // Fetch fresh settings from server before updating UI
+        fetch('/api/settings').then(r => r.json()).then(data => {
+            store.state.auto_register_agents = data.auto_register_agents;
+            updateSettingsUI();
+        }).catch(() => updateSettingsUI());
         fetchLogSettings();
         fetchTelegramStatus();
         autoCheckUpdate();
