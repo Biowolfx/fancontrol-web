@@ -1253,6 +1253,12 @@ def api_delete_node(node_id):
         # Persist dashboard changes
         from core.config import save_config
         save_config()
+        # Notify browsers to refresh dashboard (cards were removed)
+        try:
+            from app import socketio
+            socketio.emit('update', get_state())
+        except Exception:
+            pass
         return jsonify({'status': 'deleted'})
     return jsonify({'error': 'Node not found'}), 404
 
