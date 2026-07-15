@@ -8,7 +8,7 @@ import time
 import urllib.request
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Dict, List
 
 logger = logging.getLogger('fancontrol')
@@ -202,7 +202,7 @@ def _parse_and_notify(data: str, source_ip: str):
             'name': node_name,
             'ip': source_ip,
             'location': location,
-            'discovered_at': datetime.utcnow().isoformat(),
+            'discovered_at': datetime.now(timezone.utc).isoformat(),
         }
 
     logger.info(f'Discovered new agent: {node_name} ({source_ip})')

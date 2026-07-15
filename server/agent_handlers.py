@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 from collections import defaultdict
 from datetime import datetime
 
@@ -143,7 +144,7 @@ def _process_agent_data(node_id, telemetry):
 
             state['nodes'][node_id]['status'] = 'online'
             state['nodes'][node_id]['telemetry'] = telemetry
-            state['nodes'][node_id]['last_seen'] = datetime.utcnow().isoformat()
+            state['nodes'][node_id]['last_seen'] = datetime.now(timezone.utc).isoformat()
         else:
             # Node exists in DB but not in state — populate from DB
             from server.node_registry import get_node
@@ -165,7 +166,7 @@ def _process_agent_data(node_id, telemetry):
                     'pending_update': db_node.get('pending_update', 0),
                     'update_started': None,
                     'telemetry': telemetry,
-                    'last_seen': datetime.utcnow().isoformat(),
+                    'last_seen': datetime.now(timezone.utc).isoformat(),
                 }
             else:
                 logger.warning(f'_process_agent_data: node {node_id} not found in DB')

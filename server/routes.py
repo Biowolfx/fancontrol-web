@@ -8,7 +8,7 @@ import sqlite3
 import subprocess
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict
 
@@ -863,7 +863,7 @@ def api_request_agent_logs(node_id):
     """Request log lines from a remote agent via HTTP command queue."""
     from server.agent_handlers import _emit_to_node
     from app import socketio
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     if node_id not in state.get('nodes', {}):
         return jsonify({'error': 'Node not found'}), 404
@@ -874,7 +874,7 @@ def api_request_agent_logs(node_id):
     if last_seen:
         try:
             dt = datetime.fromisoformat(last_seen)
-            if (datetime.utcnow() - dt) > timedelta(seconds=60):
+            if (datetime.now(timezone.utc) - dt) > timedelta(seconds=60):
                 return jsonify({'error': 'Agent not connected'}), 503
         except (ValueError, TypeError):
             return jsonify({'error': 'Agent not connected'}), 503
@@ -1802,12 +1802,12 @@ def api_agent_control_mode():
 def api_health():
     """Quick health check — server version, agent versions, pending agents."""
     from core.state import CONFIG_VERSION
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     with state_lock:
         nodes = dict(state.get('nodes', {}))
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     agents = []
     pending_agents = []
     for nid, node in nodes.items():

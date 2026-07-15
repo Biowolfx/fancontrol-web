@@ -6,7 +6,7 @@ import re
 import sqlite3
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from core.config import DATA_DIR
@@ -213,7 +213,7 @@ def update_node(node_id: str, name: Optional[str] = None, ip: Optional[str] = No
 def update_node_status(node_id: str, status: str, telemetry: Optional[Dict] = None) -> bool:
     with _lock:
         conn = _get_conn()
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         if telemetry is not None:
             conn.execute(
                 'UPDATE nodes SET status = ?, telemetry = ?, last_seen = ? WHERE node_id = ?',

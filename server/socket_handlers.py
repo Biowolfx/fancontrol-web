@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from core.state import state, state_lock, get_state, invalidate_state_cache, _init_complete
 
@@ -28,7 +28,7 @@ def _start_heartbeat_checker(socketio):
                 with state_lock:
                     nodes_snapshot = {k: dict(v) for k, v in state.get('nodes', {}).items()}
 
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
 
                 for nid, node in nodes_snapshot.items():
                     status = node.get('status', 'offline')
