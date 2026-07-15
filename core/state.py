@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.14.8"
+CONFIG_VERSION = "3.14.9"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -82,6 +82,7 @@ def _build_state_snapshot() -> Dict[str, Any]:
         'agent_mode': state.get('server_url') is not None,
         'api_token': state.get('api_token', ''),
         'auto_register_agents': state.get('auto_register_agents', True),
+        'dashboard': state.get('dashboard', {'groups': [], 'cards': [], 'hiddenSensors': []}),
     }
 
 
