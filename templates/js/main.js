@@ -49,6 +49,7 @@ registerSocketHandlers(socket, {
     showManualModeWarning,
     loadNodes,
     loadPickerCards,
+    renderPickerCard,
     startCardPulse,
     stopCardPulse,
 });

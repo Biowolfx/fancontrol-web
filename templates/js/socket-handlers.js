@@ -50,11 +50,26 @@ export function registerSocketHandlers(socket, fns) {
             }
             _fns.buildServerTree();
         }
-        // Update dashboard cards if server sent them
+        // Update dashboard cards directly from event data (no HTTP needed)
         if (data.dashboard && data.dashboard.cards) {
             dashboard.cards = data.dashboard.cards;
             dashboard.groups = data.dashboard.groups || [];
-            _fns.loadPickerCards();
+            // Remove stale card DOM elements
+            const canvas = document.getElementById('dashboard-canvas');
+            if (canvas) {
+                const validCardIds = new Set(data.dashboard.cards.map(c => c.id));
+                canvas.querySelectorAll('[data-card-id]').forEach(el => {
+                    if (!validCardIds.has(el.dataset.cardId)) {
+                        el.remove();
+                    }
+                });
+                // Render any new cards that don't exist in DOM yet
+                data.dashboard.cards.forEach(c => {
+                    if (!document.querySelector(`[data-card-id="${c.id}"]`)) {
+                        _fns.renderPickerCard ? _fns.renderPickerCard(c) : _fns.loadPickerCards();
+                    }
+                });
+            }
         }
         if (data.test_progress && data.testing) {
             _fns.updateCalibrationModal(data.test_progress);
