@@ -69,25 +69,27 @@ def api_agent_telemetry_http():
 
         # Update agent version if provided
         agent_version = data.get('version', '')
-        if agent_version and agent_version != node.get('agent_version', ''):
+        if agent_version:
             from server.node_registry import update_node_version
             update_node_version(node_id, agent_version)
             # Also update in-memory state so /api/health shows correct version
             with state_lock:
                 if node_id in state.get('nodes', {}):
+                    old_ver = state['nodes'][node_id].get('agent_version', '')
                     state['nodes'][node_id]['agent_version'] = agent_version
-                    # Clear update timer — agent is now on latest version
-                    state['nodes'][node_id]['update_started'] = None
-            # Notify browsers immediately so sidebar updates
-            try:
-                from app import socketio as _sio
-                _sio.emit('update', {
-                    'nodes': dict(state.get('nodes', {})),
-                    'config_version': CONFIG_VERSION,
-                }) if _sio else None
-            except Exception:
-                pass
-            logger.info(f'[HTTP] Agent {node_id} version updated: {node.get("agent_version", "?")} → {agent_version}')
+                    if agent_version != old_ver:
+                        # Clear update timer — agent is now on latest version
+                        state['nodes'][node_id]['update_started'] = None
+                        # Notify browsers immediately so sidebar updates
+                        try:
+                            from app import socketio as _sio
+                            _sio.emit('update', {
+                                'nodes': dict(state.get('nodes', {})),
+                                'config_version': CONFIG_VERSION,
+                            }) if _sio else None
+                        except Exception:
+                            pass
+                        logger.info(f'[HTTP] Agent {node_id} version: {old_ver} → {agent_version}')
 
         # Drain command queue
         commands = drain_commands(node_id)
