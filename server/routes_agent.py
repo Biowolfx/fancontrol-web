@@ -1,6 +1,10 @@
 """Agent HTTP protocol endpoints — telemetry, poll, ack, update, commands."""
 
+import logging
 from flask import Blueprint, request, jsonify
+from core.state import state, state_lock, CONFIG_VERSION, invalidate_state_cache
+
+logger = logging.getLogger('fancontrol')
 
 agent_bp = Blueprint('agent', __name__)
 

@@ -1,7 +1,12 @@
 """SMART monitoring, DSM schemes, calibration, and dashboard endpoints."""
 
+import logging
 from typing import Dict
 from flask import Blueprint, request, jsonify
+from core.state import state, state_lock, invalidate_state_cache
+from core.config import save_config
+
+logger = logging.getLogger('fancontrol')
 
 smart_bp = Blueprint('smart', __name__)
 
