@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.14.28"
+CONFIG_VERSION = "3.14.29"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -58,6 +58,17 @@ def mark_state_dirty():
     """Signal that state has changed and emit is needed."""
     global _state_dirty
     _state_dirty = True
+
+
+def is_state_dirty() -> bool:
+    """Check if state has changed and emit is needed."""
+    return _state_dirty
+
+
+def clear_state_dirty():
+    """Clear dirty flag after emit."""
+    global _state_dirty
+    _state_dirty = False
 
 
 def bump_state_version():

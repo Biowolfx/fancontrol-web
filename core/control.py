@@ -8,7 +8,7 @@ from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from core.state import state, state_lock, get_state, bump_state_version, mark_state_dirty
+from core.state import state, state_lock, get_state, bump_state_version, mark_state_dirty, is_state_dirty, clear_state_dirty
 from core.hardware import (
     executor,
     read_disk_temp, calculate_disk_health,
@@ -29,8 +29,6 @@ TELEMETRY_LOG_INTERVAL = 300
 LOG_CLEANUP_INTERVAL = 86400
 DISK_POLL_COOLDOWN = 15
 
-# Dirty flag — emit update to browsers only when state changed
-_state_dirty = False
 
 
 _db_local = threading.local()
@@ -586,7 +584,7 @@ def loop(socketio=None):
                 refresh_disks()
                 if socketio:
                     socketio.emit('update', get_state())
-                    _state_dirty = False
+                    clear_state_dirty()
                 time.sleep(2)
                 continue
             
@@ -650,9 +648,9 @@ def loop(socketio=None):
                     if fan_id in state['fans']:
                         state['fans'][fan_id].update(metrics)
             
-            if socketio and _state_dirty:
+            if socketio and is_state_dirty():
                 socketio.emit('update', get_state())
-                _state_dirty = False
+                clear_state_dirty()
                 try:
                     check_alerts(socketio)
                 except Exception:
