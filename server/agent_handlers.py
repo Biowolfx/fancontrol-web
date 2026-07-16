@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from collections import defaultdict
 from datetime import datetime
 
-from core.state import state, state_lock, invalidate_state_cache
+from core.state import state, state_lock, invalidate_state_cache, bump_state_version
 from server.node_registry import (
     update_node_status,
     get_node,

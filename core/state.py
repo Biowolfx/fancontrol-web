@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-CONFIG_VERSION = "3.14.16"
+CONFIG_VERSION = "3.14.17"
 
 # Auto-generated update token if FANCONTROL_UPDATE_TOKEN is not set
 # Import cfg lazily to avoid circular imports
@@ -46,6 +46,25 @@ state: Dict[str, Any] = {
 STATE_CACHE_TTL = 2.0
 _cached_state: Optional[Dict[str, Any]] = None
 _cached_state_time: float = 0.0
+_state_version: int = 0
+_cached_state_version: int = -1
+
+
+# Dirty flag for conditional emit
+_state_dirty = False
+
+
+def mark_state_dirty():
+    """Signal that state has changed and emit is needed."""
+    global _state_dirty
+    _state_dirty = True
+
+
+def bump_state_version():
+    """Mark state as changed — next get_state() will rebuild snapshot."""
+    global _state_version, _cached_state
+    _state_version += 1
+    _cached_state = None
 
 _init_complete = threading.Event()
 
@@ -89,19 +108,23 @@ def _build_state_snapshot() -> Dict[str, Any]:
 
 def get_state() -> Dict[str, Any]:
     """Thread-safe snapshot of global state for API and Socket.IO."""
-    global _cached_state, _cached_state_time
+    global _cached_state, _cached_state_time, _cached_state_version
     now = time.monotonic()
 
     with state_lock:
-        if _cached_state is not None and (now - _cached_state_time) < STATE_CACHE_TTL:
+        if (_cached_state is not None
+            and _cached_state_version == _state_version
+            and (now - _cached_state_time) < STATE_CACHE_TTL):
             return dict(_cached_state)
 
         _cached_state = _build_state_snapshot()
         _cached_state_time = now
+        _cached_state_version = _state_version
         return dict(_cached_state)
 
 
 def invalidate_state_cache():
     """Force next get_state() to rebuild snapshot."""
-    global _cached_state
+    global _cached_state, _state_version
     _cached_state = None
+    _state_version += 1
