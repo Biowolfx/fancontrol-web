@@ -114,6 +114,7 @@ def refresh_disks():
                 state['hdd_sensors'][disk_id].update(data)
         
         state['last_hdd_poll'] = time.monotonic()
+        mark_state_dirty()
         
         active_temps = [
             v['temp'] for v in state['hdd_sensors'].values()
