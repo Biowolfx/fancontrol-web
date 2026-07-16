@@ -1052,6 +1052,26 @@
                 </button>
             </div>
             
+            <!-- Export & Diagnostics -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-gray-300 block mb-1">Export Data</label>
+                <p class="text-xs text-gray-500 mb-3">Download telemetry history or system diagnostics</p>
+                <div class="flex gap-2">
+                    <button onclick="exportCsv(24)"
+                        class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan">
+                        📥 24h CSV
+                    </button>
+                    <button onclick="exportCsv(168)"
+                        class="flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan">
+                        📥 7d CSV
+                    </button>
+                </div>
+                <button onclick="exportDump()"
+                    class="w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-300 border bg-cyber-accent text-gray-400 border-gray-700 hover:text-neon-cyan mt-2">
+                    🔧 System Dump (JSON)
+                </button>
+            </div>
+
             <!-- Version -->
             <div class="mb-6 text-center">
                 <a id="version-link" href="https://github.com/Biowolfx/fancontrol-web" target="_blank" rel="noopener"

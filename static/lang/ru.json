@@ -413,5 +413,8 @@
   "settings.auto_register": "Авто-регистрация агентов",
   "settings.auto_register_hint": "Автоматически регистрировать новых агентов при первом подключении",
   "settings.auto_register_on": "Авто-регистрация включена",
-  "settings.auto_register_off": "Авто-регистрация отключена"
+  "settings.auto_register_off": "Авто-регистрация отключена",
+  "export.downloading": "Скачивание CSV...",
+  "export.dump_downloaded": "Дамп системы скачан",
+  "export.dump_error": "Ошибка экспорта"
 }

@@ -6079,6 +6079,33 @@ async function pushConfigToNode(nodeId) {
 
 console.log('[FanControl] main.js loaded successfully');
 
+
+// ============================================================================
+// EXPORT & DIAGNOSTICS
+// ============================================================================
+
+function exportCsv(hours) {
+    const url = `/api/export/csv?hours=${hours}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fancontrol_telemetry_${hours}h.csv`;
+    a.click();
+    showToast(t('export.downloading', 'Downloading CSV...'), 'info');
+}
+
+function exportDump() {
+    fetch('/api/dump').then(r => r.json()).then(data => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fancontrol_dump_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(t('export.dump_downloaded', 'System dump downloaded'), 'success');
+    }).catch(e => showToast('Export failed: ' + e.message, 'error'));
+}
+
 // ============================================================================
 // DEBUG PANEL
 // ============================================================================
@@ -6270,3 +6297,5 @@ window.updatePickerElements = updatePickerElements;
 window.onScheduleMouseDown = onScheduleMouseDown;
 window.onScheduleMouseEnter = onScheduleMouseEnter;
 window.removePickerCard = removePickerCard;
+window.exportCsv = exportCsv;
+window.exportDump = exportDump;

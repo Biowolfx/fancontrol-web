@@ -413,5 +413,8 @@
   "settings.auto_register": "Agent Auto-Registration",
   "settings.auto_register_hint": "Automatically register new agents on first connection",
   "settings.auto_register_on": "Auto-registration enabled",
-  "settings.auto_register_off": "Auto-registration disabled"
+  "settings.auto_register_off": "Auto-registration disabled",
+  "export.downloading": "Downloading CSV...",
+  "export.dump_downloaded": "System dump downloaded",
+  "export.dump_error": "Export failed"
 }
