@@ -1856,12 +1856,16 @@ window.loadSmartHistoryData = async function() {
                 divisor = cachedSmart.attributes[smartHistory.attrKey].unit_divisor || 1;
             }
             for (const point of history) {
+                const raw = parseFloat(point.value) || 0;
                 if (unit === 'days') {
-                    point.value = (parseFloat(point.value) / 24).toFixed(1);
+                    point.value = parseFloat((raw / 24).toFixed(2));
                 } else if (unit === 'months') {
-                    point.value = (parseFloat(point.value) / 720).toFixed(1);
+                    point.value = parseFloat((raw / 720).toFixed(2));
                 } else if (divisor > 1) {
-                    point.value = formatBytes(parseFloat(point.value) * divisor, unit);
+                    // Convert raw LBA sectors to target unit
+                    const bytes = raw * divisor;
+                    const units = { bytes: 1, kb: 1024, mb: 1024*1024, gb: 1024*1024*1024 };
+                    point.value = parseFloat((bytes / (units[unit] || 1)).toFixed(2));
                 }
             }
         }
