@@ -1820,6 +1820,10 @@ function updateRangeButtons(active) {
 window.loadSmartHistoryData = async function() {
     const select = document.getElementById('smart-history-attr');
     smartHistory.attrKey = select?.value;
+    // Read current unit from dropdown (not from smartHistory.unit which may be stale)
+    const unitSelect = document.getElementById('smart-history-unit');
+    smartHistory.unit = unitSelect && !unitSelect.classList.contains('hidden')
+        ? unitSelect.value : 'raw';
     if (!smartHistory.attrKey || !smartHistory.diskId) return;
 
     const now = new Date();
