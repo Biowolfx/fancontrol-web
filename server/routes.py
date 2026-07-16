@@ -700,16 +700,17 @@ def api_update_agents():
         if status != 'online':
             skipped.append(nid)
             continue
-        # Skip agents already at the correct version
-        if agent_ver and agent_ver == CONFIG_VERSION:
-            # Clear any stale pending_update flag
+        # Skip agents already at or ahead of server version
+        if agent_ver and not _version_gt(CONFIG_VERSION, agent_ver):
+            # Agent is up-to-date or ahead — clear pending and skip
             with state_lock:
                 state['nodes'].get(nid, {})['pending_update'] = False
                 state['nodes'].get(nid, {})['update_started'] = None
             from server.node_registry import update_node_flags
             update_node_flags(nid, pending_update=False)
             already_ok.append(nid)
-            logger.info(f'[AGENTS-UPDATE] Agent {nid} already at {CONFIG_VERSION} — skipped')
+            reason = 'up to date' if agent_ver == CONFIG_VERSION else f'ahead ({agent_ver} > {CONFIG_VERSION})'
+            logger.info(f'[AGENTS-UPDATE] Agent {nid} {reason} — skipped')
             continue
         # Set pending_update — agent polling will pick it up
         import time as _time
@@ -766,6 +767,16 @@ def api_request_agent_logs(node_id):
     return jsonify({'status': 'ok', 'message': 'Log request sent'})
 
 
+def _version_gt(a: str, b: str) -> bool:
+    """Compare semantic versions. Returns True if a > b."""
+    try:
+        a_parts = [int(x) for x in a.split('.')]
+        b_parts = [int(x) for x in b.split('.')]
+        return a_parts > b_parts
+    except (ValueError, AttributeError):
+        return a > b  # fallback to string comparison
+
+
 @routes.route('/api/update/poll', methods=['POST'])
 def api_update_poll():
     """Agent polls to check if an update is needed.
@@ -784,18 +795,25 @@ def api_update_poll():
 
     auto_update = node.get('auto_update', False)
     pending = node.get('pending_update', False)
-    version_mismatch = agent_version and agent_version != CONFIG_VERSION
-    should_update = version_mismatch and (auto_update or pending)
+    agent_ahead = agent_version and _version_gt(agent_version, CONFIG_VERSION)
+    agent_behind = agent_version and _version_gt(CONFIG_VERSION, agent_version)
+    
+    should_update = agent_behind and (auto_update or pending)
 
-    # Don't consume pending_update here — clear it only when agent
-    # reconnects with matching version (handled in agent:connect).
-    # This allows retry on git fetch/reset failures.
+    # If agent is up-to-date or ahead, clear pending flag immediately
+    if not agent_behind and pending:
+        with state_lock:
+            if node_id in state.get('nodes', {}):
+                state['nodes'][node_id]['pending_update'] = False
+        from server.node_registry import update_node_flags
+        update_node_flags(node_id, pending_update=False)
+        logger.info(f'[POLL] Agent {node_id} already at {agent_version} (>= {CONFIG_VERSION}) — cleared pending_update')
 
-    logger.info(f'[POLL] node={node_id} v={agent_version}→{CONFIG_VERSION} '
-                f'mismatch={version_mismatch} auto={auto_update} pending={pending} '
+    logger.info(f'[POLL] node={node_id} v={agent_version} server={CONFIG_VERSION} '
+                f'behind={agent_behind} auto={auto_update} pending={pending} '
                 f'should_update={should_update}')
     return jsonify({
-        'update_available': version_mismatch,
+        'update_available': agent_behind,
         'should_update': should_update,
         'server_version': CONFIG_VERSION,
     })
