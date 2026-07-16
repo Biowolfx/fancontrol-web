@@ -1347,8 +1347,12 @@
             </div>
             <div id="smart-history-start-date" class="text-xs text-gray-500 mb-2"></div>
             <div class="flex items-center gap-2 mb-3">
-                <select id="smart-history-attr" onchange="loadSmartHistoryData()"
+                <select id="smart-history-attr" onchange="onSmartHistoryAttrChange()"
                     class="bg-cyber-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-300">
+                </select>
+                <select id="smart-history-unit" onchange="loadSmartHistoryData()"
+                    class="bg-cyber-bg border border-gray-600 rounded px-2 py-1 text-[10px] text-gray-300 hidden">
+                    <option value="raw">Raw</option>
                 </select>
                 <div class="flex gap-1" id="smart-history-range-btns">
                     <button onclick="setSmartHistoryRange('1m')" class="range-btn px-2 py-0.5 text-[10px] rounded bg-cyber-accent text-gray-400 hover:text-white" data-range="1m">1м</button>

@@ -1722,6 +1722,10 @@ window.showSmartHistory = function(cardId) {
     }
     select.innerHTML = optionsHtml;
     smartHistory.attrKey = attrs[0] || null;
+    smartHistory.unit = 'raw';
+
+    // Populate unit options for first attribute
+    updateHistoryUnitOptions(cachedSmart, attrs[0]);
 
     // Highlight active range button
     updateRangeButtons('1d');
@@ -1732,6 +1736,62 @@ window.showSmartHistory = function(cardId) {
     loadSmartHistoryStartDate();
     loadSmartHistoryData();
 };
+
+window.onSmartHistoryAttrChange = function() {
+    const select = document.getElementById('smart-history-attr');
+    smartHistory.attrKey = select?.value;
+    smartHistory.unit = 'raw';
+    const saved = getPickerCards();
+    const card = saved.find(c => c.id === smartHistory.cardId);
+    if (!card) return;
+    const cachedSmart = smart.cache?.[`${card.source || 'local'}:${card.sourceId}`];
+    updateHistoryUnitOptions(cachedSmart, smartHistory.attrKey);
+    loadSmartHistoryData();
+};
+
+function updateHistoryUnitOptions(cachedSmart, attrKey) {
+    const unitSelect = document.getElementById('smart-history-unit');
+    if (!unitSelect || !cachedSmart) { unitSelect?.classList.add('hidden'); return; }
+
+    let unitType = null;
+    let divisor = 1;
+    if (cachedSmart.attr_type === 'sata' && cachedSmart.attributes) {
+        const attr = cachedSmart.attributes.find(a => String(a.id) === attrKey);
+        if (attr) { unitType = attr.unit; divisor = attr.unit_divisor || 1; }
+    } else if (cachedSmart.attributes?.[attrKey]) {
+        const attr = cachedSmart.attributes[attrKey];
+        unitType = attr.unit; divisor = attr.unit_divisor || 1;
+    }
+
+    if (unitType === 'bytes' && divisor > 1) {
+        unitSelect.innerHTML = `
+            <option value="raw">Raw</option>
+            <option value="bytes">Bytes</option>
+            <option value="kb">KB</option>
+            <option value="mb">MB</option>
+            <option value="gb">GB</option>
+        `;
+        unitSelect.classList.remove('hidden');
+    } else if (unitType === 'hours') {
+        unitSelect.innerHTML = `
+            <option value="raw">Часы</option>
+            <option value="days">Дни</option>
+            <option value="months">Месяцы</option>
+        `;
+        unitSelect.classList.remove('hidden');
+    } else if (unitType === 'nvme_blocks') {
+        unitSelect.innerHTML = `
+            <option value="raw">Raw</option>
+            <option value="bytes">Bytes</option>
+            <option value="kb">KB</option>
+            <option value="mb">MB</option>
+            <option value="gb">GB</option>
+        `;
+        unitSelect.classList.remove('hidden');
+    } else {
+        unitSelect.classList.add('hidden');
+    }
+}
 
 window.hideSmartHistory = function() {
     document.getElementById('smart-history-modal').classList.add('hidden');
@@ -1781,7 +1841,31 @@ window.loadSmartHistoryData = async function() {
     try {
         const resp = await fetch(`/api/smart/history/${smartHistory.diskId}?${params}`);
         const data = await resp.json();
-        renderSmartHistoryChart(data.history || []);
+        const history = data.history || [];
+        // Apply unit conversion
+        const unit = smartHistory.unit || 'raw';
+        if (unit !== 'raw') {
+            const saved = getPickerCards();
+            const card = saved.find(c => c.id === smartHistory.cardId);
+            const cachedSmart = smart.cache?.[`${card?.source || 'local'}:${card?.sourceId}`];
+            let divisor = 1;
+            if (cachedSmart?.attr_type === 'sata' && cachedSmart.attributes) {
+                const attr = cachedSmart.attributes.find(a => String(a.id) === smartHistory.attrKey);
+                if (attr) divisor = attr.unit_divisor || 1;
+            } else if (cachedSmart?.attributes?.[smartHistory.attrKey]) {
+                divisor = cachedSmart.attributes[smartHistory.attrKey].unit_divisor || 1;
+            }
+            for (const point of history) {
+                if (unit === 'days') {
+                    point.value = (parseFloat(point.value) / 24).toFixed(1);
+                } else if (unit === 'months') {
+                    point.value = (parseFloat(point.value) / 720).toFixed(1);
+                } else if (divisor > 1) {
+                    point.value = formatBytes(parseFloat(point.value) * divisor, unit);
+                }
+            }
+        }
+        renderSmartHistoryChart(history);
     } catch (e) {
         console.error('Failed to load SMART history:', e);
     }
