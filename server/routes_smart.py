@@ -3,7 +3,7 @@
 import logging
 from typing import Dict
 from flask import Blueprint, request, jsonify
-from core.state import state, state_lock, invalidate_state_cache
+from core.state import state, state_lock, invalidate_state_cache, CONFIG_VERSION
 from core.config import save_config
 
 logger = logging.getLogger('fancontrol')
