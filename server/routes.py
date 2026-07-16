@@ -1161,6 +1161,111 @@ def _get_uptime():
 
 
 
+
+# ============================================================================
+# EXPORT & DIAGNOSTICS
+# ============================================================================
+
+@routes.route('/api/export/csv')
+def api_export_csv():
+    """Export telemetry history as CSV."""
+    import csv
+    import io
+    hours = int(request.args.get('hours', 24))
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            'SELECT ts, mode, pwm, rpm, max_temp, fan_count, disk_count FROM logs WHERE ts >= ? ORDER BY ts',
+            (cutoff,)
+        )
+        rows = cursor.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['timestamp', 'mode', 'avg_pwm', 'avg_rpm', 'max_temp', 'fan_count', 'disk_count'])
+    for row in rows:
+        writer.writerow(row)
+
+    return output.getvalue(), 200, {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': f'attachment; filename=fancontrol_telemetry_{hours}h.csv'
+    }
+
+
+@routes.route('/api/dump')
+def api_system_dump():
+    """Full system state dump for diagnostics."""
+    import json as _json
+
+    dump = {
+        'version': CONFIG_VERSION,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'server': {
+            'config_version': CONFIG_VERSION,
+            'server_name': state.get('server_name', ''),
+            'initialized': state.get('initialized', False),
+            'auto_register_agents': state.get('auto_register_agents', True),
+        },
+        'fans': {},
+        'temp_sensors': {},
+        'hdd_sensors': {},
+        'nodes': {},
+        'dashboard': state.get('dashboard', {}),
+    }
+
+    # Fan data (strip runtime fields for readability)
+    for fid, fan in state.get('fans', {}).items():
+        dump['fans'][fid] = {
+            'label': fan.get('label', ''),
+            'mode': fan.get('mode', 'manual'),
+            'rpm': fan.get('rpm', 0),
+            'writable': fan.get('writable', False),
+            'control_method': fan.get('control_method', ''),
+            'health': fan.get('health', {}),
+        }
+
+    # Sensor data
+    for sid, sensor in state.get('temp_sensors', {}).items():
+        dump['temp_sensors'][sid] = {
+            'label': sensor.get('label', ''),
+            'value': sensor.get('value', 0),
+        }
+
+    # Disk data
+    for did, disk in state.get('hdd_sensors', {}).items():
+        dump['hdd_sensors'][did] = {
+            'label': disk.get('label', ''),
+            'temp': disk.get('temp', 0),
+            'standby': disk.get('standby', False),
+        }
+
+    # Node data
+    for nid, node in state.get('nodes', {}).items():
+        dump['nodes'][nid] = {
+            'name': node.get('name', ''),
+            'status': node.get('status', ''),
+            'agent_version': node.get('agent_version', ''),
+            'ip': node.get('ip', ''),
+            'last_seen': node.get('last_seen', ''),
+        }
+
+    # Recent logs
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.execute(
+                'SELECT ts, mode, pwm, rpm, max_temp FROM logs ORDER BY ts DESC LIMIT 20'
+            )
+            dump['recent_logs'] = [
+                {'ts': r[0], 'mode': r[1], 'pwm': r[2], 'rpm': r[3], 'max_temp': r[4]}
+                for r in cursor.fetchall()
+            ]
+    except Exception:
+        dump['recent_logs'] = []
+
+    return jsonify(dump)
+
+
 # ============================================================================
 # Register sub-module Blueprints
 # ============================================================================

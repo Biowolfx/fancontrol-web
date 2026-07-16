@@ -363,4 +363,53 @@ class TestStableId:
         from core.hardware import generate_stable_id
         id1 = generate_stable_id('/dev/sda')
         assert id1.startswith('dev-')
-        assert len(id1) == 16  # 'dev-' + 12 hex chars
+        assert len(id1) == 16  # 'dev-' + 12 hex chars\n
+
+# ============================================================================
+# Export & Diagnostics
+# ============================================================================
+
+class TestExportEndpoints:
+    """Tests for CSV export and system dump."""
+
+    @pytest.fixture
+    def client(self):
+        from pathlib import Path
+        if not Path('/data').exists() or not os.access('/data', os.W_OK):
+            pytest.skip('/data not writable')
+        from app import app
+        app.config['TESTING'] = True
+        with app.test_client() as c:
+            yield c
+
+    def test_csv_export(self, client):
+        resp = client.get('/api/export/csv?hours=24')
+        assert resp.status_code == 200
+        assert resp.content_type == 'text/csv'
+        data = resp.get_data(as_text=True)
+        assert 'timestamp' in data
+        assert 'avg_pwm' in data
+
+    def test_csv_export_empty(self, client):
+        resp = client.get('/api/export/csv?hours=1')
+        assert resp.status_code == 200
+        lines = resp.get_data(as_text=True).strip().split('\n')
+        assert len(lines) >= 1  # At least header
+
+    def test_system_dump(self, client):
+        resp = client.get('/api/dump')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert 'version' in data
+        assert 'timestamp' in data
+        assert 'fans' in data
+        assert 'nodes' in data
+        assert 'recent_logs' in data
+
+    def test_system_dump_has_structure(self, client):
+        resp = client.get('/api/dump')
+        data = resp.get_json()
+        assert isinstance(data['fans'], dict)
+        assert isinstance(data['nodes'], dict)
+        assert isinstance(data['recent_logs'], list)
+

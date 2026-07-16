@@ -540,12 +540,24 @@ function renderLocalServerTree() {
     return html;
 }
 
+
+function formatRelativeTime(isoString) {
+    if (!isoString) return '';
+    const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (diff < 5) return 'just now';
+    if (diff < 60) return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
 function renderRemoteNodeTree(node) {
     const telemetry = node.telemetry || {};
     const fans = telemetry.fans || {};
     const temps = telemetry.temp_sensors || {};
     const disks = telemetry.hdd_sensors || {};
     const fanCount = Object.keys(fans).length;
+    const hasProblems = Object.values(fans).some(f => f.health?.status && f.health.status !== 'healthy');
     const statusDot = node.status === 'online' ? 'bg-neon-green' : 'bg-gray-500';
 
     const serverVer = store.state?.config_version || '';
@@ -573,6 +585,7 @@ function renderRemoteNodeTree(node) {
                  onclick="toggleNodeGroup('${escapeHtml(node.node_id)}')">
                 <div class="flex items-center gap-1.5">
                     <span class="w-2 h-2 ${statusDot} rounded-full flex-shrink-0"></span>
+                    ${hasProblems ? '<span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 alert-pulse" title="Has problems"></span>' : ''}
                     <span class="text-sm font-semibold text-white truncate flex-1">${escapeHtml(node.name)}</span>
                     ${versionBadge}
                     <button onclick="event.stopPropagation(); showNodeSettings('${escapeHtml(node.node_id)}')"
@@ -582,6 +595,7 @@ function renderRemoteNodeTree(node) {
                 </div>
                 <div class="flex items-center gap-2 mt-0.5 ml-3.5">
                     <span class="text-[10px] ${node.status === 'online' ? 'text-neon-green' : 'text-gray-500'}">${node.status}</span>
+                    ${node.last_seen ? `<span class="text-[10px] text-gray-600" title="${escapeHtml(node.last_seen)}">${formatRelativeTime(node.last_seen)}</span>` : ''}
                     ${fanCount > 0 ? `<span class="text-[10px] text-gray-500">· ${fanCount} ${t('nodes.fans', 'fans')}</span>` : ''}
                     ${Object.keys(temps).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(temps).length} ${t('nodes.sensors', 'sensors')}</span>` : ''}
                     ${Object.keys(disks).length > 0 ? `<span class="text-[10px] text-gray-500">· ${Object.keys(disks).length} ${t('nodes.disks', 'disks')}</span>` : ''}

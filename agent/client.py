@@ -165,6 +165,19 @@ def _handle_update(data):
             _report_update_status('error', f'git reset failed: {reset.stderr[:200]}')
             return
 
+        try:
+            import importlib
+            import core.state as state_mod
+            importlib.reload(state_mod)
+            new_version = state_mod.CONFIG_VERSION
+            if new_version != CONFIG_VERSION:
+                _report_update_status('version_mismatch',
+                    f'Expected new version, got {new_version}')
+                logger.warning(f'[update] Version check failed after direct update')
+                return
+        except Exception as e:
+            logger.warning(f'[update] Version check failed: {e}, proceeding anyway')
+
         _report_update_status('synced', CONFIG_VERSION)
         logger.info('[update] Synced to latest, restarting...')
         time.sleep(1)
@@ -418,6 +431,21 @@ def _update_check_loop():
                 if reset.returncode != 0:
                     _report_update_status('error', f'git reset failed: {reset.stderr[:200]}')
                     continue
+
+                # Verify updated version matches server
+                try:
+                    import importlib
+                    import core.state as state_mod
+                    importlib.reload(state_mod)
+                    new_version = state_mod.CONFIG_VERSION
+                    if new_version != server_ver:
+                        _report_update_status('version_mismatch',
+                            f'Expected {server_ver}, got {new_version}')
+                        logger.warning(f'[update] Version mismatch: expected {server_ver}, got {new_version}')
+                        continue
+                    logger.info(f'[update] Version verified: {new_version}')
+                except Exception as e:
+                    logger.warning(f'[update] Version check failed: {e}, proceeding anyway')
 
                 _report_update_status('synced', CONFIG_VERSION)
                 time.sleep(1)
