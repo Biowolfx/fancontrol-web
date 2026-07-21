@@ -98,6 +98,11 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
                     fan_path_str = f'{hw_path.name}/{pwm_file.name}'
                     fan_id = generate_stable_id(fan_path_str, namespace=state.get('node_id', ''))
                     
+                    # Skip non-functional hwmon fans (not writable and no RPM)
+                    if not writable and current_rpm == 0:
+                        logger.info(f'    Skipping non-functional fan: {pwm_file.name} (not writable, no RPM)')
+                        continue
+                    
                     fans[fan_id] = {
                         'id': fan_id,
                         'label': label,
@@ -174,7 +179,9 @@ def discover_fans_and_sensors() -> Tuple[Dict, Dict]:
     logger.info(f'  Found: {len(fans)} fans, {len(temps)} temp sensors')
 
     # Fallback: DSM scemd.xml fan control (official kernel xpenology)
-    if not fans:
+    # Try DSM even if non-functional hwmon fans were found
+    has_writable_fans = any(f.get('writable') for f in fans.values())
+    if not has_writable_fans:
         from core.dsm_fan import is_dsm_fan_available, get_dsm_fan_info
         if is_dsm_fan_available():
             logger.info('  No hwmon fans found, trying DSM scemd.xml...')
